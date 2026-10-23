@@ -90,6 +90,9 @@ private:
             std::string filter = "";                  /* and narrowed: "&GenreIds=..." */
         };
         std::vector<Section>        sections;
+        /* a row of every library at once (New Additions, Top Rated): each
+         * library's part, offered once it is expanded, after All */
+        std::vector<Section>        parts;
         std::string                 query;            /* what it shows; empty: can't expand */
         int                         sort = -1;        /* its order (Sort); -1: no other */
     };

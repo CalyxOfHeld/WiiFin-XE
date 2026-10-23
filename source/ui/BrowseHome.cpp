@@ -209,17 +209,21 @@ void BrowseHome::buildHome(const std::vector<JellyfinLibrary>& libs)
         ADD_ROW(title, query, square, MAX_ITEMS);
     };
 
-    /* one part of a row of several (one per library), empty ones dropped */
+    /* a library's part of a row of every library (expanded), empty ones
+     * dropped */
     auto addSection = [&](Row& r, const std::string& label, const std::string& query,
                           const std::string& parent, const char* types) {
         std::vector<JellyfinItem> got;
         client.getItemsByQuery(serverUrl, auth, query, got);
         if (got.empty()) return;
-        if ((int)got.size() > SECTION_ITEMS) got.resize(SECTION_ITEMS);
-        r.sections.push_back({ (int)r.items.size(), label, query, parent, types });
-        r.items.insert(r.items.end(), got.begin(), got.end());
+        r.parts.push_back({ 0, label, query, parent, types });
     };
     auto pushRow = [&](Row& r) {
+        /* the row itself: every library at once (All), not the first's part */
+        if (!r.query.empty() && !r.parts.empty()) {
+            client.getItemsByQuery(serverUrl, auth, r.query, r.items);
+            if ((int)r.items.size() > MAX_ITEMS) r.items.resize(MAX_ITEMS);
+        }
         if (r.items.empty()) return;
         r.tex.assign(r.items.size(), nullptr);
         r.st.assign(r.items.size(), TILE_NONE);
@@ -265,11 +269,11 @@ void BrowseHome::buildHome(const std::vector<JellyfinLibrary>& libs)
     }
     /* the rows' own queries: every library at once (the "All" part of the
      * expanded page) */
-    snprintf(q, sizeof(q), "/Users/%s/Items/Latest?Limit=%d", uid.c_str(), SECTION_ITEMS);
+    snprintf(q, sizeof(q), "/Users/%s/Items/Latest?Limit=%d", uid.c_str(), MAX_ITEMS);
     added.query = q;
     snprintf(q, sizeof(q),
              "/Users/%s/Items?Recursive=true&IncludeItemTypes=Movie,Series"
-             "&SortBy=CommunityRating,SortName&SortOrder=Descending&Limit=%d", uid.c_str(), SECTION_ITEMS);
+             "&SortBy=CommunityRating,SortName&SortOrder=Descending&Limit=%d", uid.c_str(), MAX_ITEMS);
     top.query = q;
     pushRow(added);
     pushRow(top);
@@ -1182,9 +1186,12 @@ void BrowseHome::expand()
     expSort    = expSortWant = r.sort;
     expBase    = r.title;
     expSecs.clear();
-    if (!r.sections.empty() && !r.query.empty()) {   /* first: every library at once */
+    /* the parts listed on the left: a row of every library's (New
+     * Additions...), or a row of parts' own */
+    const std::vector<Row::Section>& parts = r.parts.empty() ? r.sections : r.parts;
+    if (!parts.empty() && !r.query.empty()) {        /* first: every library at once */
         std::string types;                           /* what any of them hold */
-        for (const auto& sec : r.sections) {
+        for (const auto& sec : parts) {
             size_t a = 0;
             while (a < sec.types.size()) {
                 size_t b = sec.types.find(',', a);
@@ -1198,8 +1205,9 @@ void BrowseHome::expand()
         expSecs.push_back({ 0, tr("All"), r.query, "", types });
     }
     const int skip = (int)expSecs.size();
-    expSecs.insert(expSecs.end(), r.sections.begin(), r.sections.end());
-    expSec     = sideSel = s < 0 ? -1 : s + skip;
+    expSecs.insert(expSecs.end(), parts.begin(), parts.end());
+    expSec     = sideSel = s < 0 ? (r.parts.empty() ? -1 : 0) : s + skip;
+    if (s < 0 && !r.parts.empty()) exp.title = expBase + " \xc2\xb7 " + expSecs[0].label;
     sideTop    = 0;
     sideFocus  = false;
     if (r.sel >= 0 && r.sel < (int)r.items.size()) {   /* the selection stays on it */
