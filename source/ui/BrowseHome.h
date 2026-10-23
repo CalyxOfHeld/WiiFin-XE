@@ -50,7 +50,9 @@ public:
 
     /* The focused row (or the part of it selected) as a page of its own,
      * more of it, in the library view (Posters: a grid; List; List +
-     * Posters); 1 changes the view, B back to the rows.  Blocking network:
+     * Posters); 1 changes the view, B back to the rows.  A row of parts
+     * lists them all on the left: Left to that list, A shows the part
+     * picked (Action::Expand again: here, that part).  Blocking network:
      * the loader stopped, inside a loading screen. */
     void expand();
     bool isExpanded() const { return expanded; }
@@ -61,7 +63,8 @@ public:
     unsigned focusKey() const {
         unsigned k = (unsigned)(rowSel + 1) * 7919u + (unsigned)(headerFocus + 2) * 104729u;
         if (rowSel >= 0 && rowSel < (int)rows.size()) k += (unsigned)rows[rowSel].sel * 2654435761u;
-        if (expanded) k += (unsigned)(exp.sel + 1) * 31337u + (unsigned)expView() * 977u + 1u;
+        if (expanded) k += (unsigned)(exp.sel + 1) * 31337u + (unsigned)expView() * 977u + 1u +
+                           (sideFocus ? (unsigned)(sideSel + 1) * 6151u : 0u) + (unsigned)(expSec + 1) * 421u;
         return k;
     }
     void setUserName(const std::string& n) { userName = n; }
@@ -90,6 +93,15 @@ private:
     bool        expanded = false;
     int         expTop   = 0;      /* first line shown: of tiles (grid) or titles (list) */
     static int  expView();         /* 0 grid, 1 list, 2 list + cover: the library view */
+    /* a row of parts (New Additions...): every part listed on the left */
+    std::string expBase;           /* the row's own title */
+    std::vector<Row::Section> expSecs;
+    int         expSec    = -1;    /* the part shown */
+    int         sideSel   = 0, sideTop = 0;
+    bool        sideFocus = false; /* the highlight in that list */
+    float       expLeft() const;
+    float       expRight() const;
+    float       expListW() const;
     int         expCols() const;
     int         expLines() const;  /* lines on the page */
     void        expWindow(int& first, int& last) const;   /* tiles worth loading */
@@ -129,6 +141,8 @@ private:
     void loaderLoop();
     static void* loaderMain(void* self);
 
+    static float rowDrop(const Row& r);      /* the Libraries row sits lower */
+    float bandHeight() const;
     float tileW(const Row& r) const;
     float stride(const Row& r) const;
     int   fullyVisible(const Row& r) const;

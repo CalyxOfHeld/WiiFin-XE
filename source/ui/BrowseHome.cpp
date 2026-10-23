@@ -29,6 +29,9 @@ static const float GAP        = 9;
 #define X0 (Ui::screenLeft() + 30.0f)              /* first poster of a row */
 static const float ROW_STRIDE = 252;                 /* poster top to poster top */
 static const float INFO_Y     = 240, INFO_H = 52;
+/* the Libraries row (no info panel): lower, clear of the header, on a
+ * shorter band */
+static const float WIDE_DROP  = 14, BAND_H_WIDE = 210;
 #define INFO_X (Ui::screenLeft() + 28.0f)
 #define INFO_W (Ui::screenWidth() - 56.0f)
 static const int   MAX_ITEMS  = 20;                  /* per row (home)           */
@@ -252,6 +255,14 @@ void BrowseHome::buildHome(const std::vector<JellyfinLibrary>& libs)
             addSection(top, lib.name, q);
         }
     }
+    /* the rows' own queries: every library at once (the "All" part of the
+     * expanded page) */
+    snprintf(q, sizeof(q), "/Users/%s/Items/Latest?Limit=%d", uid.c_str(), SECTION_ITEMS);
+    added.query = q;
+    snprintf(q, sizeof(q),
+             "/Users/%s/Items?Recursive=true&IncludeItemTypes=Movie,Series"
+             "&SortBy=CommunityRating,SortName&SortOrder=Descending&Limit=%d", uid.c_str(), SECTION_ITEMS);
+    top.query = q;
     pushRow(added);
     pushRow(top);
 
@@ -350,6 +361,22 @@ const JellyfinItem* BrowseHome::selectedItem() const
 }
 
 /* ---- Geometry ------------------------------------------------------------ */
+
+float BrowseHome::rowDrop(const Row& r) { return r.wide ? WIDE_DROP : 0.0f; }
+
+/* the band's height, following the rows as they slide */
+float BrowseHome::bandHeight() const
+{
+    if (rows.empty()) return BAND_H;
+    int a = (int)floorf(rowAnim), b = a + 1;
+    float t = rowAnim - a;
+    auto h = [&](int r) {
+        if (r < 0) r = 0;
+        if (r >= (int)rows.size()) r = (int)rows.size() - 1;
+        return rows[r].wide ? BAND_H_WIDE : BAND_H;
+    };
+    return h(a) + (h(b) - h(a)) * t;
+}
 
 float BrowseHome::tileW(const Row& r) const
 {
@@ -594,7 +621,8 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
         if (nRows > 0) {
             Row& row = rows[rowSel];
             float tw = tileW(row), st = stride(row);
-            if (ir.y >= POSTER_Y && ir.y < POSTER_Y + POSTER_H) {
+            const float py = POSTER_Y + rowDrop(row);
+            if (ir.y >= py && ir.y < py + POSTER_H) {
                 hoverLeft  = ir.x < X0 - 4;
                 hoverRight = ir.x > Ui::screenRight() - 24.0f;
                 for (int i = 0; i < (int)row.items.size(); ++i) {
@@ -707,7 +735,7 @@ void BrowseHome::drawRow(int r, float offY, float focus)
     Row& row = rows[r];
     const float ws = WiiUtils::wsScaleX();
     const float tw = tileW(row), st = stride(row);
-    const float y = POSTER_Y + offY;
+    const float y = POSTER_Y + rowDrop(row) + offY;
     const bool  focused = focus > 0.5f && headerFocus < 0;
     const Look  L = look();
 
@@ -948,7 +976,7 @@ void BrowseHome::render(const ir_t& ir)
 
     /* Focused-row band */
     const Look L = look();
-    Ui::roundRect(Ui::screenLeft() - 20, BAND_Y, Ui::screenWidth() + 40, BAND_H, 16, L.bandTop, L.bandBottom);
+    Ui::roundRect(Ui::screenLeft() - 20, BAND_Y, Ui::screenWidth() + 40, bandHeight(), 16, L.bandTop, L.bandBottom);
     Ui::roundRect(Ui::screenLeft() - 20, BAND_Y, Ui::screenWidth() + 40, 1.5f, 0.75f, L.bandEdge);
 
     if (rows.empty()) {
@@ -1007,17 +1035,33 @@ static const float EXP_Y = 58;                               /* top of the first
 static const float EXP_W = 80, EXP_H = 120, EXP_GAP = 10;    /* grid tiles (2:3)        */
 static const float EXP_STRIDE = EXP_H + 10;
 static const int   EXP_GRID_LINES = 3;
-static const float EXP_LIST_X = 40;
 static const int   EXP_LIST_ROWS = 10, EXP_LIST_H = 36;
-static const float EXP_LIST_W = 560, EXP_LIST_W_COVER = 370;
+static const float EXP_COVER_W = 150;                        /* List + Posters: the cover */
+/* a row of parts: the parts listed down the left, any one a press away */
+static const float SIDE_W = 130, SIDE_H = 34;
+static const int   SIDE_ROWS = 11;
 
 int BrowseHome::expView() { return (int)Ui::libraryStyle(); }
+
+/* the page's content, right of the parts' list if there is one */
+float BrowseHome::expLeft() const
+{
+    return expSecs.empty() ? 40.0f : Ui::screenLeft() + 28.0f + SIDE_W + 14.0f;
+}
+
+float BrowseHome::expRight() const { return expSecs.empty() ? 600.0f : Ui::screenRight() - 40.0f; }
+
+float BrowseHome::expListW() const
+{
+    float w = expRight() - expLeft();
+    return expView() == 2 ? w - EXP_COVER_W - 26.0f : w;
+}
 
 int BrowseHome::expCols() const
 {
     if (expView() != 0) return 1;
     const float ws = WiiUtils::wsScaleX();
-    int c = (int)((Ui::screenWidth() - 56.0f + EXP_GAP * ws) / ((EXP_W + EXP_GAP) * ws));
+    int c = (int)((expRight() - expLeft() + EXP_GAP * ws) / ((EXP_W + EXP_GAP) * ws));
     return c < 1 ? 1 : c;
 }
 
@@ -1042,6 +1086,18 @@ void BrowseHome::expFollow()
 
 void BrowseHome::expand()
 {
+    /* open already: the part picked in the list on the left */
+    if (expanded) {
+        if (sideSel < 0 || sideSel >= (int)expSecs.size() || sideSel == expSec) return;
+        freeTextures(exp);
+        expSec     = sideSel;
+        exp.title  = expBase + " \xc2\xb7 " + expSecs[expSec].label;
+        exp.query  = expSecs[expSec].query;
+        exp.items.clear(); exp.tex.clear(); exp.st.clear();
+        exp.sel    = 0;
+        fetchExpanded();
+        return;
+    }
     if (rowSel < 0 || rowSel >= (int)rows.size()) return;
     const Row& r = rows[rowSel];
     std::string title = r.title, query = r.query;
@@ -1053,6 +1109,15 @@ void BrowseHome::expand()
     exp.title  = title;
     exp.query  = query;
     exp.square = r.square;
+    expBase    = r.title;
+    expSecs.clear();
+    if (!r.sections.empty() && !r.query.empty())   /* first: every library at once */
+        expSecs.push_back({ 0, tr("All"), r.query });
+    const int skip = (int)expSecs.size();
+    expSecs.insert(expSecs.end(), r.sections.begin(), r.sections.end());
+    expSec     = sideSel = s < 0 ? -1 : s + skip;
+    sideTop    = 0;
+    sideFocus  = false;
     if (r.sel >= 0 && r.sel < (int)r.items.size()) {   /* the selection stays on it */
         exp.items.push_back(r.items[r.sel]);
         exp.tex.assign(1, nullptr);
@@ -1096,13 +1161,15 @@ void BrowseHome::collapse()
     stopLoader();
     freeTextures(exp);
     exp = Row();
+    expSecs.clear();
     expanded = false;
+    sideFocus = false;
     startLoader();
 }
 
 BrowseHome::Action BrowseHome::updateExpanded(const ir_t& ir, bool& irMode)
 {
-    const int n = (int)exp.items.size();
+    const int n = (int)exp.items.size(), nSec = (int)expSecs.size();
     bool up    = Input::isUpPressed(),   down  = Input::isDownPressed();
     bool left  = Input::isLeftPressed(), right = Input::isRightPressed();
     bool a     = Input::isAJustPressed();
@@ -1116,18 +1183,64 @@ BrowseHome::Action BrowseHome::updateExpanded(const ir_t& ir, bool& irMode)
         expFollow();
         return Action::None;
     }
-    if (n == 0) return Action::None;
 
+    /* pointer: the parts on the left, or the page */
+    int hover = -1, hoverSide = -1;
     const int cols = expCols(), page = cols * expLines();
+    const float ws = WiiUtils::wsScaleX();
+    if (ir.valid && irMode) {
+        const float sx = Ui::screenLeft() + 28.0f;
+        if (nSec > 0 && ir.x >= sx && ir.x < sx + SIDE_W && ir.y >= EXP_Y) {
+            int i = sideTop + (int)((ir.y - EXP_Y) / SIDE_H);
+            if (i - sideTop < SIDE_ROWS && i < nSec) hoverSide = i;
+        }
+        if (expView() == 0) {
+            const float tw = EXP_W * ws, gap = EXP_GAP * ws;
+            const float x0 = (expLeft() + expRight()) * 0.5f - (cols * tw + (cols - 1) * gap) * 0.5f;
+            for (int l = 0; l < expLines(); ++l)
+                for (int c = 0; c < cols; ++c) {
+                    int i = (expTop + l) * cols + c;
+                    float x = x0 + c * (tw + gap), y = EXP_Y + l * EXP_STRIDE;
+                    if (i < n && ir.x >= x && ir.x < x + tw && ir.y >= y && ir.y < y + EXP_H) hover = i;
+                }
+        } else if (ir.x >= expLeft() && ir.x < expLeft() + expListW() && ir.y >= EXP_Y) {
+            int i = expTop + (int)((ir.y - EXP_Y) / EXP_LIST_H);
+            if (i - expTop < EXP_LIST_ROWS && i < n) hover = i;
+        }
+        if (hoverSide >= 0) { sideSel = hoverSide; sideFocus = true; }
+        if (hover >= 0)     { exp.sel = hover; sideFocus = false; }
+    }
+
+    /* the parts: Up/Down to one, A (or Right) shows it */
+    if (sideFocus) {
+        if (up   && sideSel > 0)        sideSel--;
+        if (down && sideSel < nSec - 1) sideSel++;
+        if (sideSel < sideTop) sideTop = sideSel;
+        if (sideSel >= sideTop + SIDE_ROWS) sideTop = sideSel - SIDE_ROWS + 1;
+        if ((right && n > 0) || Input::isLPressed() || Input::isRPressed()) { sideFocus = false; sideSel = expSec; }
+        if (a && (!irMode || hoverSide >= 0)) {
+            sideFocus = false;
+            if (sideSel != expSec) return Action::Expand;   /* expand(): that part */
+        }
+        return Action::None;
+    }
+    if (n == 0) {
+        if (left && nSec > 0) sideFocus = true;
+        return Action::None;
+    }
+
     int sel = exp.sel;
     if (Input::isLPressed()) sel -= page;
     if (Input::isRPressed()) sel += page;
     if (expView() == 0) {
+        /* Left past the first column: to the parts */
+        if (left && nSec > 0 && sel % cols == 0) { sideFocus = true; sideSel = expSec; return Action::None; }
         if (left)  sel--;
         if (right) sel++;
         if (up    && sel - cols >= 0) sel -= cols;
         if (down) sel = sel + cols < n ? sel + cols : (sel / cols < (n - 1) / cols ? n - 1 : sel);
     } else {
+        if (left && nSec > 0) { sideFocus = true; sideSel = expSec; return Action::None; }
         if (up)    sel--;
         if (down)  sel++;
         if (left)  sel -= page;
@@ -1137,28 +1250,6 @@ BrowseHome::Action BrowseHome::updateExpanded(const ir_t& ir, bool& irMode)
     if (sel > n - 1) sel = n - 1;
     if (sel != exp.sel) { exp.sel = sel; expFollow(); }
 
-    /* pointer */
-    int hover = -1;
-    if (ir.valid && irMode) {
-        const float ws = WiiUtils::wsScaleX();
-        if (expView() == 0) {
-            const float tw = EXP_W * ws, gap = EXP_GAP * ws;
-            const float x0 = 320.0f - (cols * tw + (cols - 1) * gap) * 0.5f;
-            for (int l = 0; l < expLines(); ++l)
-                for (int c = 0; c < cols; ++c) {
-                    int i = (expTop + l) * cols + c;
-                    float x = x0 + c * (tw + gap), y = EXP_Y + l * EXP_STRIDE;
-                    if (i < n && ir.x >= x && ir.x < x + tw && ir.y >= y && ir.y < y + EXP_H) hover = i;
-                }
-        } else {
-            const float lw = expView() == 2 ? EXP_LIST_W_COVER : EXP_LIST_W;
-            if (ir.x >= EXP_LIST_X && ir.x < EXP_LIST_X + lw && ir.y >= EXP_Y) {
-                int i = expTop + (int)((ir.y - EXP_Y) / EXP_LIST_H);
-                if (i - expTop < EXP_LIST_ROWS && i < n) hover = i;
-            }
-        }
-        if (hover >= 0) exp.sel = hover;
-    }
     if (a && (!irMode || hover >= 0)) return Action::Open;
     return Action::None;
 }
@@ -1184,7 +1275,25 @@ void BrowseHome::renderExpanded(const ir_t& ir)
     snprintf(pos, sizeof(pos), "%d / %d", n > 0 ? exp.sel + 1 : 0, n);
     Ui::header(fit(exp.title, 24, 440).c_str(), pos);
 
-    if (n == 0) Ui::textCentered(320, 200, tr("Nothing to show yet"), 16, p.textDim);
+    /* the parts of the row, the one shown marked */
+    if (!expSecs.empty()) {
+        const float sx = Ui::screenLeft() + 28.0f;
+        for (int r = 0; r < SIDE_ROWS; ++r) {
+            int i = sideTop + r;
+            if (i >= (int)expSecs.size()) break;
+            float y = EXP_Y + r * SIDE_H;
+            bool cur = i == expSec, f = sideFocus && i == sideSel;
+            Ui::card(sx, y + 2, SIDE_W, SIDE_H - 4, 8, f ? 1.0f : 0.0f);
+            if (cur) Ui::roundRect(sx + 4, y + 9, 4, SIDE_H - 18, 2, p.accent);
+            std::string lab = fit(expSecs[i].label, 14, (int)SIDE_W - 24);
+            Ui::text(sx + 14, y + 9, lab.c_str(), 14, cur || f ? p.text : p.textDim);
+            if (cur) Ui::text(sx + 15, y + 9, lab.c_str(), 14, p.text);
+        }
+        if ((int)expSecs.size() > SIDE_ROWS)
+            Ui::scrollbar(sx + SIDE_W + 4, EXP_Y + 2, SIDE_ROWS * SIDE_H - 4, sideTop, SIDE_ROWS, (int)expSecs.size());
+    }
+
+    if (n == 0) Ui::textCentered((expLeft() + expRight()) * 0.5f, 200, tr("Nothing to show yet"), 16, p.textDim);
 
     auto texOf = [&](int i) {
         LWP_MutexLock(texLock);
@@ -1192,16 +1301,17 @@ void BrowseHome::renderExpanded(const ir_t& ir)
         LWP_MutexUnlock(texLock);
         return t;
     };
+    const bool contentFocus = !sideFocus;
 
     if (v == 0) {
         const float tw = EXP_W * ws, gap = EXP_GAP * ws;
-        const float x0 = 320.0f - (cols * tw + (cols - 1) * gap) * 0.5f;
+        const float x0 = (expLeft() + expRight()) * 0.5f - (cols * tw + (cols - 1) * gap) * 0.5f;
         for (int pass = 0; pass < 2; ++pass)                 /* selected tile last */
             for (int l = 0; l < lines; ++l)
                 for (int c = 0; c < cols; ++c) {
                     int i = (expTop + l) * cols + c;
                     if (i >= n) break;
-                    bool sel = i == exp.sel;
+                    bool sel = contentFocus && i == exp.sel;
                     if (sel != (pass == 1)) continue;
                     float dx = x0 + c * (tw + gap), dy = EXP_Y + l * EXP_STRIDE, dw = tw, dh = EXP_H;
                     if (sel) {
@@ -1234,37 +1344,37 @@ void BrowseHome::renderExpanded(const ir_t& ir)
         int total = (n + cols - 1) / cols;
         Ui::scrollbar(Ui::screenRight() - 18.0f, EXP_Y, lines * EXP_STRIDE - 10, expTop, lines, total);
     } else {
-        const float lw = v == 2 ? EXP_LIST_W_COVER : EXP_LIST_W;
+        const float lx = expLeft(), lw = expListW();
         for (int r = 0; r < lines; ++r) {
             int i = expTop + r;
             if (i >= n) break;
             const JellyfinItem& it = exp.items[i];
             float ry = EXP_Y + r * EXP_LIST_H;
             bool sel = i == exp.sel;
-            Ui::card(EXP_LIST_X, ry + 2, lw, EXP_LIST_H - 4, 9, sel ? 1.0f : 0.0f);
+            Ui::card(lx, ry + 2, lw, EXP_LIST_H - 4, 9, sel && contentFocus ? 1.0f : 0.0f);
             float rightW = 0;
             if (it.year > 0) {
                 char y[12];
                 snprintf(y, sizeof(y), "%d", it.year);
-                Ui::textRight(EXP_LIST_X + lw - 12, ry + 10, y, 14, p.textDim);
+                Ui::textRight(lx + lw - 12, ry + 10, y, 14, p.textDim);
                 rightW = Ui::textWidth(y, 14) + 12;
             }
             std::string t = fit(expName(it), 16, (int)(lw - 28 - rightW));
-            Ui::text(EXP_LIST_X + 14, ry + 9, t.c_str(), 16, sel ? p.accentDark : p.text);
+            Ui::text(lx + 14, ry + 9, t.c_str(), 16, sel && contentFocus ? p.accentDark : p.text);
             if (it.playbackPositionTicks > 0 && it.runtimeTicks > 0)
-                Ui::progress(EXP_LIST_X + 14, ry + EXP_LIST_H - 9, 60, 3,
+                Ui::progress(lx + 14, ry + EXP_LIST_H - 9, 60, 3,
                              (float)it.playbackPositionTicks / (float)it.runtimeTicks);
         }
-        Ui::scrollbar(EXP_LIST_X + lw + 8, EXP_Y + 2, lines * EXP_LIST_H - 4, expTop, lines, n);
+        Ui::scrollbar(lx + lw + 8, EXP_Y + 2, lines * EXP_LIST_H - 4, expTop, lines, n);
 
         /* List + Posters: the selected title's cover beside the list */
         if (v == 2 && exp.sel >= 0 && exp.sel < n) {
             const JellyfinItem& it = exp.items[exp.sel];
-            const float PX = EXP_LIST_X + lw + 26, PW = 600 - PX, PY = EXP_Y + 2;
+            const float PX = lx + lw + 26, PW = expRight() - PX, PY = EXP_Y + 2;
             const bool sq = exp.square || it.type == "MusicAlbum";
             const float PH = sq ? PW : PW * 1.5f;
             GRRLIB_texImg* tex = texOf(exp.sel);
-            if (tex) Ui::texCover(tex, PX, PY, PW, PH, 6, PW / PH);
+            if (tex) Ui::texCover(tex, PX, PY, PW, PH, 6, PW / ws / PH);
             else {
                 Ui::roundRect(PX, PY, PW, PH, 6, L.phTop, L.phBottom);
                 Ui::textCentered(PX + PW * 0.5f, PY + PH * 0.5f - 7, fit(it.name, 13, (int)PW - 10).c_str(), 13, L.phText);
@@ -1285,8 +1395,8 @@ void BrowseHome::renderExpanded(const ir_t& ir)
     }
 
     static const char* const VIEWS[Ui::LIBRARY_STYLE_COUNT] = { N_("Posters"), N_("List"), N_("List + Posters") };
-    const Ui::Hint l[] = { { "A", N_("Open") }, { "B", N_("Back") }, { "1", VIEWS[v] } };
+    const Ui::Hint l[] = { { "A", sideFocus ? N_("Show") : N_("Open") }, { "B", N_("Back") }, { "1", VIEWS[v] } };
     const Ui::Hint r[] = { { "-/+", N_("Page") } };
-    std::string cap = v == 0 && exp.sel >= 0 && exp.sel < n ? fit(expName(exp.items[exp.sel]), 14, 240) : "";
-    Ui::footer(l, 3, r, n > cols * lines ? 1 : 0, cap.empty() ? nullptr : cap.c_str());
+    std::string cap = v == 0 && contentFocus && exp.sel >= 0 && exp.sel < n ? fit(expName(exp.items[exp.sel]), 14, 240) : "";
+    Ui::footer(l, 3, r, n > cols * lines && !sideFocus ? 1 : 0, cap.empty() ? nullptr : cap.c_str());
 }
