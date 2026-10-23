@@ -223,6 +223,9 @@ void spinner(GRRLIB_texImg* ring, float cx, float cy);
 bool freezeFrame();
 bool drawFrozen();
 void releaseFrozen();
+/* each frame, as it is shown (the render hook): whether it had a spinner,
+ * which a frozen picture must not (two spinners, one still) */
+void frameShown();
 /* While a USB mouse has the pointer: its arrow drawn at x, y, true (the
  * screen then draws no Wii Remote cursor). */
 bool mouseCursor(float x, float y);

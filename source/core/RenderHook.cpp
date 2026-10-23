@@ -19,6 +19,7 @@ void __wrap_GRRLIB_Render(void)
     Ui::drawNotice();
     if (g_wiifin_before_render) g_wiifin_before_render();
     __real_GRRLIB_Render();
+    Ui::frameShown();
     Text::endFrame();
 }
 }

@@ -1064,9 +1064,14 @@ bool mouseCursor(float x, float y)
  * other line and pair at half size (each needs a frame-sized texture
  * otherwise); in RGBA, through the 601 video levels */
 static GRRLIB_texImg* s_frozen = nullptr;
+/* a spinner in the frame being drawn, in the one shown last */
+static bool s_spinNow = false, s_spinShown = false;
 
 bool freezeFrame()
 {
+    /* the picture shown is a loading screen (the network's, the load
+     * before): the one kept before it, else none (the background) */
+    if (s_spinShown) return s_frozen != nullptr;
     if (!rmode || !xfb[fb ^ 1]) return false;
     const int W = rmode->fbWidth, H = rmode->xfbHeight, tw = W / 2, th = (H / 2) & ~3;
     if (!s_frozen) s_frozen = GRRLIB_CreateEmptyTexture(tw, th);
@@ -1107,9 +1112,16 @@ void releaseFrozen()
     if (s_frozen) { GRRLIB_FreeTexture(s_frozen); s_frozen = nullptr; }
 }
 
+void frameShown()
+{
+    s_spinShown = s_spinNow;
+    s_spinNow = false;
+}
+
 void spinner(GRRLIB_texImg* ring, float cx, float cy)
 {
     if (!ring) return;
+    s_spinNow = true;
     float angle = (float)(ticks_to_millisecs(gettime()) % 1500) * (360.0f / 1500.0f);
     GRRLIB_SetMidHandle(ring, true);
     const u32 tint = theme() == Theme::Light ? 0x34BEEDFF : theme() == Theme::Flix ? 0xE52A30FF
