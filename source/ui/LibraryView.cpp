@@ -134,6 +134,11 @@ const char* LibraryView::labelForType(const std::string& type) {
 void LibraryView::drawLoadingFrame() {
     if (!Ui::drawFrozen()) Ui::background(false);
     Ui::spinner(ringTex, 320, 240);
+    if (progressTotal > 0) {   /* a long job: how far it is */
+        char s[96];
+        snprintf(s, sizeof(s), "%s: %d / %d", progressLabel.c_str(), (int)progressDone, (int)progressTotal);
+        Ui::textCentered(320, 290, s, 16, Ui::pal().text);
+    }
     SoundFX::tickLoading();
     // Flush to screen and block on vsync. This serves two purposes:
     // 1. The spinner actually appears and animates on screen.
@@ -630,7 +635,7 @@ void LibraryView::clampSeasonScroll() {
 }
 
 void LibraryView::clampEpisodeScroll() {
-    int n = (int)episodes.size();
+    int n = (int)episodeView.size();
     if (episodeSel < 0) episodeSel = 0;
     if (n > 0 && episodeSel >= n) episodeSel = n - 1;
     if (episodeSel < episodeTop) episodeTop = episodeSel;
@@ -1164,7 +1169,9 @@ void LibraryView::loadEpisodes() {
     else {
         SYS_Report("[Episodes] %d in season %d\n", (int)episodes.size(),
                    episodes.empty() ? 0 : episodes[0].seasonNumber);
-        episodeSel = 0; episodeTop = 0; state = State::EpisodesReady;
+        episodeQuery.clear(); epPanel = epTyping = false;
+        episodeSel = 0; episodeTop = 0; buildEpisodeView();
+        state = State::EpisodesReady;
     }
 }
 

@@ -1795,7 +1795,7 @@ bool JellyfinClient::getEpisodes(const std::string& serverUrl,
         "/Shows/%s/Episodes?SeasonId=%s&UserId=%s"
         "&Fields=IndexNumber,ParentIndexNumber,UserData&EnableImages=false",
         seriesId.c_str(), seasonId.c_str(), auth.userId.c_str());
-    return fetchEpisodes(serverUrl + qs, auth, out);
+    return fetchEpisodes(serverUrl + qs, auth, out, 4u << 20);   /* a long anime season */
 }
 
 /* a long series is more than the 256 KB of a response (about 300 episodes):
@@ -1827,6 +1827,8 @@ bool JellyfinClient::getShuffledEpisodes(const std::string& serverUrl,
     return fetchEpisodes(serverUrl + qs, auth, out);
 }
 
+static float jsonGetFloat(const std::string& json, const char* key);
+
 bool JellyfinClient::fetchEpisodes(const std::string& url, const JellyfinAuth& auth,
                                    std::vector<JellyfinEpisode>& out, size_t maxResponse) {
     std::string resp;
@@ -1847,6 +1849,9 @@ bool JellyfinClient::fetchEpisodes(const std::string& url, const JellyfinAuth& a
         e.seasonNumber          = c->self->jsonGetInt(obj,    "ParentIndexNumber");
         e.playbackPositionTicks = c->self->jsonGetLongLong(obj, "PlaybackPositionTicks");
         e.played                = c->self->jsonGetBool(obj, "Played");
+        e.runTimeTicks          = c->self->jsonGetLongLong(obj, "RunTimeTicks");
+        e.rating                = jsonGetFloat(obj, "CommunityRating");
+        e.lastPlayed            = c->self->jsonGetString(obj, "LastPlayedDate");
         if (!e.id.empty()) c->out->push_back(e);
     }, &ctx);
 

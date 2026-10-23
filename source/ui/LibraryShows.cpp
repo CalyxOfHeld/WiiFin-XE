@@ -4,7 +4,13 @@
 #include "Ui.h"
 #include "../input/Input.h"
 #include "../core/Lang.h"
+#include "../core/SoundFX.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <ctype.h>
+#include <algorithm>
 
 using namespace LibDraw;
 
@@ -53,6 +59,7 @@ bool LibraryView::startSeriesFromStart()
 }
 
 bool LibraryView::updateSeasons(ir_t& ir, bool aPressed) {
+    if (seasonAsk) { updateSeasonAsk(ir); return false; }
     int n = (int)seasons.size();
     if (Input::isBackPressed()) {
         freeSeasonPosters();
@@ -116,6 +123,10 @@ bool LibraryView::updateSeasons(ir_t& ir, bool aPressed) {
     }
     if (Input::is2Pressed() && n > 0) return startShuffle("");   /* whole series */
     if (Input::is1Pressed()) toggleFavorite(currentSeriesId, seriesFavorite);
+    if (Input::isActionPressed() && n > 0 && seasonSel < n) {   /* +: the season watched, asked first */
+        askSeasonWatched(seasons[seasonSel].id, seasons[seasonSel].name);
+        return false;
+    }
     if (aPressed && n > 0 && seasonSel < n && seasons[seasonSel].id == SPECIALS_ROW) {
         openSpecials(currentSeriesId, currentSeriesName, State::SeasonsReady);
         return false;
@@ -129,15 +140,30 @@ bool LibraryView::updateSeasons(ir_t& ir, bool aPressed) {
     return false;
 }
 
+/* The episodes: Up/Down, a page at a time with Left/Right or -/+ (seasons
+ * of hundreds of episodes), 1 watched or not, 2 the options (sort,
+ * search, the season marked watched, shuffle); B clears a search first */
 bool LibraryView::updateEpisodes(ir_t& ir, bool aPressed) {
-    int n = (int)episodes.size();
+    if (seasonAsk) { updateSeasonAsk(ir); return false; }
+    if (epPanel || epTyping) return updateEpisodePanel(ir);
+    const int n = (int)episodeView.size();
     if (Input::isBackPressed()) {
+        if (!episodeQuery.empty()) { episodeQuery.clear(); buildEpisodeView(); return false; }
         if (episodesFromHome) { episodesFromHome = false; state = State::LibsReady; }
         else                  state = State::SeasonsReady;
         return false;
     }
-    if (Input::isUpPressed())   { if (episodeSel > 0)   { episodeSel--; clampEpisodeScroll(); } irMode = false; }
-    if (Input::isDownPressed()) { if (episodeSel < n-1) { episodeSel++; clampEpisodeScroll(); } irMode = false; }
+    const int was = episodeSel;
+    if (Input::isUpPressed())   { if (episodeSel > 0)   episodeSel--; irMode = false; }
+    if (Input::isDownPressed()) { if (episodeSel < n-1) episodeSel++; irMode = false; }
+    if (Input::isLeftPressed() || Input::isLPressed()) {   /* a page up */
+        episodeSel -= ITEMS_VISIBLE; episodeTop -= ITEMS_VISIBLE; irMode = false;
+    }
+    if (Input::isRightPressed() || Input::isRPressed()) {  /* a page down */
+        episodeSel += ITEMS_VISIBLE; episodeTop += ITEMS_VISIBLE; irMode = false;
+        if (episodeTop > n - ITEMS_VISIBLE) episodeTop = n - ITEMS_VISIBLE;
+    }
+    if (episodeSel != was || episodeTop < 0) clampEpisodeScroll();
     if (irMode && ir.valid && !Input::isUpPressed() && !Input::isDownPressed()) {
         for (int i = 0; i < ITEMS_VISIBLE; i++) {
             int idx = episodeTop + i;
@@ -150,17 +176,281 @@ bool LibraryView::updateEpisodes(ir_t& ir, bool aPressed) {
             }
         }
     }
-    if (Input::is2Pressed() && n > 0) return startShuffle(currentSeasonId);
-    if (Input::isActionPressed() && n > 0 && episodeSel < n) {   /* +: watched or not */
-        togglePlayed(episodes[episodeSel].id, episodes[episodeSel].played);
-        if (episodes[episodeSel].played) episodes[episodeSel].playbackPositionTicks = 0;
+    if (Input::is2Pressed() && !episodes.empty()) {
+        epPanel = true;
+        epPanelRow = 0;
+        SoundFX::play(SoundFX::FX::Open);
+        return false;
     }
-    if (aPressed && n > 0 && episodeSel < n) {
-        detailItemId = episodes[episodeSel].id;
+    const int e = shownEpisode();
+    if (Input::is1Pressed() && e >= 0) {   /* watched or not */
+        togglePlayed(episodes[e].id, episodes[e].played);
+        if (episodes[e].played) episodes[e].playbackPositionTicks = 0;
+    }
+    if (aPressed && e >= 0) {
+        detailItemId = episodes[e].id;
         detailReturnState = State::EpisodesReady;
         state = State::DetailLoad;
     }
     return false;
+}
+
+/* ---------------------------------------------------------------
+ * The episodes as shown: sorted one way or another, searched
+ * --------------------------------------------------------------- */
+enum EpisodeSort { ES_EPISODE, ES_TITLE, ES_LAST, ES_WATCHED, ES_RATING, ES_LENGTH, ES_COUNT };
+static const char* const EP_SORTS[ES_COUNT] = {
+    N_("Episode"), N_("Title A-Z"), N_("Last Watched"), N_("Watched Status"), N_("Rating"), N_("Length")
+};
+/* each starts the useful way round: the latest watched, the best rated, the longest first */
+static const bool EP_DESC[ES_COUNT] = { false, false, true, false, true, true };
+
+int LibraryView::shownEpisode() const
+{
+    return episodeSel >= 0 && episodeSel < (int)episodeView.size() ? episodeView[episodeSel] : -1;
+}
+
+void LibraryView::buildEpisodeView()
+{
+    const int keep = shownEpisode();
+    std::string q = episodeQuery;
+    for (char& c : q) c = (char)tolower((unsigned char)c);
+    const bool number = !q.empty() && q.find_first_not_of("0123456789") == std::string::npos;
+    episodeView.clear();
+    for (int i = 0; i < (int)episodes.size(); ++i) {
+        if (!q.empty()) {
+            std::string name = episodes[i].name;
+            for (char& c : name) c = (char)tolower((unsigned char)c);
+            if (name.find(q) == std::string::npos && !(number && episodes[i].indexNumber == atoi(q.c_str())))
+                continue;
+        }
+        episodeView.push_back(i);
+    }
+    const int sort = episodeSort;
+    const bool desc = episodeDesc;
+    std::stable_sort(episodeView.begin(), episodeView.end(), [&](int a, int b) {
+        const JellyfinEpisode &x = episodes[a], &y = episodes[b];
+        int k = 0;
+        switch (sort) {
+        case ES_TITLE:   k = strcasecmp(x.name.c_str(), y.name.c_str()); break;
+        case ES_LAST:    /* never watched: at the end, either way round */
+            if (x.lastPlayed.empty() != y.lastPlayed.empty()) return y.lastPlayed.empty();
+            k = x.lastPlayed.compare(y.lastPlayed);
+            break;
+        case ES_WATCHED: k = (int)x.played - (int)y.played; break;
+        case ES_RATING:  k = x.rating < y.rating ? -1 : x.rating > y.rating; break;
+        case ES_LENGTH:  k = x.runTimeTicks < y.runTimeTicks ? -1 : x.runTimeTicks > y.runTimeTicks; break;
+        default:         k = a - b; break;
+        }
+        if (desc) k = -k;
+        return k ? k < 0 : a < b;   /* the season's order among equals */
+    });
+    episodeSel = 0;
+    for (int i = 0; i < (int)episodeView.size(); ++i) if (episodeView[i] == keep) episodeSel = i;
+    episodeTop = episodeSel - ITEMS_VISIBLE / 2;
+    clampEpisodeScroll();
+}
+
+/* the options: 2 in the episodes */
+static const float EPP_W = 400, EPP_X = 320 - EPP_W / 2, EPP_Y = 82, EPP_STEP = 42;
+static const int   EPP_ROWS = 5;
+
+bool LibraryView::updateEpisodePanel(ir_t& ir)
+{
+    if (epTyping) {   /* the search: the list follows each letter */
+        epKb.setOrigin((640 - epKb.width()) * 0.5f, 214);
+        const Keyboard::Result r = epKb.update(ir, epDraft, 40);
+        if (epDraft != episodeQuery) { episodeQuery = epDraft; buildEpisodeView(); }
+        if (r == Keyboard::Result::Enter)  { epTyping = false; epPanel = false; SoundFX::play(SoundFX::FX::Open); }
+        if (r == Keyboard::Result::Cancel) { epTyping = false; SoundFX::play(SoundFX::FX::Back); }
+        return false;
+    }
+    if (Input::isBackPressed()) { epPanel = false; SoundFX::play(SoundFX::FX::Back); return false; }
+    const int was = epPanelRow;
+    if (Input::isUpPressed())   epPanelRow = (epPanelRow + EPP_ROWS - 1) % EPP_ROWS;
+    if (Input::isDownPressed()) epPanelRow = (epPanelRow + 1) % EPP_ROWS;
+    int hover = -1;
+    if (ir.valid && ir.x >= EPP_X + 16 && ir.x < EPP_X + EPP_W - 16)
+        for (int i = 0; i < EPP_ROWS; ++i) {
+            const float ry = EPP_Y + 50 + i * EPP_STEP;
+            if (ir.y >= ry && ir.y < ry + 34) hover = i;
+        }
+    if (hover >= 0) epPanelRow = hover;
+    if (epPanelRow != was) SoundFX::play(SoundFX::FX::Move);
+    const int d = Input::isRightPressed() ? 1 : Input::isLeftPressed() ? -1 : 0;
+    if (d && epPanelRow == 0) {
+        episodeSort = (episodeSort + d + ES_COUNT) % ES_COUNT;
+        episodeDesc = EP_DESC[episodeSort];
+        buildEpisodeView();
+        SoundFX::play(SoundFX::FX::Move);
+    }
+    if (d && epPanelRow == 1) { episodeDesc = !episodeDesc; buildEpisodeView(); SoundFX::play(SoundFX::FX::Move); }
+    if (!Input::isAJustPressed() || (ir.valid && hover < 0)) return false;
+    switch (epPanelRow) {
+    case 2:
+        epTyping = true;
+        epDraft = episodeQuery;
+        epKb.reset();
+        SoundFX::play(SoundFX::FX::Select);
+        return false;
+    case 3:
+        epPanel = false;
+        askSeasonWatched(currentSeasonId, currentSeasonName);
+        return false;
+    case 4:
+        epPanel = false;
+        return startShuffle(currentSeasonId);
+    default:
+        epPanel = false;
+        SoundFX::play(SoundFX::FX::Open);
+        return false;
+    }
+}
+
+static const char* orderName(int sort, bool desc)
+{
+    if (sort == ES_WATCHED) return desc ? N_("Watched first") : N_("Not watched first");
+    return desc ? N_("Descending") : N_("Ascending");
+}
+
+void LibraryView::renderEpisodePanel(ir_t& ir)
+{
+    const Ui::Palette& p = Ui::pal();
+    if (epTyping) {
+        GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, p.dim, 1);
+        Ui::card((640 - epKb.width()) * 0.5f - 10, 104, epKb.width() + 20, epKb.height() + 120, 16, 0.0f);
+        Ui::text((640 - epKb.width()) * 0.5f + 4, 116, tr("Search this season"), 18, p.text);
+        char found[48];
+        snprintf(found, sizeof(found), tr("%d of %d"), (int)episodeView.size(), (int)episodes.size());
+        Ui::textRight((640 + epKb.width()) * 0.5f - 4, 120, found, 13, p.textDim);
+        const std::string shown = epDraft + "_";
+        Ui::field((640 - epKb.width()) * 0.5f, 150, epKb.width(), 40, shown.c_str(), 18, true);
+        epKb.render(ir);
+        const Ui::Hint l[] = { { "A", N_("Type") }, { "B", N_("Delete") }, { "+", N_("Done") } };
+        Ui::bottomBar(l, 3);
+        return;
+    }
+    const float H = 50 + EPP_ROWS * EPP_STEP + 34;
+    Ui::roundRect(Ui::screenLeft(), 0, Ui::screenWidth(), 480, 0, 0x00000080);
+    Ui::shadow(EPP_X, EPP_Y + 4, EPP_W, H, 16, 10.0f, p.shadow);
+    Ui::roundRect(EPP_X, EPP_Y, EPP_W, H, 16, p.cardTop, p.cardBottom);
+    Ui::roundBorder(EPP_X, EPP_Y, EPP_W, H, 16, 1.5f, p.cardBorder);
+    Ui::textCentered(320, EPP_Y + 14, fitText(font, filterDejaVu(currentSeasonName, 60), 19, (int)EPP_W - 40).c_str(), 19, p.text);
+    const char* labels[EPP_ROWS] = { N_("Sort by"), N_("Order"), N_("Search"), N_("Mark Season Watched"), N_("Shuffle Season") };
+    for (int i = 0; i < EPP_ROWS; ++i) {
+        const float ry = EPP_Y + 50 + i * EPP_STEP;
+        const bool on = i == epPanelRow;
+        Ui::card(EPP_X + 16, ry, EPP_W - 32, 34, 10, on ? Ui::pulse() : 0.0f);
+        Ui::text(EPP_X + 30, ry + 8, tr(labels[i]), 15, i >= 3 ? (on ? p.accentDark : p.text) : p.textDim);
+        std::string v;
+        if (i == 0) v = tr(EP_SORTS[episodeSort]);
+        if (i == 1) v = tr(orderName(episodeSort, episodeDesc));
+        if (i == 2) v = episodeQuery.empty() ? std::string(tr("A to type")) : fitText(font, episodeQuery, 16, 170);
+        if (i <= 1 && on) v = "\xe2\x80\xb9  " + v + "  \xe2\x80\xba";
+        if (!v.empty()) Ui::textRight(EPP_X + EPP_W - 30, ry + 7, v.c_str(), 16, on ? p.text : p.textDim);
+    }
+    const Ui::Hint l[] = { { "A", N_("Select") }, { "LR", N_("Change") } };
+    const Ui::Hint r[] = { { "B", N_("Close") } };
+    Ui::footer(l, 2, r, 1);
+}
+
+/* ---------------------------------------------------------------
+ * A season marked watched: asked first
+ * --------------------------------------------------------------- */
+void LibraryView::askSeasonWatched(const std::string& id, const std::string& name)
+{
+    if (id.empty() || id == SPECIALS_ROW) return;
+    seasonAsk = true;
+    seasonAskSel = 1;   /* Cancel first */
+    seasonAskId = id;
+    seasonAskName = name;
+    SoundFX::play(SoundFX::FX::Select);
+}
+
+void LibraryView::updateSeasonAsk(ir_t& ir)
+{
+    const int was = seasonAskSel;
+    if (Input::isLeftPressed())  seasonAskSel = 0;
+    if (Input::isRightPressed()) seasonAskSel = 1;
+    if (ir.valid && ir.y >= 258 && ir.y < 296) {
+        if (ir.x >= 150 && ir.x < 310) seasonAskSel = 0;
+        if (ir.x >= 330 && ir.x < 490) seasonAskSel = 1;
+    }
+    if (seasonAskSel != was) SoundFX::play(SoundFX::FX::Move);
+    if (Input::isBackPressed() || (Input::isAJustPressed() && seasonAskSel == 1)) {
+        seasonAsk = false;
+        SoundFX::play(SoundFX::FX::Back);
+        return;
+    }
+    if (Input::isAJustPressed()) {
+        seasonAsk = false;
+        SoundFX::play(SoundFX::FX::Open);
+        markSeasonWatched(seasonAskId, seasonAskName);
+    }
+}
+
+void LibraryView::renderSeasonAsk()
+{
+    const Ui::Palette& p = Ui::pal();
+    GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, p.dim, 1);
+    Ui::card(120, 160, 400, 152, 20, 0.0f);
+    char q[160];
+    /* TRANSLATORS: %s is a season's name */
+    snprintf(q, sizeof(q), tr("Mark %s watched?"), filterDejaVu(seasonAskName, 60).c_str());
+    Ui::textCentered(320, 178, fitText(font, q, 20, 370).c_str(), 20, p.text);
+    Ui::textCentered(320, 210, tr("Every episode not watched yet is marked watched."), 14, p.textDim);
+    Ui::textCentered(320, 228, tr("The ones already watched stay as they are."), 14, p.textDim);
+    Ui::button(150, 258, 160, 38, N_("Mark Watched"), 16, seasonAskSel == 0 ? Ui::pulse() : 0.0f);
+    Ui::button(330, 258, 160, 38, N_("Cancel"), 16, seasonAskSel == 1 ? Ui::pulse() : 0.0f);
+    const Ui::Hint l[] = { { "A", N_("Select") } };
+    const Ui::Hint r[] = { { "B", N_("Cancel") } };
+    Ui::footer(l, 1, r, 1);
+}
+
+/* only the episodes not watched yet: one request each (the season's own
+ * request would mark the watched ones again, their last-watched dates too) */
+void LibraryView::markSeasonWatched(const std::string& seasonId, const std::string& name)
+{
+    std::vector<JellyfinEpisode> eps;
+    const bool here = seasonId == currentSeasonId && !episodes.empty();
+    bool ok = true;
+    std::string err;
+    if (here) eps = episodes;
+    else runWithLoading([&]() {
+        ok = client.getEpisodes(serverUrl, auth, currentSeriesId, seasonId, eps);
+        if (!ok) err = client.lastError();
+    });
+    if (!ok) { Ui::showNotice(tr("The season wasn't marked"), err, 5000); return; }
+    std::vector<std::string> ids;
+    for (const JellyfinEpisode& e : eps) if (!e.played) ids.push_back(e.id);
+    if (ids.empty()) { Ui::showNotice(name, tr("Every episode is already watched."), 3000); return; }
+
+    std::vector<char> marked(ids.size(), 0);
+    int count = 0;
+    progressLabel = tr("Marking watched");
+    progressDone  = 0;
+    progressTotal = (int)ids.size();
+    runWithLoading([&]() {
+        for (size_t i = 0; i < ids.size(); ++i) {
+            if (client.setPlayed(serverUrl, auth, ids[i], true)) { marked[i] = 1; ++count; }
+            progressDone = (int)i + 1;
+        }
+    });
+    progressLabel.clear();
+    progressTotal = 0;
+    SYS_Report("[Series] season marked watched: %d of %d\n", count, (int)ids.size());
+    if (here)
+        for (JellyfinEpisode& e : episodes)
+            for (size_t i = 0; i < ids.size(); ++i)
+                if (marked[i] && e.id == ids[i]) { e.played = true; e.playbackPositionTicks = 0; break; }
+    browse.invalidate();    /* continue watching, next up */
+    if (here) buildEpisodeView();
+    char msg[96];
+    if (count == (int)ids.size())
+        snprintf(msg, sizeof(msg), count == 1 ? tr("%d episode marked watched") : tr("%d episodes marked watched"), count);
+    else
+        snprintf(msg, sizeof(msg), tr("%d of %d marked watched; the server refused the others"), count, (int)ids.size());
+    Ui::showNotice(name, msg, 4000);
 }
 
 /* the series' page: its poster (A plays it from the start), its name,
@@ -263,9 +553,11 @@ void LibraryView::renderSeasons(ir_t& ir) {
         Ui::footer(l, 3, r, 2);
         return;
     }
+    const bool real = seasonSel < (int)seasons.size() && seasons[seasonSel].id != SPECIALS_ROW;
     const Ui::Hint l[] = { { "A", N_("Select") }, { "2", N_("Shuffle") }, { "B", N_("Back") } };
-    const Ui::Hint r[] = { { "1", seriesFavorite ? N_("Unfavorite") : N_("Favorite") } };
-    Ui::footer(l, 3, r, 1);
+    const Ui::Hint r[] = { { "+!", N_("Mark Watched") }, { "1", seriesFavorite ? N_("Unfavorite") : N_("Favorite") } };
+    Ui::footer(l, 3, real ? r : r + 1, real ? 2 : 1);
+    if (seasonAsk) renderSeasonAsk();
 }
 
 /* the seasons themselves: posters, or a list */
@@ -328,10 +620,11 @@ void LibraryView::renderEpisodes(ir_t& ir) {
     drawBreadcrumb(hdr, 18, 580);
     headerLine(46);
 
-    int n = (int)episodes.size();
+    const int n = (int)episodeView.size();
     for (int i = 0; i < ITEMS_VISIBLE; i++) {
         int idx = episodeTop + i;
         if (idx >= n) break;
+        const JellyfinEpisode& ep = episodes[episodeView[idx]];
         bool sel   = (idx == episodeSel);
         bool hover = ir.valid &&
                      ir.y >= LIST_Y + i * ROW_H &&
@@ -343,25 +636,51 @@ void LibraryView::renderEpisodes(ir_t& ir) {
 
         int tx = LIST_X + 16;
         // Episode number badge
-        if (episodes[idx].indexNumber > 0) {
+        if (ep.indexNumber > 0) {
             char num[16];
             /* TRANSLATORS: E = episode, its number in the season */
-            snprintf(num, sizeof(num), tr("E%02d"), episodes[idx].indexNumber);
+            snprintf(num, sizeof(num), tr("E%02d"), ep.indexNumber);
             int bw = Ui::textWidth(num, 12) + 14;
             Ui::roundRect(tx, ry + 12, bw, 20, 10, Ui::mix(p.accent, 0xFFFFFFFF, 0.2f), p.accentDark);
             Ui::textCentered(tx + bw / 2, ry + 15, num, 12, p.textOnAccent);
             tx += bw + 10;
         }
-        const bool seen = episodes[idx].played;
-        const int  avail = LIST_X + LIST_W - 16 - tx - (seen ? 34 : 0);
+        /* sorted by rating or length: that value on the right */
+        char extra[24] = "";
+        if (episodeSort == ES_RATING && ep.rating > 0) snprintf(extra, sizeof(extra), "\xe2\x98\x85 %.1f", ep.rating);
+        if (episodeSort == ES_LENGTH && ep.runTimeTicks > 0)
+            snprintf(extra, sizeof(extra), tr("%d min"), (int)((ep.runTimeTicks + 300000000LL) / 600000000LL));
+        const int ew = extra[0] ? Ui::textWidth(extra, 14) + 14 : 0;
+        const bool seen = ep.played;
+        const int  avail = LIST_X + LIST_W - 16 - tx - (seen ? 34 : 0) - ew;
         const u32  col = seen ? Ui::mix(p.textDim, p.accentDark, f) : Ui::mix(p.text, p.accentDark, f);
-        titleText(0, tx, ry + 11, avail, filterDejaVu(episodes[idx].name, 200), 18, col, sel);
+        titleText(0, tx, ry + 11, avail, filterDejaVu(ep.name, 200), 18, col, sel);
+        if (extra[0]) Ui::textRight(LIST_X + LIST_W - 16 - (seen ? 34 : 0), ry + 13, extra, 14, p.textDim);
         if (seen)   /* watched: a check on the right */
             Ui::textRight(LIST_X + LIST_W - 16, ry + 11, "\xe2\x9c\x93", 18, p.ok);
     }
+    if (n == 0 && !episodeQuery.empty())
+        Ui::textCentered(320, LIST_Y + 40, tr("No episode matches"), 16, p.textDim);
     Ui::scrollbar(614, LIST_Y + 2, ITEMS_VISIBLE * ROW_H - 6, episodeTop, ITEMS_VISIBLE, n);
-    const bool seenSel = episodeSel < n && episodes[episodeSel].played;
-    const Ui::Hint l[] = { { "A", N_("Details") }, { "2", N_("Shuffle") }, { "B", N_("Back") } };
-    const Ui::Hint r[] = { { "+!", seenSel ? N_("Unwatched") : N_("Watched") } };
-    Ui::footer(l, 3, r, 1);
+
+    /* how the list is shown, under it: the search, the sort */
+    std::string how;
+    if (!episodeQuery.empty()) {
+        char s[96];
+        snprintf(s, sizeof(s), tr("\"%s\": %d of %d"), episodeQuery.c_str(), n, (int)episodes.size());
+        how = s;
+    }
+    if (episodeSort != ES_EPISODE || episodeDesc)
+        how += (how.empty() ? "" : "  \xc2\xb7  ") + std::string(tr(EP_SORTS[episodeSort])) + ", " +
+               tr(orderName(episodeSort, episodeDesc));
+
+    const int e = shownEpisode();
+    const bool seenSel = e >= 0 && episodes[e].played;
+    const Ui::Hint l[] = { { "A", N_("Details") }, { "1", seenSel ? N_("Unwatched") : N_("Watched") },
+                           { "2", N_("Options") } };
+    const Ui::Hint r[] = { { "-/+", N_("Page") }, { "B", episodeQuery.empty() ? N_("Back") : N_("Clear") } };
+    Ui::footer(l, 3, r, 2, how.empty() ? nullptr : how.c_str());
+
+    if (epPanel || epTyping) renderEpisodePanel(ir);
+    if (seasonAsk) renderSeasonAsk();
 }

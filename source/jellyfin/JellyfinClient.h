@@ -43,6 +43,11 @@ struct JellyfinEpisode {
     int         seasonNumber = 0;
     long long   playbackPositionTicks = 0;
     bool        played = false;   // UserData.Played
+    /* sorting a season: its length, its rating, when it was last played
+     * (ISO 8601, "" never: sorts as text) */
+    long long   runTimeTicks = 0;
+    float       rating       = 0;   // CommunityRating
+    std::string lastPlayed;         // UserData.LastPlayedDate
 };
 
 struct JellyfinPerson {

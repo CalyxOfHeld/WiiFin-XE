@@ -290,9 +290,36 @@ private:
     void freeSeasonPosters();
     std::string currentSeasonId;
     std::string currentSeasonName;
-    std::vector<JellyfinEpisode> episodes;
-    int episodeSel = 0;
+    std::vector<JellyfinEpisode> episodes;   // the season's, in its order (play on from them)
+    int episodeSel = 0;                      // place in episodeView
     int episodeTop = 0;
+    /* the list as shown: sorted, searched (indices into episodes) */
+    std::vector<int> episodeView;
+    int         episodeSort = 0;              // EpisodeSort in LibraryShows.cpp
+    bool        episodeDesc = false;
+    std::string episodeQuery;                 // "" all of them
+    void buildEpisodeView();                  // the selected one kept where it can
+    int  shownEpisode() const;                // episodes index selected, -1 none
+    /* 2 in the episodes: sort, search, the season marked watched, shuffle */
+    bool     epPanel = false;
+    int      epPanelRow = 0;
+    bool     epTyping = false;
+    Keyboard epKb;
+    std::string epDraft;
+    bool updateEpisodePanel(ir_t& ir);   // true: shuffle started
+    void renderEpisodePanel(ir_t& ir);
+    /* a season marked watched: asked first; only the episodes not watched
+     * yet are marked (the others stay as they are) */
+    bool        seasonAsk = false;
+    int         seasonAskSel = 1;             // 0 Mark Watched, 1 Cancel
+    std::string seasonAskId, seasonAskName;
+    void askSeasonWatched(const std::string& id, const std::string& name);
+    void updateSeasonAsk(ir_t& ir);
+    void renderSeasonAsk();
+    void markSeasonWatched(const std::string& seasonId, const std::string& name);
+    /* the spinner's line while a long job runs ("" none) */
+    std::string    progressLabel;
+    volatile int   progressDone = 0, progressTotal = 0;
 
     // Music track browsing
     std::string                       musicAlbumId;
