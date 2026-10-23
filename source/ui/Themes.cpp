@@ -95,6 +95,21 @@ Palette buildPalette(const CustomTheme& t)
         const int e = exactIndex(kc.first);
         if (e >= 0) p.*(EXACT[e].m) = kc.second;
     }
+    /* the ring from the accent, no Selection of its own: it must stand out
+     * from a card more than a card's own border does, or what is selected
+     * looks like the only thing without a ring (a dark accent on Dark).
+     * Then it rings in the text's colour. */
+    bool ownRing = false;
+    for (const auto& kc : t.colors) if (kc.first == "selection") ownRing = true;
+    if (!ownRing) {
+        auto luma = [](u32 c) { return (int)((c >> 24) * 299 + ((c >> 16) & 0xFF) * 587 + ((c >> 8) & 0xFF) * 114) / 1000; };
+        const int card = luma(mix(p.cardTop, p.cardBottom, 0.5f));
+        const int need = std::max(48, abs(luma(p.cardBorder) - card) + 16);
+        if (abs(luma(p.focus) - card) < need) {
+            p.focus = p.text | 0xFF;
+            p.glow  = (p.text & 0xFFFFFF00) | 0x60;
+        }
+    }
     return p;
 }
 
