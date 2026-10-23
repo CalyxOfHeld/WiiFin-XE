@@ -43,6 +43,8 @@ ASSET_OFILES := \
 	$(BUILD)/button_start_png.o \
 	$(BUILD)/logo_wiifin_png.o \
 	$(BUILD)/avatar_jelly_png.o \
+	$(BUILD)/saver_vhs_png.o \
+	$(BUILD)/saver_cd_png.o \
 	$(BUILD)/cursor_pointer_png.o \
 	$(BUILD)/cursor_hand_open_png.o \
 	$(BUILD)/cursor_hand_closed_png.o \
@@ -154,6 +156,14 @@ $(BUILD)/logo_wiifin_png.o: data/images/logo_wiifin.png
 $(BUILD)/avatar_jelly_png.o: data/images/avatar_jelly.png
 	xxd -i -n data_avatar_jelly_png $< > $(BUILD)/avatar_jelly_png.h
 	$(CC) -x c -c -o $@ $(BUILD)/avatar_jelly_png.h
+
+$(BUILD)/saver_vhs_png.o: data/images/saver_vhs.png
+	xxd -i -n data_saver_vhs_png $< > $(BUILD)/saver_vhs_png.h
+	$(CC) -x c -c -o $@ $(BUILD)/saver_vhs_png.h
+
+$(BUILD)/saver_cd_png.o: data/images/saver_cd.png
+	xxd -i -n data_saver_cd_png $< > $(BUILD)/saver_cd_png.h
+	$(CC) -x c -c -o $@ $(BUILD)/saver_cd_png.h
 
 # The interface's translations (lang/*.po), see source/core/Lang.cpp
 LANG_PO := $(sort $(wildcard lang/*.po))

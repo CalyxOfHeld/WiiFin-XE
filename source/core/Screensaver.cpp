@@ -13,6 +13,8 @@
 #include <string>
 
 extern unsigned char data_logo_wiifin_png[];
+extern unsigned char data_saver_vhs_png[];
+extern unsigned char data_saver_cd_png[];
 
 namespace {
 
@@ -25,6 +27,8 @@ u64   s_lastActive = 0;          /* ms */
 bool  s_on = false;
 
 GRRLIB_texImg* s_wiifin = nullptr;
+GRRLIB_texImg* s_vhs = nullptr;           /* tools/screensaver_logos.py: white, tinted */
+GRRLIB_texImg* s_cd = nullptr;
 
 /* the picture: its name (from WiiFin's folder), it loaded (shrunk), the one
  * that would not load (not tried again until chosen again), and whether its
@@ -155,6 +159,15 @@ void logoSize(float& w, float& h)
 {
     switch (kind()) {
     case Screensaver::LogoDvd: w = 196; h = 104; return;
+    case Screensaver::LogoVhs:
+    case Screensaver::LogoCd: {
+        const bool vhs = kind() == Screensaver::LogoVhs;
+        GRRLIB_texImg*& t = vhs ? s_vhs : s_cd;
+        if (!t) t = GRRLIB_LoadTexture(vhs ? data_saver_vhs_png : data_saver_cd_png);
+        w = vhs ? 200 : 210;
+        h = t ? w * t->h / t->w : w / 2;
+        return;
+    }
     case Screensaver::LogoOwn: {
         GRRLIB_texImg* t = ownPicture();
         const float k = 220.0f / (t->w > t->h ? t->w : t->h);
@@ -264,8 +277,10 @@ std::string Screensaver::pictureLabel()
 void Screensaver::nextLogo()
 {
     if (s_logoKind == LogoWiiFin) { s_logoKind = LogoDvd; return; }
+    if (s_logoKind == LogoDvd)    { s_logoKind = LogoVhs; return; }
+    if (s_logoKind == LogoVhs)    { s_logoKind = LogoCd; return; }
     const std::vector<std::string> all = pictures();
-    if (s_logoKind == LogoDvd) {
+    if (s_logoKind == LogoCd) {
         /* none there: "Picture" all the same, saying where to put one */
         s_logoKind = LogoOwn;
         setPicture(all.empty() ? std::string() : all[0]);
@@ -338,20 +353,23 @@ void Screensaver::draw()
     }
     const float x = s_x0 + s_px, y = s_y0 + s_py;
     const int k = s_kindNow;
-    const u32 c = k == LogoDvd ? colourOf(SOLID, N_SOLID) : colourOf(TINTS, N_TINTS);
+    /* the tape and disc logos: in plain colours; the WiiFin logo and a
+     * picture: their own, shifted */
+    const bool mark = k == LogoDvd || k == LogoVhs || k == LogoCd;
+    const u32 c = mark ? colourOf(SOLID, N_SOLID) : colourOf(TINTS, N_TINTS);
     /* the corner: a glow in its colour, fading over a second and a half
      * (one soft swell: nothing blinks) */
     if (s_flash > 0) {
         const float a = s_flash / 90.0f;
-        Ui::shadow(x, y, s_w, s_h, 16, 26.0f, Ui::alpha(k == LogoDvd || s_effect == EffectNone ? c : colourOf(SOLID, N_SOLID), 0.7f * a));
+        Ui::shadow(x, y, s_w, s_h, 16, 26.0f, Ui::alpha(mark || s_effect == EffectNone ? c : colourOf(SOLID, N_SOLID), 0.7f * a));
         --s_flash;
     }
     if (k == LogoDvd) {
         drawDvd(x, y, c);
         return;
     }
-    GRRLIB_texImg* tex = k == LogoOwn ? s_own : s_wiifin;
+    GRRLIB_texImg* tex = k == LogoOwn ? s_own : k == LogoVhs ? s_vhs : k == LogoCd ? s_cd : s_wiifin;
     if (!tex) return;
     const float kx = s_w / tex->w, ky = s_h / tex->h;
-    GRRLIB_DrawImg(x, y, tex, 0, kx, ky, (c & 0xFFFFFF00) | (s_effect == EffectNone ? 0xFF : 0xC8));
+    GRRLIB_DrawImg(x, y, tex, 0, kx, ky, (c & 0xFFFFFF00) | (mark || s_effect == EffectNone ? 0xFF : 0xC8));
 }

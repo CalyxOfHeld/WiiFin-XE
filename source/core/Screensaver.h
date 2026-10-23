@@ -15,13 +15,14 @@ int  minutes();
 /* the next and previous choice: Off, 1, 3, 5, 10, 15, 30 */
 int  nextMinutes(int m, int dir);
 
-/* what drifts: the WiiFin logo, a DVD-player-style one, or a picture of
- * one's own (none found: WiiFin's).  It moves in whole steps, so now and
+/* what drifts: the WiiFin logo, a DVD-, VHS- or CD-style one (WiiFin's
+ * own drawings, after the old marks), or a picture of one's own (none
+ * found: WiiFin's).  It moves in whole steps, so now and
  * then it lands right in a corner (every few minutes) and glows */
-enum Logo { LogoWiiFin = 0, LogoDvd = 1, LogoOwn = 2, LOGO_COUNT };
+enum Logo { LogoWiiFin = 0, LogoDvd = 1, LogoOwn = 2, LogoVhs = 3, LogoCd = 4, LOGO_COUNT };
 void setLogo(int l);
 int  logo();
-/* the next choice: WiiFin, DVD, then each picture in turn */
+/* the next choice: WiiFin, DVD, VHS, CD, then each picture in turn */
 void nextLogo();
 
 /* the picture: "screensaver.png" (or .jpg) in WiiFin's folder, or

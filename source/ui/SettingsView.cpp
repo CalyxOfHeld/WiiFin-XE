@@ -276,6 +276,8 @@ SettingsView::RowInfo SettingsView::describe(int id)
         const int l = Screensaver::logo();
         set(N_("Screensaver Logo"),
             l == Screensaver::LogoDvd ? N_("A DVD-player-style logo")
+            : l == Screensaver::LogoVhs ? N_("A VHS-tape-style logo")
+            : l == Screensaver::LogoCd  ? N_("A Compact-Disc-style logo")
             : l == Screensaver::LogoOwn
                 ? (Screensaver::picture().empty()
                        ? N_("Put a PNG or JPEG in apps/WiiFin/pictures/; until then, the WiiFin logo")
@@ -283,7 +285,8 @@ SettingsView::RowInfo SettingsView::describe(int id)
                        ? N_("Your picture, from apps/WiiFin/ (A: the next one)")
                        : N_("That picture can't be used: a JPEG, or a PNG up to 1600 pixels, under 3 MB"))
                 : N_("The WiiFin logo"),
-            l == Screensaver::LogoDvd ? N_("DVD") : l == Screensaver::LogoOwn ? N_("Picture") : N_("WiiFin"),
+            l == Screensaver::LogoDvd ? N_("DVD") : l == Screensaver::LogoVhs ? N_("VHS")
+            : l == Screensaver::LogoCd ? N_("CD") : l == Screensaver::LogoOwn ? N_("Picture") : N_("WiiFin"),
             l ? p.accent : OFF);
         if (l == Screensaver::LogoOwn && !Screensaver::picture().empty()) r.value = Screensaver::pictureLabel();
         break;
