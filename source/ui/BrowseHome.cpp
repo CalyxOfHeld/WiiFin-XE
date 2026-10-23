@@ -1020,7 +1020,8 @@ void BrowseHome::render(const ir_t& ir)
     Ui::roundRect(Ui::screenLeft() - 20, BAND_Y, Ui::screenWidth() + 40, bandHeight(), 16, L.bandTop, L.bandBottom);
     /* and on to the bottom of the screen, under the shade below (no edge
      * where the band would end) */
-    GRRLIB_Rectangle(Ui::screenLeft(), BAND_Y + bandHeight() - 1, Ui::screenWidth(),
+    if (Ui::dimRows())
+        GRRLIB_Rectangle(Ui::screenLeft(), BAND_Y + bandHeight() - 1, Ui::screenWidth(),
                      480 - (BAND_Y + bandHeight()) + 1, L.bandBottom, 1);
     Ui::roundRect(Ui::screenLeft() - 20, BAND_Y, Ui::screenWidth() + 40, 1.5f, 0.75f, L.bandEdge);
 
@@ -1045,8 +1046,9 @@ void BrowseHome::render(const ir_t& ir)
     if (headerFocus < 0) drawInfoPanel(settle < 0 ? 0 : settle);
 
     /* Shade everything under the band (from its bottom edge, which follows
-     * the rows as they slide), the peeking row fading into the floor */
-    {
+     * the rows as they slide), the peeking row fading into the floor;
+     * the setting Other Rows: or not at all */
+    if (Ui::dimRows()) {
         const u32 c = L.floor;
         const float top = BAND_Y + bandHeight(), bottom = 470;
         const int   N = 24;

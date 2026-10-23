@@ -47,6 +47,10 @@ bool solidColors();
 /* The bar's clock: 12-hour (1:31 PM, date month/day) or 24-hour */
 void setClock12h(bool on);
 bool clock12h();
+/* The rows home: the rows under the focused one shaded (fewer things to
+ * look at at once), or all of them shown plainly */
+void setDimRows(bool on);
+bool dimRows();
 
 /* Home screen layout: tile grid of libraries, or rows of poster carousels
  * (independent of the theme; picking the Flix theme switches to Rows). */

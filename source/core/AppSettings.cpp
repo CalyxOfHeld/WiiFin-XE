@@ -74,6 +74,8 @@ void App::loadSettings() {
             g_app_startBrowse = atoi(val) != 0;
         } else if (strcmp(key, "language") == 0) {
             Lang::chooseKey(val);
+        } else if (strcmp(key, "dim_rows") == 0) {
+            Ui::setDimRows(atoi(val) != 0);
         } else if (strcmp(key, "clock_12h") == 0) {
             Ui::setClock12h(atoi(val) != 0);
         } else if (strcmp(key, "solid_colors") == 0) {
@@ -207,6 +209,7 @@ void App::saveSettings() {
     fprintf(f, "library_view=%d\n",     startView.libraryStyle);
     fprintf(f, "solid_colors=%d\n",     startView.solidColors);
     fprintf(f, "clock_12h=%d\n",        Ui::clock12h() ? 1 : 0);
+    fprintf(f, "dim_rows=%d\n",         Ui::dimRows() ? 1 : 0);
     fprintf(f, "language=%s\n",         Lang::choiceKey());
     fprintf(f, "smooth_motion=%d\n",    g_wiifin_smooth_motion ? 1 : 0);
     fprintf(f, "disc_light=%d\n",     g_wiifin_disc_light ? 1 : 0);

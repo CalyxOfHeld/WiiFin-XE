@@ -15,7 +15,7 @@
 
 /* The rows, by what they set (drawRow and activate take these) */
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
-           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_SIGNIN, R_STARTUP };
+           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_SIGNIN, R_STARTUP };
 
 /* the sections: a profile's own look (WiiFin's menu: the start-up one,
  * theme and backgrounds only), what every profile shares, how a profile
@@ -59,7 +59,7 @@ void SettingsView::openSection(int s) {
     if (s == 0) rows = profile ? std::vector<int>{ R_THEME, R_BACKGROUNDS, R_HOME, R_VIEW }
                                : std::vector<int>{ R_THEME, R_BACKGROUNDS };
     else if (s == 1) rows = { R_MUSIC, R_SOUNDS, R_CLOCK, R_LANGUAGE, R_AREA,
-                              R_SSL, R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT, R_EXIT, R_START };
+                              R_SSL, R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT, R_EXIT, R_START, R_DIM };
     else rows = { R_SIGNIN, R_STARTUP };
     signInWant = profile ? profile->signIn : -1;
 }
@@ -174,6 +174,7 @@ void SettingsView::activate(int index) {
             signInWant = (signInWant + 1) % 3;
             break;
         case R_START: g_app_startBrowse = !g_app_startBrowse; break;
+        case R_DIM:   Ui::setDimRows(!Ui::dimRows()); break;
         case R_STARTUP:   /* this profile at start-up, or none; one at most */
             if (!profile || profile->userId.empty()) break;
             if (g_app_startProfile == profile->userId) g_app_startProfile.clear();
@@ -465,6 +466,10 @@ void SettingsView::render(ir_t& ir) {
             g_app_startBrowse ? N_("The rows home opens on browse: your libraries")
                               : N_("The rows home opens on home: Continue Watching"),
             g_app_startBrowse ? N_("Browse") : N_("Home"), g_app_startBrowse ? 0x8A9099FF : p.accent);
+    drawRow(R_DIM, N_("Other Rows"),
+            Ui::dimRows() ? N_("The rows home shades the rows under the one you're on")
+                          : N_("The rows home shows every row plainly"),
+            Ui::dimRows() ? N_("Shaded") : N_("Shown"), Ui::dimRows() ? 0x8A9099FF : p.accent);
     if (profile) {
         static const char* const how[3]  = { N_("Automatic"), N_("Passcode"), N_("Password") };
         static const char* const desc[3] = {

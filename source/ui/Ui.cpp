@@ -118,6 +118,9 @@ void setSolidColors(bool on) { s_solid = on; }
 static bool s_clock12 = false;
 void setClock12h(bool on) { s_clock12 = on; }
 bool clock12h()           { return s_clock12; }
+static bool s_dimRows = true;
+void setDimRows(bool on) { s_dimRows = on; }
+bool dimRows()           { return s_dimRows; }
 bool solidColors()           { return s_solid; }
 const Palette& pal()
 {
