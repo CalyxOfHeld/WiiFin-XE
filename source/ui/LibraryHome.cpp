@@ -66,6 +66,8 @@ bool LibraryView::updateHome(ir_t& ir, bool aPressed) {
         return false;
     }
 
+    if (homePage == 1 && !activityLoaded) { loadActivity(); return false; }
+
     // User icon click (top right of header) → the profile menu
     if (aPressed && irMode && ir.valid &&
         fabsf(ir.x - 614.0f) < 24.0f && fabsf(ir.y - 26.0f) < 24.0f) {

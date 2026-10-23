@@ -656,10 +656,18 @@ void LibraryView::loadLibraries() {
     }
     if (!ok)             { errMsg = err;                state = State::Error; return; }
     if (libraries.empty()) { errMsg = N_("No library found"); state = State::Error; return; }
+    activityLoaded = false;   /* the grid's Activity tab: fetched once opened */
+    state = State::LibsReady;
+}
+
+/* Continue Watching and Next Up of the grid home's Activity tab (the rows
+ * home has rows of its own): fetched the first time the tab is shown, not
+ * at every sign-in, and again after something was played */
+void LibraryView::loadActivity() {
     loadContinueWatching();
     loadNextUp();
     buildActDisplayStrings();
-    state = State::LibsReady;
+    activityLoaded = true;
 }
 
 void LibraryView::freeCWTextures() {
@@ -698,6 +706,7 @@ void LibraryView::onPlaybackFinished(const std::string& lastItemId) {
     clearPendingPlay();
     browse.invalidate();   // resume positions / next up changed
     catalog.invalidate();
+    activityLoaded = false;
     if (state == State::DetailReady || state == State::ResumePrompt) {
         if (!lastItemId.empty()) detailItemId = lastItemId;
         /* an episode's page again, its picture wide: opened from the home
@@ -1505,7 +1514,9 @@ bool LibraryView::render(ir_t& ir) {
     const bool loading = loadingState(state) ||
         /* the carousel home is built on the next update: no tile grid
          * flashing in between */
-        (state == State::LibsReady && flixHome() && !(browsePage ? catalog : browse).built());
+        (state == State::LibsReady && flixHome() && !(browsePage ? catalog : browse).built()) ||
+        /* the Activity tab, fetched on the next update */
+        (state == State::LibsReady && !flixHome() && homePage == 1 && !activityLoaded);
     // Loading screen (shown one frame before blocking load), after a grace
     if (loading && loadingWait()) return false;
     if (!loading) { loadingSince = spinnerSince = 0; Ui::releaseFrozen(); }

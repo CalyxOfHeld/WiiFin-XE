@@ -383,6 +383,8 @@ private:
     void loadContinueWatching();
     void loadNextUp();
     void buildActDisplayStrings(); // pre-compute truncated titles for activity cards
+    void loadActivity();           // the two above and the titles, once the tab is shown
+    bool activityLoaded = false;
     void freeCWTextures();
     void freeNextUpTextures();
     void loadItems();
