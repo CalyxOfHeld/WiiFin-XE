@@ -1,4 +1,4 @@
-/* LibraryView: All Libraries: every library of the server, the ones left off
+/* LibraryView: Display Libraries: every library of the server, the ones left off
  * the home too.  A opens one, 1 (or A on its box) shows or hides it on the
  * home: the tiles, the browse page's Libraries row and its rows, the home's
  * New Additions and Top Rated.  The profile keeps the choice. */
@@ -49,10 +49,11 @@ std::string LibraryView::hiddenLibraries() const
     return s;
 }
 
-void LibraryView::openLibManager()
+void LibraryView::openLibManager(bool fromSettings)
 {
-    if (allLibraries.empty()) return;
+    if (allLibraries.empty()) { if (fromSettings) exitTo = Exit::Settings; return; }
     libManager = true;
+    libManagerFromSettings = fromSettings;
     libManagerDirty = false;
     libManagerSel = libManagerTop = 0;
     SoundFX::play(SoundFX::FX::Open);
@@ -76,7 +77,13 @@ void LibraryView::closeLibManager()
 bool LibraryView::updateLibManager(ir_t& ir)
 {
     const int n = (int)allLibraries.size(), was = libManagerSel;
-    if (Input::isBackPressed()) { closeLibManager(); SoundFX::play(SoundFX::FX::Back); return false; }
+    if (Input::isBackPressed()) {
+        closeLibManager();
+        SoundFX::play(SoundFX::FX::Back);
+        /* opened from the settings: back to them */
+        if (libManagerFromSettings) { libManagerFromSettings = false; exitTo = Exit::Settings; return true; }
+        return false;
+    }
     if (Input::isUpPressed())   libManagerSel = (libManagerSel + n - 1) % n;
     if (Input::isDownPressed()) libManagerSel = (libManagerSel + 1) % n;
     if (Input::isLPressed())    libManagerSel = libManagerSel - LM_ROWS < 0 ? 0 : libManagerSel - LM_ROWS;
@@ -106,6 +113,7 @@ bool LibraryView::updateLibManager(ir_t& ir)
     if (a) {
         const JellyfinLibrary lib = allLibraries[libManagerSel];
         closeLibManager();
+        libManagerFromSettings = false;
         for (int i = 0; i < (int)libraries.size(); ++i)
             if (libraries[i].id == lib.id) libSel = i;
         SoundFX::play(SoundFX::FX::Open);
@@ -123,11 +131,11 @@ void LibraryView::renderLibManager(ir_t& ir)
     Ui::roundRect(Ui::screenLeft(), 0, Ui::screenWidth(), 480, 0, 0x00000090);
     const float top = LM_Y - 66, h = 66 + shown * LM_ROW + 16;
     Ui::card(lmLeft() - 16, top, LM_W + 32, h, 18, 0.0f);
-    Ui::text(lmLeft() + 4, top + 14, tr("All Libraries"), 20, p.text);
+    Ui::text(lmLeft() + 4, top + 14, tr("Display Libraries"), 20, p.text);
     char count[48];
     int hidden = 0;
     for (const auto& l : allLibraries) if (isHidden(l.id)) ++hidden;
-    /* TRANSLATORS: All Libraries: how many are on the home */
+    /* TRANSLATORS: Display Libraries: how many are on the home */
     snprintf(count, sizeof(count), tr("%d of %d on the home"), n - hidden, n);
     Ui::textRight(lmLeft() + LM_W - 4, top + 20, count, 13, p.textDim);
 

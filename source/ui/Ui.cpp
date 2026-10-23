@@ -335,7 +335,7 @@ void triangle(float x0, float y0, float x1, float y1, float x2, float y2, u32 c)
     GX_End();
 }
 
-void icon(Icon i, float cx, float cy, u32 c)
+void icon(Icon i, float cx, float cy, u32 c, u32 fill)
 {
     switch (i) {
     case Icon::Search: {       /* magnifier */
@@ -346,13 +346,16 @@ void icon(Icon i, float cx, float cy, u32 c)
         break;
     }
     case Icon::Home:           /* house: roof, walls, a door */
+        if (fill) roundRect(cx - 4.5f, cy - 2, 9, 8, 1, fill);
         triangle(cx - 7, cy - 1, cx, cy - 7, cx + 7, cy - 1, c);
         roundBorder(cx - 4.5f, cy - 2, 9, 8, 1, 2.0f, c);
         roundRect(cx - 1, cy + 2, 2, 4, 0, c);
         break;
     case Icon::Browse:         /* four tiles */
-        for (int k = 0; k < 4; ++k)
+        for (int k = 0; k < 4; ++k) {
+            if (fill) roundRect(cx - 6 + (k % 2) * 7, cy - 6 + (k / 2) * 7, 5, 5, 1, fill);
             roundBorder(cx - 6 + (k % 2) * 7, cy - 6 + (k / 2) * 7, 5, 5, 1, 1.5f, c);
+        }
         break;
     case Icon::Menu:           /* three bars */
         for (int k = 0; k < 3; ++k)

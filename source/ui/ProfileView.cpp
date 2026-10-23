@@ -41,17 +41,23 @@ ProfileResult ProfileView::update(ir_t& ir) {
     }
 
     /* the delete question over the list: the list behind it stays put (the
-     * pointer moving over another row closed it); A on Delete or anywhere
-     * without a pointer deletes, on Cancel or B it doesn't */
+     * pointer moving over another row closed it); Left/Right or the pointer
+     * pick Delete or Cancel (Cancel first), A acts on it, B cancels */
     if (confirmDelete) {
-        const bool onDelete = ir.valid && ir.x >= 170 && ir.x <= 310 && ir.y >= 248 && ir.y <= 286;
-        const bool onCancel = ir.valid && ir.x >= 330 && ir.x <= 470 && ir.y >= 248 && ir.y <= 286;
-        if (Input::isBackPressed() || (Input::isAJustPressed() && onCancel)) {
+        const int was = confirmSel;
+        if (Input::isLeftPressed())  confirmSel = 0;
+        if (Input::isRightPressed()) confirmSel = 1;
+        if (ir.valid && ir.y >= 248 && ir.y <= 286) {
+            if (ir.x >= 170 && ir.x <= 310) confirmSel = 0;
+            if (ir.x >= 330 && ir.x <= 470) confirmSel = 1;
+        }
+        if (confirmSel != was) SoundFX::play(SoundFX::FX::Move);
+        if (Input::isBackPressed() || (Input::isAJustPressed() && confirmSel == 1)) {
             SoundFX::play(SoundFX::FX::Back);
             confirmDelete = false;
             return ProfileResult::None;
         }
-        if (Input::isAJustPressed() && (onDelete || !ir.valid)) {
+        if (Input::isAJustPressed()) {
             SoundFX::play(SoundFX::FX::Open);
             confirmDelete = false;
             selectedIdx = focusedRow;
@@ -110,6 +116,7 @@ ProfileResult ProfileView::update(ir_t& ir) {
     /* MINUS (isLPressed) = toggle delete confirm for a profile row */
     if (Input::isLPressed() && focusedRow < (int)profiles.size()) {
         confirmDelete = !confirmDelete;
+        confirmSel = 1;
         SoundFX::play(confirmDelete ? SoundFX::FX::Select : SoundFX::FX::Back);
         return ProfileResult::None;
     }
@@ -184,8 +191,8 @@ void ProfileView::render(ir_t& ir) {
         Ui::card(140, 170, 360, 130, 20, 0.0f);
         Ui::textCentered(320, 192, tr("Delete this profile?"), 21, pal.danger);
         Ui::textCentered(320, 222, tr("Its saved sign-in will be forgotten."), 14, pal.textDim);
-        Ui::button(170, 248, 140, 38, N_("Delete"), 17, 1.0f);
-        Ui::button(330, 248, 140, 38, N_("Cancel"), 17, 0.0f);
+        Ui::button(170, 248, 140, 38, N_("Delete"), 17, confirmSel == 0 ? Ui::pulse() : 0.0f);
+        Ui::button(330, 248, 140, 38, N_("Cancel"), 17, confirmSel == 1 ? Ui::pulse() : 0.0f);
     }
 
     /* Nickname: the name being typed over the list, the keyboard below */
@@ -203,7 +210,7 @@ void ProfileView::render(ir_t& ir) {
         static const Ui::Hint left[] = { { "A", N_("Type") }, { "B", N_("Delete") }, { "+", N_("Done") } };
         Ui::bottomBar(left, 3);
     } else if (confirmDelete) {
-        static const Ui::Hint left[] = { { "A", N_("Delete") }, { "B", N_("Cancel") } };
+        static const Ui::Hint left[] = { { "A", N_("Select") }, { "B", N_("Cancel") } };
         Ui::bottomBar(left, 2);
     } else {
         static const Ui::Hint left[]  = { { "A", N_("Open") }, { "1", N_("Nickname") }, { "-", N_("Delete") } };

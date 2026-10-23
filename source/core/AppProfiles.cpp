@@ -22,7 +22,7 @@ static void drawPointer(const ir_t& ir, GRRLIB_texImg* tex) {
     }
 }
 
-void App::runSettings(SavedProfile* profile) {
+bool App::runSettings(SavedProfile* profile) {
     SettingsView sv(btnTex, font, jellyfinClient, musicEnabled, profile);
     while (true) {
         Input::update();
@@ -43,6 +43,7 @@ void App::runSettings(SavedProfile* profile) {
     saveSettings();
     logSettings();
     MusicBGM::setEnabled(musicEnabled);
+    return running && sv.wantsLibraries;
 }
 
 bool App::askPasscode(const SavedProfile& p) {

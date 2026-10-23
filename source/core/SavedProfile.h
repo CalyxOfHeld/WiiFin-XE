@@ -19,7 +19,7 @@ struct SavedProfile {
     int signIn = Auto;
     std::string passSalt, passHash;   /* the passcode's SHA-256, never the code */
 
-    /* libraries left off its home (ids, comma-separated): All Libraries
+    /* libraries left off its home (ids, comma-separated): Display Libraries
      * still lists and opens them */
     std::string hiddenLibs;
 

@@ -342,7 +342,7 @@ void LibraryView::renderHome(ir_t& ir) {
                              Ui::mix(p.text, p.accentDark, f));
         }
         const Ui::Hint l[] = { { "A", avatarFocus ? N_("Menu") : N_("Open") }, { "1", N_("Search") },
-                               { "2", N_("All Libraries") } };
+                               { "2", N_("Display Libraries") } };
         const Ui::Hint r[] = { { "-/+", N_("Tab") } };
         Ui::footer(l, 3, r, 1);
 
@@ -448,17 +448,17 @@ void LibraryView::renderGlobalFavorites(ir_t& ir) {
  * the settings (signed in still), WiiMC-SS XE (Local Media), or WiiFin's
  * own menu
  * --------------------------------------------------------------- */
-static const char* const PROFILE_MENU[7] = {
-    N_("Now Playing"), N_("Back to Jellyfin"), N_("All Libraries"), N_("Switch Profile"), N_("Settings"),
-    N_("Local Media"), N_("WiiFin Main Menu")
+static const char* const PROFILE_MENU[6] = {
+    N_("Now Playing"), N_("Back to Jellyfin"), N_("Switch Profile"), N_("Settings"),
+    N_("Local Media (WiiMC)"), N_("WiiFin Main Menu")
 };
-static const Ui::Icon PROFILE_ICONS[7] = {
-    Ui::Icon::Play, Ui::Icon::Back, Ui::Icon::Browse, Ui::Icon::Profile, Ui::Icon::Settings,
+static const Ui::Icon PROFILE_ICONS[6] = {
+    Ui::Icon::Play, Ui::Icon::Back, Ui::Icon::Profile, Ui::Icon::Settings,
     Ui::Icon::Folder, Ui::Icon::Menu
 };
 /* Now Playing, first, while a music session plays */
 static int pmFirst() { return MusicSession::active() ? 0 : 1; }
-static int pmCount() { return 7 - pmFirst(); }
+static int pmCount() { return 6 - pmFirst(); }
 static const int PM_W = 300, PM_BH = 42, PM_STEP = 54;
 static int pmTop() { return 240 - (pmCount() * PM_STEP + 50) / 2 + 50; }
 
@@ -490,13 +490,12 @@ bool LibraryView::updateProfileMenu(ir_t& ir) {
     switch (entry) {
     case 0: exitTo = Exit::NowPlaying; break;
     case 1: SoundFX::play(SoundFX::FX::Back); return false;
-    case 2: state = State::LibsReady; openLibManager(); return false;
-    case 3: exitTo = Exit::Profiles;   break;
-    case 4: exitTo = Exit::Settings;   break;
-    case 5: exitTo = Exit::LocalMedia; break;
+    case 2: exitTo = Exit::Profiles;   break;
+    case 3: exitTo = Exit::Settings;   break;
+    case 4: exitTo = Exit::LocalMedia; break;
     default: exitTo = Exit::WiiFinMenu; break;
     }
-    SoundFX::play(entry == 4 || entry == 0 || entry == 5 ? SoundFX::FX::Open : SoundFX::FX::Back);
+    SoundFX::play(entry == 3 || entry == 0 || entry == 4 ? SoundFX::FX::Open : SoundFX::FX::Back);
     return true;
 }
 

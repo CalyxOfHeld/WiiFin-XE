@@ -17,7 +17,7 @@
 
 /* The rows, by what they set (describe and activate take these) */
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
-           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP };
+           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -53,7 +53,7 @@ std::vector<int> SettingsView::sectionRows(int s) const
     switch (s) {
     case S_VIEW:
         /* the home and the libraries' look: a profile's (WiiFin's menu has neither) */
-        return profile ? std::vector<int>{ R_THEME, R_BACKGROUNDS, R_HOME, R_VIEW, R_START, R_DIM, R_HEADER, R_AREA }
+        return profile ? std::vector<int>{ R_THEME, R_BACKGROUNDS, R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER, R_AREA }
                        : std::vector<int>{ R_THEME, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA };
     case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT };
     case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT };
@@ -277,6 +277,23 @@ SettingsView::RowInfo SettingsView::describe(int id)
         set(N_("Sign-In"), desc[m], how[m], m == 0 ? OFF : p.accent);
         break;
     }
+    case R_LIBS: {
+        /* how many the profile leaves off its home */
+        int hidden = 0;
+        if (profile && !profile->hiddenLibs.empty()) {
+            hidden = 1;
+            for (char c : profile->hiddenLibs) if (c == ',') ++hidden;
+        }
+        set(N_("Display Libraries"), N_("Choose which libraries show on your home; hidden ones can still be opened here"),
+            hidden ? "" : N_("All"), hidden ? p.accent : OFF);
+        if (hidden) {
+            char v[32];
+            /* TRANSLATORS: Display Libraries: how many are left off the home */
+            snprintf(v, sizeof(v), tr("%d hidden"), hidden);
+            r.value = v;
+        }
+        break;
+    }
     case R_STARTUP: {
         const bool on = profile && !profile->userId.empty() && g_app_startProfile == profile->userId;
         set(N_("Open at Start-Up"),
@@ -328,6 +345,7 @@ void SettingsView::activate(int index) {
         case R_START: g_app_startBrowse = !g_app_startBrowse; break;
         case R_DIM:   Ui::setDimRows(!Ui::dimRows()); break;
         case R_HEADER: Ui::setClassicHeader(!Ui::classicHeader()); break;
+        case R_LIBS: if (profile) wantsLibraries = true; break;
         case R_STARTUP:   /* this profile at start-up, or none; one at most */
             if (!profile || profile->userId.empty()) break;
             if (g_app_startProfile == profile->userId) g_app_startProfile.clear();
@@ -421,7 +439,7 @@ bool SettingsView::update(ir_t& ir) {
     if (calibrating) { updateCalibration(); return false; }
     if (pinStep) {
         const int r = pin.update(ir);
-        if (r < 0) { pinStep = 0; signInWant = profile->signIn; return false; }   /* the settings, as they were */
+        if (r < 0) { pinStep = 0; signInWant = profile->signIn; wantsLibraries = false; return false; }   /* the settings, as they were */
         if (r == 0) return false;
         if (pinStep == 1) {
             pinFirst = pin.code();
@@ -529,6 +547,10 @@ bool SettingsView::update(ir_t& ir) {
         follow();
         if (a && n > 0 && (!ir.valid || hoverRow >= 0)) {
             activate(rows[selectedIndex]);
+            if (wantsLibraries) {   /* the settings close for the list */
+                SoundFX::play(SoundFX::FX::Open);
+                return leaveSignIn();
+            }
             if (section == S_SEARCH) {   /* the match changed its words: still listed */
                 const int id = rows[selectedIndex];
                 runSearch();

@@ -448,7 +448,7 @@ void App::loop() {
     float menuFocus[MENU_COUNT] = {};
     const std::string menuItems[] = {
         N_("Connect To Jellyfin"),
-        N_("Local Media"),
+        N_("Local Media (WiiMC)"),
         N_("Settings"),
         N_("Exit")
     };
@@ -563,7 +563,7 @@ void App::loop() {
                 if (g_app_powerOff || g_app_reset) { running = false; break; }
                 if (Input::isHomePressed() && showHomeOverlay()) { running = false; break; }
                 if (lv.update(ir)) break;
-                if (lv.hiddenChanged) {   /* All Libraries closed: the profile's from now on */
+                if (lv.hiddenChanged) {   /* Display Libraries closed: the profile's from now on */
                     lv.hiddenChanged = false;
                     p.hiddenLibs = lv.hiddenLibraries();
                     saveSettings();
@@ -609,11 +609,18 @@ void App::loop() {
                 lv.exitTo = LibraryView::Exit::Profiles;
                 if (startLocalMedia()) { MusicSession::stop(true); return; }
             } else if (lv.exitTo == LibraryView::Exit::Settings) {
-                /* Settings from the profile menu: signed in still */
+                /* Settings from the profile menu (or back from Display
+                 * Libraries): signed in still */
                 lv.exitTo = LibraryView::Exit::Profiles;
-                runSettings(&p);
+                if (lv.hiddenChanged) {
+                    lv.hiddenChanged = false;
+                    p.hiddenLibs = lv.hiddenLibraries();
+                    saveSettings();
+                }
+                const bool libs = runSettings(&p);
                 if (!running) return;
                 lv.onSettingsClosed();
+                if (libs) lv.openLibrariesFromSettings();
             } else {
                 /* the profile closes: its music with it, the menu music back */
                 MusicSession::stop(true);

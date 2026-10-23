@@ -36,6 +36,7 @@ private:
     int  focusedRow    = 0;
     bool irMode        = false;
     bool confirmDelete = false;
+    int  confirmSel    = 1;       /* the question's button: 0 Delete, 1 Cancel */
     bool renaming      = false;   /* 1: the keyboard, for its nickname */
     Keyboard    kb;
     std::string draft;

@@ -41,7 +41,7 @@ private:
     ViewPrefs viewOf(const SavedProfile& p) const; /* its own, or startView's */
     void keepView(SavedProfile& p);                /* Ui's look, into p */
     /* Settings, from WiiFin's menu (profile null) or a profile's menu */
-    void runSettings(SavedProfile* profile);
+    bool runSettings(SavedProfile* profile);   /* true: Display Libraries chosen */
     /* a new profile's questions: sign-in, home screen, library view */
     void runOnboarding(SavedProfile& p);
     /* the passcode of a profile asked; false: B (or power) */

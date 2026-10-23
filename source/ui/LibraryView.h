@@ -44,9 +44,11 @@ public:
     /* back from the Settings the profile menu opened: the home again, as
      * the settings left it (theme, home screen, library view) */
     void onSettingsClosed();
+    /* Display Libraries chosen in those settings: the list, B back to them */
+    void openLibrariesFromSettings() { openLibManager(true); }
 
     /* the profile's libraries left off the home (ids, comma-separated);
-     * hiddenChanged: All Libraries closed with others, for the profile */
+     * hiddenChanged: Display Libraries closed with others, for the profile */
     void setHiddenLibraries(const std::string& ids);
     std::string hiddenLibraries() const;
     bool hiddenChanged = false;
@@ -139,18 +141,20 @@ private:
 
     // Libraries
     std::vector<JellyfinLibrary> libraries;      // the ones shown on the home
-    std::vector<JellyfinLibrary> allLibraries;   // every one (All Libraries)
+    std::vector<JellyfinLibrary> allLibraries;   // every one (Display Libraries)
     std::vector<std::string>     hiddenLibs;     // ids left off the home
     JellyfinLibrary              openedLib;      // the library open (hidden ones too)
     int  libSel = 0;
     bool isHidden(const std::string& id) const;
     void filterLibraries();                      // libraries = allLibraries - hidden
-    /* All Libraries (2 on the Libraries row, or the profile menu): every
-     * library, A opens it, 1 shows or hides it on the home */
+    /* Display Libraries (Settings, or 2 on the Libraries row): every
+     * library, A opens it, 1 shows or hides it on the home; from the
+     * settings, B goes back to them */
     bool  libManager    = false;
+    bool  libManagerFromSettings = false;
     bool  libManagerDirty = false;
     int   libManagerSel = 0, libManagerTop = 0;
-    void openLibManager();
+    void openLibManager(bool fromSettings = false);
     void closeLibManager();
     bool updateLibManager(ir_t& ir);
     void renderLibManager(ir_t& ir);

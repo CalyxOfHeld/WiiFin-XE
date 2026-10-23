@@ -24,6 +24,10 @@ public:
     void startCalibration() { calibrating = true; calCorner = 0; }
     bool isCalibrating() const { return calibrating; }
 
+    /* Display Libraries chosen: the settings closed for the profile's
+     * library list, and opened again when it closes */
+    bool wantsLibraries = false;
+
 private:
     GRRLIB_texImg*  btnTex;
     GRRLIB_ttfFont* font;

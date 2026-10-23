@@ -1399,7 +1399,7 @@ void LibraryView::openItem(const JellyfinItem& it, State returnState) {
 // Open library `index` (tile grid or the "Libraries" row of the browse page).
 void LibraryView::openLibrary(int index) { openLibrary(libraries[index]); }
 
-// Any library, hidden ones too (All Libraries).
+// Any library, hidden ones too (Display Libraries).
 void LibraryView::openLibrary(const JellyfinLibrary& lib) {
     openedLib        = lib;
     currentLibId     = openedLib.id;

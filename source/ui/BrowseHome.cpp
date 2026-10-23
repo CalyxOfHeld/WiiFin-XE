@@ -1044,15 +1044,15 @@ void BrowseHome::drawHeader()
         Ui::roundBorder(x, PILL_Y, w, PILL_H, PILL_H * 0.5f, f ? 2.0f : 1.5f, f ? L.pillFocus : L.pillBorder);
         float tx = x + w * 0.5f;
         /* the icon, left of the label */
+        /* the page shown: its icon in the accent, filled in softly */
         static const Ui::Icon ICONS[4] = { Ui::Icon::Search, Ui::Icon::Home, Ui::Icon::Browse, Ui::Icon::Menu };
+        const bool shown = (b == HB_HOME && !catalog) || (b == HB_BROWSE && catalog);
         if (b <= HB_MENU) {
-            Ui::icon(ICONS[b], x + 17, PILL_Y + 13, L.pillText);
+            Ui::icon(ICONS[b], x + 17, PILL_Y + 13, shown ? L.pillFocus : L.pillText,
+                     shown ? Ui::alpha(L.pillFocus, 0.4f) : 0);
             tx += 7;
         }
         Ui::textCentered(tx, PILL_Y + 4, pillLabel(i, catalog), 15, L.pillText);
-        /* the page shown: a short bar under its label */
-        if ((b == HB_HOME && !catalog) || (b == HB_BROWSE && catalog))
-            Ui::roundRect(tx - 8, PILL_Y + PILL_H - 4, 16, 2, 1, L.pillFocus);
     }
 
     /* profile avatar (classic) */
@@ -1124,7 +1124,7 @@ void BrowseHome::render(const ir_t& ir)
             if (!canExpand && strcmp(e.button, "2") == 0) continue;
             h[nh] = e;
             /* TRANSLATORS: 2 on the browse page's Libraries row: every library, the hidden ones too */
-            if (libs && strcmp(e.button, "2") == 0) h[nh].label = N_("All Libraries");
+            if (libs && strcmp(e.button, "2") == 0) h[nh].label = N_("Display Libraries");
             ++nh;
         }
         float w = 0;
