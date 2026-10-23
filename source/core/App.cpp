@@ -49,6 +49,7 @@ volatile bool g_app_powerOff = false;
 volatile bool g_app_reset    = false;
 volatile bool g_restartApp = false;
 bool g_app_exitToLoader = true;
+std::string g_app_startProfile;
 /* the loader's mark, read at start-up (main menu) before anything could
  * write over low memory */
 bool appFromLoader()
@@ -634,8 +635,9 @@ void App::loop() {
         }
     };
 
-    /* ---- Helper: profile picker loop ---- */
-    auto runProfilePicker = [&]() {
+    /* ---- Helper: profile picker loop; autoOpen: that profile opened
+     * first, as if picked (Open at Start-Up) ---- */
+    auto runProfilePicker = [&](int autoOpen = -1) {
         while (running) {
             if (profiles.empty()) {
                 runConnect();
@@ -643,6 +645,11 @@ void App::loop() {
             }
             ProfileView pv(font, cursorPointerTex, profiles);
             ProfileResult res = ProfileResult::None;
+            if (autoOpen >= 0 && autoOpen < (int)profiles.size()) {
+                pv.selectedIdx = autoOpen;
+                res = ProfileResult::Selected;
+            }
+            autoOpen = -1;
             while (res == ProfileResult::None && running) {
                 Input::update();
                 Input::readIR(ir);
@@ -656,6 +663,7 @@ void App::loop() {
             if (res == ProfileResult::DeleteOne) {
                 int idx = pv.selectedIdx;
                 if (idx >= 0 && idx < (int)profiles.size()) {
+                    if (profiles[idx].userId == g_app_startProfile) g_app_startProfile.clear();
                     profiles.erase(profiles.begin() + idx);
                     saveSettings();
                 }
@@ -692,6 +700,22 @@ void App::loop() {
 
     SYS_Report("[WiiFin] ready\n");   /* tools/test/smoke.sh waits for this */
     offerScreenCalibration(ir);
+
+    /* Open at Start-Up: that profile's home at once, the menu after it
+     * (B held while WiiFin starts: the menu) */
+    if (running && !g_app_startProfile.empty()) {
+        Input::update();
+        for (int i = 0; i < (int)profiles.size(); ++i) {
+            if (profiles[i].userId != g_app_startProfile) continue;
+            if (Input::held() & WPAD_BUTTON_B) {
+                SYS_Report("[WiiFin] start-up profile skipped (B held)\n");
+            } else {
+                SYS_Report("[WiiFin] start-up profile\n");
+                runProfilePicker(i);
+            }
+            break;
+        }
+    }
 
     while (running) {
         Input::update();   // calls WPAD_ScanPads() internally

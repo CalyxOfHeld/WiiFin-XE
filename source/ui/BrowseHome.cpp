@@ -498,6 +498,17 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
     if (Input::isActionPressed()) return Action::Browse;
     if (mode == Mode::Catalog && Input::isBackPressed()) return Action::Back;
 
+    /* L / R (the GameCube's and Classic's triggers, the Wii Remote's -):
+     * from the rows, to search (L) or the avatar (R); in the header, the
+     * header's buttons in turn, round and round.  + stays Browse (above) */
+    const bool l = Input::isLPressed(), r = Input::isRPressed();
+    if (l || r) {
+        if (headerFocus < 0) headerFocus = l ? 0 : 2;
+        else                 headerFocus = (headerFocus + (l ? 2 : 1)) % 3;
+        irMode = false;
+        return Action::None;
+    }
+
     /* ---- Pointer ---- */
     hoverHeader = -1;
     int  hoverTile = -1;
@@ -541,8 +552,9 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
 
     /* ---- Header ---- */
     if (headerFocus >= 0) {
-        if (left  && headerFocus > 0) headerFocus--;
-        if (right && headerFocus < 2) headerFocus++;
+        /* past either end, round to the other */
+        if (left)  headerFocus = (headerFocus + 2) % 3;
+        if (right) headerFocus = (headerFocus + 1) % 3;
         if (down && nRows > 0) headerFocus = -1;
         if (a) {
             int f = headerFocus;

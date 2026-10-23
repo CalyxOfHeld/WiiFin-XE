@@ -18,6 +18,9 @@ extern bool g_app_exitToLoader;
 /* launched by a loader (its stub at 0x80001800), not as the WAD's channel,
  * which always goes back to the Wii Menu */
 bool appFromLoader();
+/* the profile WiiFin opens when it starts (its userId), empty: the menu.
+ * The Sign-In setting Open at Start-Up, wiifin.cfg's start_profile */
+extern std::string g_app_startProfile;
 /* g_app_exitToLoader, when it can be: where leaving goes */
 inline bool appExitsToLoader() { return g_app_exitToLoader && appFromLoader(); }
 

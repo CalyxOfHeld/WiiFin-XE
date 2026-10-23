@@ -10,7 +10,7 @@
  *
  *   Wii Remote   Classic / GamePad          GameCube
  *   A / B        A / B                      A / B
- *   D-pad        D-pad, left stick          D-pad, stick
+ *   D-pad        D-pad, left stick          D-pad, stick, C-Stick
  *   - / +        - / +, L / R               L / R
  *   1 / 2        Y / X                      Y / X
  *   HOME         HOME                       START

@@ -73,7 +73,19 @@ static u32 fromGameCube(u16 p)
 static u16  s_padHeld = 0;
 static bool s_padUp   = false;            /* last read answered */
 
-/* Sticks pushed past half way count as the D-pad. */
+/* A GameCube stick pushed past half way: its D-pad direction */
+static u32 padStickDir(int x, int y)
+{
+    const int T = 48;                             /* full tilt is about 100 */
+    if (x * x + y * y <= T * T) return 0;
+    const int ax = x < 0 ? -x : x;
+    if (y > ax)  return WPAD_BUTTON_UP;
+    if (-y > ax) return WPAD_BUTTON_DOWN;
+    return x > 0 ? WPAD_BUTTON_RIGHT : WPAD_BUTTON_LEFT;
+}
+
+/* Sticks pushed past half way count as the D-pad (the GameCube's C-Stick
+ * too). */
 static u32 stickDirs()
 {
     u32 d = 0;
@@ -88,13 +100,9 @@ static u32 stickDirs()
             else                         d |= WPAD_BUTTON_LEFT;
         }
     }
-    int x = s_padUp ? PAD_StickX(0) : 0, y = s_padUp ? PAD_StickY(0) : 0;
-    const int T = 48;                             /* full tilt is about 100 */
-    if (x * x + y * y > T * T) {
-        if (y > (x < 0 ? -x : x))       d |= WPAD_BUTTON_UP;
-        else if (-y > (x < 0 ? -x : x)) d |= WPAD_BUTTON_DOWN;
-        else if (x > 0)                 d |= WPAD_BUTTON_RIGHT;
-        else                            d |= WPAD_BUTTON_LEFT;
+    if (s_padUp) {
+        d |= padStickDir(PAD_StickX(0), PAD_StickY(0));
+        d |= padStickDir(PAD_SubStickX(0), PAD_SubStickY(0));
     }
     return d;
 }

@@ -15,7 +15,7 @@
 
 /* The rows, by what they set (drawRow and activate take these) */
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
-           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_SIGNIN };
+           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_SIGNIN, R_STARTUP };
 
 /* the sections: a profile's own look (WiiFin's menu: the start-up one,
  * theme and backgrounds only), what every profile shares, how a profile
@@ -60,7 +60,7 @@ void SettingsView::openSection(int s) {
                                : std::vector<int>{ R_THEME, R_BACKGROUNDS };
     else if (s == 1) rows = { R_MUSIC, R_SOUNDS, R_CLOCK, R_LANGUAGE, R_AREA,
                               R_SSL, R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT, R_EXIT };
-    else rows = { R_SIGNIN };
+    else rows = { R_SIGNIN, R_STARTUP };
     signInWant = profile ? profile->signIn : -1;
 }
 
@@ -172,6 +172,12 @@ void SettingsView::activate(int index) {
         case R_SIGNIN:   /* at once, a passcode, the password: chosen, applied on leaving */
             if (!profile) break;
             signInWant = (signInWant + 1) % 3;
+            break;
+        case R_STARTUP:   /* this profile at start-up, or none; one at most */
+            if (!profile || profile->userId.empty()) break;
+            if (g_app_startProfile == profile->userId) g_app_startProfile.clear();
+            else                                       g_app_startProfile = profile->userId;
+            SYS_Report("[Settings] start-up profile %s\n", g_app_startProfile.empty() ? "none" : "this one");
             break;
     }
 }
@@ -463,6 +469,12 @@ void SettingsView::render(ir_t& ir) {
         };
         const int m = signInWant >= 0 && signInWant < 3 ? signInWant : 0;
         drawRow(R_SIGNIN, N_("Sign-In"), desc[m], how[m], m == 0 ? 0x8A9099FF : p.accent);
+        const bool on = !profile->userId.empty() && g_app_startProfile == profile->userId;
+        drawRow(R_STARTUP, N_("Open at Start-Up"),
+                on ? N_("Opens when WiiFin starts; hold B at start to skip")
+                : g_app_startProfile.empty() ? N_("WiiFin starts at its own menu")
+                                             : N_("Another profile opens at start-up: A makes it this one"),
+                on ? N_("ON") : N_("OFF"), on ? p.ok : 0x8A9099FF);
     }
 
     /* page arrows on the screen edges + page dots */
