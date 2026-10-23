@@ -65,13 +65,15 @@ static u32 fromGameCube(u16 p)
     return out;
 }
 
-/* GameCube controller state, with our own press detection: when a read
- * gets no answer, libogc clears the pad's state, and a button still held
- * came back as a new press at the next answer (about every 130 ms in
- * Dolphin): one A on "Connect To Jellyfin" also picked the first profile.
- * A read without an answer now keeps the last state. */
-static u16  s_padHeld = 0;
-static bool s_padUp   = false;            /* last read answered */
+/* GameCube controller state (each port), with our own press detection:
+ * when a read gets no answer, libogc clears the pad's state, and a button
+ * still held came back as a new press at the next answer (about every
+ * 130 ms in Dolphin): one A on "Connect To Jellyfin" also picked the first
+ * profile.  A read without an answer now keeps the last state. */
+static const int PORTS = 4;                    /* GameCube ports, Wii Remotes */
+static u16  s_padHeld[PORTS] = {};
+static bool s_padUp[PORTS]   = {};            /* last read answered */
+static int  s_pointerChan    = WPAD_CHAN_0;   /* the Wii Remote used last */
 
 /* A GameCube stick pushed past half way: its D-pad direction */
 static u32 padStickDir(int x, int y)
@@ -84,27 +86,26 @@ static u32 padStickDir(int x, int y)
     return x > 0 ? WPAD_BUTTON_RIGHT : WPAD_BUTTON_LEFT;
 }
 
-/* Sticks pushed past half way count as the D-pad (the GameCube's C-Stick
- * too). */
-static u32 stickDirs()
+/* A Classic Controller's left stick pushed past half way */
+static u32 classicStickDir(int ch)
 {
-    u32 d = 0;
-    WPADData* wd = WPAD_Data(WPAD_CHAN_0);
-    if (wd && wd->exp.type == WPAD_EXP_CLASSIC) {
-        const joystick_t& js = wd->exp.classic.ljs;
-        if (js.mag > 0.5f) {
-            float a = js.ang;                     /* 0 up, 90 right */
-            if      (a >= 315 || a < 45) d |= WPAD_BUTTON_UP;
-            else if (a < 135)            d |= WPAD_BUTTON_RIGHT;
-            else if (a < 225)            d |= WPAD_BUTTON_DOWN;
-            else                         d |= WPAD_BUTTON_LEFT;
-        }
-    }
-    if (s_padUp) {
-        d |= padStickDir(PAD_StickX(0), PAD_StickY(0));
-        d |= padStickDir(PAD_SubStickX(0), PAD_SubStickY(0));
-    }
-    return d;
+    WPADData* wd = WPAD_Data(ch);
+    if (!wd || wd->exp.type != WPAD_EXP_CLASSIC) return 0;
+    const joystick_t& js = wd->exp.classic.ljs;
+    if (js.mag <= 0.5f) return 0;
+    float a = js.ang;                             /* 0 up, 90 right */
+    if (a >= 315 || a < 45) return WPAD_BUTTON_UP;
+    if (a < 135)            return WPAD_BUTTON_RIGHT;
+    if (a < 225)            return WPAD_BUTTON_DOWN;
+    return WPAD_BUTTON_LEFT;
+}
+
+/* A GameCube controller's sticks (the C-Stick too) */
+static u32 gcStickDir(int port)
+{
+    if (!s_padUp[port]) return 0;
+    return padStickDir(PAD_StickX(port), PAD_StickY(port)) |
+           padStickDir(PAD_SubStickX(port), PAD_SubStickY(port));
 }
 
 void Input::update() {
@@ -125,42 +126,79 @@ void Input::update() {
         }
         remoteThere[ch] = there;
     }
-    bool padUp = (PAD_ScanPads() & 1) != 0;
+
+    /* every GameCube port: pressed and held, Wii Remote bits */
+    const u32 padsUp = PAD_ScanPads();
     u64 nowMs = ticks_to_millisecs(gettime());
-    static u64 lastAnswer = 0, lastDropReport = 0;
+    static u64 lastAnswer[PORTS] = {}, lastDropReport = 0;
     static u32 dropouts = 0;
-    if (padUp) lastAnswer = nowMs;
-    else if (s_padUp) ++dropouts;
+    static bool padSeen[PORTS] = {};
+    u32 gcDown = 0, gcHeld = 0;
+    int gcPort = -1;                              /* the port pressed this frame */
+    for (int port = 0; port < PORTS; ++port) {
+        const bool up = (padsUp >> port) & 1;
+        if (up) lastAnswer[port] = nowMs;
+        else if (s_padUp[port]) ++dropouts;
+        if (up && !padSeen[port]) SYS_Report("[Input] GameCube controller in port %d\n", port + 1);
+        padSeen[port] = up || nowMs - lastAnswer[port] < 500;
+        s_padUp[port] = up;
+        /* no answer for 0.5 s: unplugged, nothing is held any more */
+        u16 h = up ? PAD_ButtonsHeld(port) : (nowMs - lastAnswer[port] < 500 ? s_padHeld[port] : 0);
+        u16 d = h & ~s_padHeld[port];
+        s_padHeld[port] = h;
+        gcDown |= fromGameCube(d);
+        gcHeld |= fromGameCube(h);
+        if (d && gcPort < 0) gcPort = port;
+    }
     if (dropouts && nowMs - lastDropReport > 5000) {
         SYS_Report("[Input] GameCube controller: %u read(s) without answer\n", (unsigned)dropouts);
         dropouts = 0;
         lastDropReport = nowMs;
     }
-    s_padUp = padUp;
-    /* no answer for 0.5 s: unplugged, nothing is held any more */
-    u16 padHeld = padUp ? PAD_ButtonsHeld(0) : (nowMs - lastAnswer < 500 ? s_padHeld : 0);
-    u16 pDown   = padHeld & ~s_padHeld;
-    s_padHeld   = padHeld;
 
-    static u32 prevStick = 0;
-    u32 stick = stickDirs();
-    WPADData* wd = WPAD_Data(WPAD_CHAN_0);
-    bool classic = wd && wd->exp.type == WPAD_EXP_CLASSIC;
-    u32 wDown = WPAD_ButtonsDown(0);
-    u32 down = fromWpad(wDown, classic) | fromGameCube(pDown) | (stick & ~prevStick);
-    /* the hints follow the controller used last */
-    if (pDown || (s_padUp && (stick & ~prevStick) && !classic))
-        Ui::setButtonStyle(Ui::ButtonStyle::GameCube);
-    else if (classic && ((wDown & 0xFFFF0000u) || (stick & ~prevStick)))
-        Ui::setButtonStyle(Ui::ButtonStyle::Classic);
-    else if (wDown & 0xFFFF)
-        Ui::setButtonStyle(Ui::ButtonStyle::WiiRemote);
+    /* every Wii Remote (and its Classic Controller) */
+    u32 wiiDown = 0, wiiHeld = 0;
+    bool plusDown = false;
+    int remoteChan = -1, classicChan = -1;        /* pressed this frame */
+    for (int ch = 0; ch < PORTS; ++ch) {
+        if (!remoteThere[ch]) continue;
+        WPADData* wd = WPAD_Data(ch);
+        const bool classic = wd && wd->exp.type == WPAD_EXP_CLASSIC;
+        const u32 d = WPAD_ButtonsDown(ch);
+        wiiDown |= fromWpad(d, classic);
+        wiiHeld |= fromWpad(WPAD_ButtonsHeld(ch), classic);
+        plusDown |= (d & WPAD_BUTTON_PLUS) || (classic && (d & WPAD_CLASSIC_BUTTON_PLUS));
+        if (classic && (d & 0xFFFF0000u) && classicChan < 0) classicChan = ch;
+        if ((d & 0xFFFF) && remoteChan < 0) remoteChan = ch;
+    }
+
+    /* sticks: a new push counts as a press of that controller */
+    static u32 prevStick[2][PORTS] = {};
+    u32 stick = 0, stickDown = 0;
+    for (int i = 0; i < PORTS; ++i) {
+        const u32 g = gcStickDir(i), c = classicStickDir(i);
+        if ((g & ~prevStick[0][i]) && gcPort < 0)      gcPort = i;
+        if ((c & ~prevStick[1][i]) && classicChan < 0) classicChan = i;
+        stickDown |= (g & ~prevStick[0][i]) | (c & ~prevStick[1][i]);
+        stick |= g | c;
+        prevStick[0][i] = g;
+        prevStick[1][i] = c;
+    }
+
+    u32 down = wiiDown | gcDown | stickDown;
+    /* the hints follow the controller used last; the pointer, the Wii
+     * Remote used last */
+    if (gcPort >= 0)           Ui::setButtonStyle(Ui::ButtonStyle::GameCube);
+    else if (classicChan >= 0) Ui::setButtonStyle(Ui::ButtonStyle::Classic);
+    else if (remoteChan >= 0)  Ui::setButtonStyle(Ui::ButtonStyle::WiiRemote);
+    if (remoteChan >= 0)       s_pointerChan = remoteChan;
+    else if (classicChan >= 0) s_pointerChan = classicChan;
     /* which controller sent what: for controller bug reports */
     if (down & ~DIRS)
-        SYS_Report("[Input] pressed 0x%x (remote 0x%x, gamecube 0x%x, stick 0x%x)\n",
-                   (unsigned)down, (unsigned)wDown, (unsigned)pDown, (unsigned)(stick & ~prevStick));
-    u32 held = fromWpad(WPAD_ButtonsHeld(0), classic) | fromGameCube(padHeld) | stick;
-    prevStick = stick;
+        SYS_Report("[Input] pressed 0x%x (remote 0x%x ch %d, gamecube 0x%x port %d, stick 0x%x)\n",
+                   (unsigned)down, (unsigned)wiiDown, remoteChan >= 0 ? remoteChan + 1 : classicChan + 1,
+                   (unsigned)gcDown, gcPort + 1, (unsigned)stickDown);
+    u32 held = wiiHeld | gcHeld | stick;
 
     /* A held direction repeats: after 400 ms, then every 90 ms */
     static u64 heldSince[4], lastRepeat[4];
@@ -178,8 +216,7 @@ void Input::update() {
 
     /* + as an action: the Wii Remote's or the Classic's + button, or a
      * zoom button (the GameCube's Z), not the R triggers: they turn pages */
-    actionDown = (wDown & WPAD_BUTTON_PLUS) || (classic && (wDown & WPAD_CLASSIC_BUTTON_PLUS)) ||
-                 (down & BTN_ZOOM);
+    actionDown = plusDown || (down & BTN_ZOOM);
     rawDownBits = down;
     heldBits    = held;
     buttonsDown = down | (repeat & DIRS);
@@ -201,7 +238,17 @@ bool Input::isActionPressed() { return actionDown; }
 bool Input::is1Pressed()     { return buttonsDown & WPAD_BUTTON_1; }
 bool Input::is2Pressed()     { return buttonsDown & WPAD_BUTTON_2; }
 
+int Input::pointerChan() { return s_pointerChan; }
+
+/* the pointer of the Wii Remote used last; another one pointing at the
+ * screen when that one is not */
 void Input::readIR(ir_t& ir) {
-    WPAD_IR(WPAD_CHAN_0, &ir);
+    WPAD_IR(s_pointerChan, &ir);
+    for (int ch = 0; !ir.valid && ch < PORTS; ++ch) {
+        if (ch == s_pointerChan) continue;
+        ir_t other;
+        WPAD_IR(ch, &other);
+        if (other.valid) { ir = other; s_pointerChan = ch; }
+    }
     Ui::pointerToScreen(ir);
 }

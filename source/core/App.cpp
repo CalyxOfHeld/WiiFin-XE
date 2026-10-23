@@ -382,7 +382,7 @@ void App::offerScreenCalibration(ir_t& ir) {
     const Ui::Palette& p = Ui::pal();
     auto drawPointer = [&]() {
         if (ir.valid && cursorPointerTex) {
-            orient_t orient; WPAD_Orientation(WPAD_CHAN_0, &orient);
+            orient_t orient; WPAD_Orientation(Input::pointerChan(), &orient);
             GRRLIB_DrawImg((int)ir.x - 20, (int)ir.y - 4, cursorPointerTex, orient.roll, 1, 1, 0xFFFFFFFF);
         }
     };
@@ -807,7 +807,7 @@ void App::loop() {
         // --- IR Cursor: rendered last ---
         if (ir.valid && cursorPointerTex) {
             orient_t orient;
-            WPAD_Orientation(WPAD_CHAN_0, &orient);
+            WPAD_Orientation(Input::pointerChan(), &orient);
             GRRLIB_DrawImg(
                 (int)ir.x - 20,
                 (int)ir.y - 4,

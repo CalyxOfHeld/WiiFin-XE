@@ -5,7 +5,8 @@
  * Input — every controller, read as a Wii Remote.
  *
  * The Classic Controller (also what the Wii U GamePad is in a Virtual
- * Console inject) and the GameCube controller in port 1 are translated to
+ * Console inject) and GameCube controllers (all four ports, all four Wii
+ * Remotes too: any of them drives) are translated to
  * Wii Remote buttons, so screens only test WPAD_BUTTON_* bits:
  *
  *   Wii Remote   Classic / GamePad          GameCube
@@ -29,6 +30,8 @@ public:
     static void update();
     /* Wii Remote pointer in drawing space (see Ui::pointerToScreen). */
     static void readIR(ir_t& ir);
+    /* The Wii Remote whose pointer that is (the one used last). */
+    static int pointerChan();
 
     /* Buttons pressed this frame, Wii Remote bits, no repeat. */
     static u32 rawDown();

@@ -88,7 +88,7 @@ void LibraryView::runWithLoading(std::function<void()> fn) {
 void LibraryView::drawCursor(ir_t& ir) {
     if (ir.valid && cursorTex) {
         orient_t orient;
-        WPAD_Orientation(WPAD_CHAN_0, &orient);
+        WPAD_Orientation(Input::pointerChan(), &orient);
         GRRLIB_DrawImg((int)ir.x - 20, (int)ir.y - 4,
                        cursorTex, orient.roll, 1.0f, 1.0f, 0xFFFFFFFF);
     }

@@ -503,9 +503,12 @@ const char* buttonName(const char* b)
      * GameCube controller (its R, the page turner, is a trigger) */
     if (strcmp(b, "+!") == 0) return s_buttonStyle == ButtonStyle::GameCube ? "Z" : "+";
     if (s_buttonStyle == ButtonStyle::WiiRemote) return b;
+    /* the Classic Controller's face buttons are written in lower case */
     static const struct { const char* wii; const char* classic; const char* gc; } MAP[] = {
-        { "1",    "Y",    "Y" },
-        { "2",    "X",    "X" },
+        { "A",    "a",    "A" },
+        { "B",    "b",    "B" },
+        { "1",    "y",    "Y" },
+        { "2",    "x",    "X" },
         { "-",    "-",    "L" },
         { "+",    "+",    "R" },
         { "-/+",  "-/+",  "L/R" },
@@ -517,33 +520,88 @@ const char* buttonName(const char* b)
     return b;
 }
 
-/* GameCube A and B are green and red; everything else is a grey button */
-static void buttonDisc(float cx, float cy, const char* b, u32& textColor)
+/* A button as it looks on the controller used last: the GameCube's big
+ * green A, small red B, X and Y beans, the Z bar and the L / R triggers;
+ * the Wii Remote's B trigger; HOME with its house. */
+enum class Shape { Disc, Square, Pill, Bar, Trigger };
+struct Glyph {
+    Shape shape;
+    float w, h;
+    u32   fill, edge, ink;
+    bool  house;      /* HOME: the house instead of a letter */
+};
+
+static Glyph glyphOf(const char* b)
 {
     const Palette& p = pal();
-    u32 fill = p.cardTop;
-    textColor = p.text;
-    if (s_buttonStyle == ButtonStyle::GameCube && (b[0] == 'A' || b[0] == 'B') && !b[1]) {
-        fill = b[0] == 'A' ? 0x2FB56AFF : 0xD8463CFF;
-        textColor = 0xFFFFFFFF;
+    Glyph g{ Shape::Disc, 18, 18, p.cardTop, p.cardBorder, p.text, false };
+    const bool one = b[0] && !b[1];
+    if (strcmp(b, "HOME") == 0) { g.house = true; return g; }
+    if (s_buttonStyle == ButtonStyle::GameCube) {
+        const u32 grey = 0xC9CDD2FF, greyEdge = 0x8A9097FF, dark = 0x2E3237FF;
+        if (one && b[0] == 'A') { g.w = g.h = 20; g.fill = 0x2FB56AFF; g.edge = 0x1E7F49FF; g.ink = 0xFFFFFFFF; }
+        else if (one && b[0] == 'B') { g.w = g.h = 16; g.fill = 0xD8463CFF; g.edge = 0x9A2E27FF; g.ink = 0xFFFFFFFF; }
+        else if (one && b[0] == 'X') { g = { Shape::Pill, 13, 19, grey, greyEdge, dark, false }; }
+        else if (one && b[0] == 'Y') { g = { Shape::Pill, 19, 13, grey, greyEdge, dark, false }; }
+        else if (one && b[0] == 'Z') { g = { Shape::Bar, 22, 12, 0x6A5ACDFF, 0x463A9AFF, 0xFFFFFFFF, false }; }
+        else if (one && (b[0] == 'L' || b[0] == 'R')) { g = { Shape::Trigger, 20, 15, grey, greyEdge, dark, false }; }
+        return g;
     }
+    if (strcmp(b, "ZL") == 0 || strcmp(b, "ZR") == 0) { g.shape = Shape::Trigger; g.w = 26; g.h = 15; return g; }
     /* the Wii Remote's B is a trigger: a square, as in the Wii's own menus */
-    if (s_buttonStyle == ButtonStyle::WiiRemote && b[0] == 'B' && !b[1]) {
-        roundRect(cx - 9, cy - 9, 18, 18, 4.5f, p.cardBorder);
-        roundRect(cx - 7.5f, cy - 7.5f, 15, 15, 3.5f, fill);
-        return;
+    if (s_buttonStyle == ButtonStyle::WiiRemote && one && b[0] == 'B') g.shape = Shape::Square;
+    return g;
+}
+
+/* the shape, its edge around it, centred on cx, cy */
+static void drawShape(const Glyph& g, float cx, float cy)
+{
+    const float x = cx - g.w * 0.5f, y = cy - g.h * 0.5f;
+    switch (g.shape) {
+    case Shape::Disc:
+        circle(cx, cy, g.w * 0.5f, g.edge);
+        circle(cx, cy, g.w * 0.5f - 1.5f, g.fill);
+        break;
+    case Shape::Square:
+        roundRect(x, y, g.w, g.h, 4.5f, g.edge);
+        roundRect(x + 1.5f, y + 1.5f, g.w - 3, g.h - 3, 3.5f, g.fill);
+        break;
+    case Shape::Pill: {
+        const float r = (g.w < g.h ? g.w : g.h) * 0.5f;
+        roundRect(x, y, g.w, g.h, r, g.edge);
+        roundRect(x + 1.5f, y + 1.5f, g.w - 3, g.h - 3, r - 1.5f, g.fill);
+        break;
     }
-    circle(cx, cy, 9, p.cardBorder);
-    circle(cx, cy, 7.5f, fill);
+    case Shape::Bar:
+        roundRect(x, y, g.w, g.h, 3.5f, g.edge);
+        roundRect(x + 1.5f, y + 1.5f, g.w - 3, g.h - 3, 2.5f, g.fill);
+        break;
+    case Shape::Trigger:
+        /* round on top, flat underneath */
+        roundRect(x, y, g.w, g.h, 6.5f, g.edge);
+        roundRect(x, y + g.h * 0.5f, g.w, g.h * 0.5f, 1.5f, g.edge);
+        roundRect(x + 1.5f, y + 1.5f, g.w - 3, g.h - 3, 5.0f, g.fill);
+        roundRect(x + 1.5f, y + g.h * 0.5f, g.w - 3, g.h * 0.5f - 1.5f, 1.0f, g.fill);
+        break;
+    }
+}
+
+/* HOME's house: a roof over a square */
+static void houseGlyph(float cx, float cy, u32 c)
+{
+    triangle(cx, cy - 5.5f, cx + 5.5f, cy - 0.5f, cx - 5.5f, cy - 0.5f, c);
+    roundRect(cx - 3.5f, cy - 1.0f, 7, 5.5f, 0.5f, c);
 }
 
 static float glyphWidth(const char* b)
 {
     if (!b[0]) return 0;
     if (strcmp(b, "UD") == 0 || strcmp(b, "LR") == 0) return 18;
-    if (strcmp(b, "-/+") == 0 || strcmp(b, "L/R") == 0) return 40;
-    if (strlen(b) > 1) return textWidth(b, 10) + 16;   /* HOME ... */
-    return 18;
+    if (strcmp(b, "-/+") == 0) return 40;
+    if (strcmp(b, "L/R") == 0) return 44;
+    const Glyph g = glyphOf(b);
+    if (g.shape == Shape::Disc && strlen(b) > 1 && !g.house) return textWidth(b, 10) + 16;   /* START ... */
+    return g.w;
 }
 
 /* Minus / plus drawn as bars: a 12 px "-" character is a single thin row of
@@ -555,34 +613,42 @@ static void plusGlyph(float cx, float cy, u32 c)
     roundRect(cx - 1.25f, cy - 4.5f, 2.5f, 9, 1.25f, c);
 }
 
+/* one button: its shape and what is written on it */
+static void buttonGlyph(float cx, float cy, const char* b)
+{
+    const Glyph g = glyphOf(b);
+    drawShape(g, cx, cy);
+    if (g.house)           houseGlyph(cx, cy, g.ink);
+    else if (b[0] == '-')  minusGlyph(cx, cy, g.ink);
+    else if (b[0] == '+')  plusGlyph(cx, cy, g.ink);
+    else if (g.shape == Shape::Bar || g.shape == Shape::Trigger)
+        glyphCentered(cx, cy - 6, b, b[1] ? 10 : 11, g.ink);
+    else
+        glyphCentered(cx, cy - 7, b, 12, g.ink);
+}
+
 float hint(float x, float y, const Hint& h)
 {
     const Palette& p = pal();
     const char* b = buttonName(h.button);
     float cy = y + 9, w = glyphWidth(b);
-    u32 tc = p.text;
     if (w == 0) {
         /* plain caption */
     } else if (strcmp(b, "UD") == 0 || strcmp(b, "LR") == 0) {
         dpadGlyph(x + 9, cy, b[0] == 'U', p.text);
-    } else if (strcmp(b, "-/+") == 0 || strcmp(b, "L/R") == 0) {
+    } else if (strcmp(b, "-/+") == 0) {
         /* two small buttons side by side */
-        for (int i = 0; i < 2; ++i) {
-            float bx = x + 9 + i * 22;
-            buttonDisc(bx, cy, "", tc);
-            if (b[0] == 'L') glyphCentered(bx, cy - 7, i == 0 ? "L" : "R", 12, tc);
-            else if (i == 0) minusGlyph(bx, cy, tc);
-            else             plusGlyph(bx, cy, tc);
-        }
-    } else if (strlen(b) > 1) {
+        buttonGlyph(x + 9, cy, "-");
+        buttonGlyph(x + 31, cy, "+");
+    } else if (strcmp(b, "L/R") == 0) {
+        buttonGlyph(x + 10, cy, "L");
+        buttonGlyph(x + 34, cy, "R");
+    } else if (strlen(b) > 1 && glyphOf(b).shape == Shape::Disc && !glyphOf(b).house) {
         roundRect(x, cy - 8, w, 16, 8, p.cardTop, p.cardBottom);
         roundBorder(x, cy - 8, w, 16, 8, 1.5f, p.cardBorder);
         textCentered(x + w * 0.5f, cy - 6, b, 10, p.textDim);
     } else {
-        buttonDisc(x + 9, cy, b, tc);
-        if      (b[0] == '-') minusGlyph(x + 9, cy, tc);
-        else if (b[0] == '+') plusGlyph(x + 9, cy, tc);
-        else glyphCentered(x + 9, cy - 7, b, 12, tc);
+        buttonGlyph(x + w * 0.5f, cy, b);
     }
     if (w > 0) w += 5;
     text(x + w, y + 2, tr(h.label), 14, p.textDim);
