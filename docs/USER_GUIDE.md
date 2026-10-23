@@ -1,23 +1,24 @@
-# WiiFin user guide
+# WiiFin-XE user guide
 
-Everything WiiFin does, its controls, its settings and how to give it your own sounds. To build it from source, see [BUILDING.md](BUILDING.md).
+Everything WiiFin-XE does, its controls, its settings and how to give it your own sounds. What the XE version adds to WiiFin is listed on its own in [XE_FEATURES.md](XE_FEATURES.md); your own colours are in [THEMES.md](THEMES.md). To build it from source, see [BUILDING.md](BUILDING.md).
 
 - [Installing](#-installing)
 - [What WiiFin does](#-what-wiifin-does)
 - [Controls](#-controls)
 - [Settings](#%EF%B8%8F-settings)
 - [Custom sounds](#-custom-sounds)
+- [Files on the SD card](#-files-on-the-sd-card)
 - [Known limitations](#%EF%B8%8F-known-limitations)
 
 ## 📦 Installing
 
-Download the files from the [latest release](https://github.com/fabienmillet/WiiFin/releases).
+Download the files from the latest WiiFin-XE release.
 
 - **Homebrew Channel**: unzip `WiiFin-hbc.zip` at the root of the SD card (it holds `apps/WiiFin/`, fonts included) and start WiiFin from the Homebrew Channel
 - **Wii Menu channel**: install `WiiFin.wad` with a WAD manager (Wii and vWii); for Chinese or Korean, also copy `apps/WiiFin/fonts/` from the zip to the SD card
 - **Dolphin**: open `WiiFin.dol` (`dolphin-emu -e WiiFin.dol`)
 
-WiiFin keeps its settings, profiles and log (`wiifin.log`, to join to a bug report) in `SD:/apps/WiiFin/`.
+WiiFin-XE uses the same folder as WiiFin and replaces it. It keeps its settings, profiles and log (`wiifin.log`, to join to a bug report) in `SD:/apps/WiiFin/`.
 
 ## ✅ What WiiFin does
 
@@ -82,26 +83,79 @@ The pointer is optional: every screen works with the D-pad.
 | HOME | HOME | START | HOME menu |
 | pointer | ZL / ZR | Z | Video zoom (fit / fill); in the menus, what + does on its own: watched / not watched, the browse page, the keyboard's Enter |
 
-On-screen hints show the buttons of the controller used last (GameCube: A green, B red, L / R, Z, START).
+On-screen hints show the buttons of the controller used last (GameCube: A green, B red, X / Y beans, L / R, Z, START).
+
+- **Several controllers:** all four Wii Remotes and all four GameCube ports work at once.
+- **Nunchuk:** the stick is the D-pad, C is − and Z is +.
+- **C-Stick:** the D-pad, everywhere.
+- **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right go round the buttons.
+- **On-screen keyboard:** − deletes, 1 types a space and 2 switches to symbols (Classic: −, y, x; GameCube: X, Y, R, and L for Shift). B deletes too, and leaves when the text is empty.
+
+**USB mouse and keyboard.** A USB mouse moves the pointer: left click is A, right click is B, and the wheel scrolls. Point or press a Wii Remote to take the pointer back. A USB keyboard types into text fields and works the menus:
+
+| Key | Arrows | Enter | Esc | F1 / F2 | Page Up / Down | Home | F3 |
+|---|---|---|---|---|---|---|---|
+| Does | D-pad | A | B | 1 / 2 | − / + | HOME | Zoom |
 
 ## ⚙️ Settings
 
-Settings open on their sections: **View Settings** (from a profile's menu, that profile's own; from WiiFin's menu, the start-up look), a profile's **Sign-In Settings**, and **System Settings**.
+Settings is one screen:
+- The sections are on the left: **Search**, **View**, **Playback**, **System**, and **Sign-In** for a profile.
+- The open section's settings are on the right, in groups under headers. A on a header folds the group away or opens it again.
+- Under the list, the highlighted setting explains what it does.
+- **Search** (or 1 anywhere in Settings) finds a setting by any word of its name or description.
+
+From a profile's menu, View holds that profile's own look. From WiiFin's main menu, it holds the look WiiFin starts with.
+
+**View**
+
+| Group | Setting | |
+|---|---|---|
+| Theme | Theme | Light, Dark, Flix, Luhu (black, silver and green), Sushi (dark grey and orange), or one of your own |
+| | Customize Theme | Change any colour, then save it as a theme of your own, or remove one you saved (see [THEMES.md](THEMES.md)) |
+| | Backgrounds | Soft gradients, or solid colours for TVs that show bands in them |
+| Home and Libraries | Home Screen * | Rows or a grid |
+| | Library View * | Posters, a list, or a list with the cover |
+| | Display Libraries * | The libraries shown on your home |
+| | Start Screen | The page the rows home opens on: Browse or Home |
+| | Other Rows | Shaded under the row you're on, or all shown plainly |
+| | Header Buttons | Icons (Search, Home, Browse, Menu) or Classic |
+| Screen and Keyboard | Screen Area | Shrink the interface when the TV crops its edges; save one per TV |
+| | Keyboard Size | Normal, Large or Larger |
+
+\* in a profile's settings only
+
+**Playback**
+
+| Group | Setting | |
+|---|---|---|
+| Video | Video Quality | The transcoding bitrate, from Low (1.5 Mb/s) to Max (5 Mb/s, for a wired adapter); WiiFin also measures the connection and stays under it |
+| | Direct Play | Play the files the Wii can decode as they are, without the server converting them |
+| | Smooth Motion | Blend frames on picture changes, so 24 fps films move evenly on 60 Hz TVs |
+| Speaker and Disc Light | Wii Remote Speaker | Off, Wii Remote only, or TV + Remote |
+| | Disc Slot Light | The light pulsing with the sound during playback, or off |
+
+**System**
+
+| Group | Setting | |
+|---|---|---|
+| Sound | Background Music / Interface Sounds | The menus' music and sounds |
+| Screensaver | Screensaver | Off, or after 1 to 30 minutes untouched (or paused) |
+| | Screensaver Logo | WiiFin, DVD, VHS, CD, or your own pictures |
+| | Screensaver Speed | Slow, Normal or Fast |
+| | Screensaver Colours | A new colour at each edge, a slow fade, or off |
+| Clock and Language | Clock | 24-hour, or 12-hour (AM/PM, the date as month/day) |
+| | Language | The Wii's, or one chosen here |
+| Buttons and Exit | Exit To | Where Exit and the HOME menu go: the Homebrew Channel or the Wii Menu |
+| | Power Button / Reset Button | Power Off, Homebrew Channel, WiiMC or Wii Menu |
+| Connection | SSL Verification | Check the server's HTTPS certificate (off for self-signed ones) |
+
+**Sign-In** (a profile's own)
 
 | Setting | |
 |---|---|
-| SSL Verification | Check the server's HTTPS certificate (off for self-signed ones) |
-| Background Music / Interface Sounds | The menus' music and sounds |
-| Video Quality | The transcoding bitrate, from Low (1.5 Mb/s) to Max (5 Mb/s, for a wired adapter); WiiFin also measures the connection and stays under it |
-| Direct Play | Play the files the Wii can decode as they are, without the server converting them |
-| Smooth Motion | Blend frames on picture changes, so 24 fps films move evenly on 60 Hz TVs |
-| Theme / Home Screen / Library View | Light, Dark, Flix, Luhu (black, silver and green) or Sushi (dark grey and orange); rows or a grid; posters, a list, or a list with the cover (View Settings, per profile) |
-| Disc Slot Light | The light pulsing with the sound during playback, or off |
-| Screen Area | Shrink the interface when the TV crops its edges |
-| Backgrounds | Soft gradients, or solid colours for TVs that show bands in them |
-| Clock | 24-hour or 12-hour (AM/PM, the date as month/day); 12-hour by default on a US Wii |
-| Language | The Wii's, or one chosen here |
-| Sign-In | At once, a four-digit passcode, or the password each time (Sign-In Settings, per profile) |
+| Sign-In | At once, a four-digit passcode, or the password each time; it applies when you leave Settings |
+| Open at Start-Up | Open this profile when WiiFin starts (hold B at start to skip) |
 
 ## 🔊 Custom sounds
 
@@ -123,10 +177,26 @@ Put your own sounds in `SD:/apps/WiiFin/sounds/` (next to `wiifin.cfg`): a file 
 
 Each sound is `name.mp3` or `name.wav` (PCM, 8 or 16-bit, mono or stereo, up to 48 kHz), at most 2 MB and 10 s (longer sounds are cut). A file WiiFin cannot read is ignored, and the log says why. Settings > Interface Sounds turns them all off; Background Music turns off the music.
 
+## 📁 Files on the SD card
+
+Everything is in `SD:/apps/WiiFin/`:
+
+| | |
+|---|---|
+| `boot.dol`, `meta.xml`, `icon.png` | WiiFin-XE itself |
+| `wiifin.cfg` | Settings and profiles (each profile keeps a sign-in token, never a password) |
+| `wiifin.log` | What happened last time; add it to a bug report |
+| `themes/` | Your own themes (`.theme` files); removed ones go to `themes/removed/` |
+| `pictures/` | PNG or JPEG pictures for profiles and the screensaver |
+| `sounds/` | Your own interface sounds and menu music |
+| `fonts/` | The Chinese and Korean font, and any other `.ttf` / `.otf` to use |
+| `screensaver.png` / `.jpg` | A screensaver picture of your own |
+
 ## ⚠️ Known limitations
 
 - Direct play only for what the Wii decodes in real time (SD resolutions, see [DIRECT_PLAY.md](../DIRECT_PLAY.md)); the server converts the rest
 - Stereo output only (multi-channel audio is mixed down)
 - Picture subtitles (PGS, VobSub) are burned into the video by the server; text subtitles are drawn by WiiFin
+- The Wii Remote Speaker setting doesn't make a sound from the remote yet
 - While a song plays, the interface sounds and the menu music are silent (the Wii's audio is the player's)
 - Chinese and Korean, titles and the interface alike, need the font in `SD:/apps/WiiFin/fonts/`: the Homebrew Channel package has it; with the WAD, copy that folder from the package (or `data/fonts/cjk/`) there. Without it, WiiFin doesn't offer those languages (English instead); any other `.ttf` / `.otf` there is used too, for what the other fonts lack

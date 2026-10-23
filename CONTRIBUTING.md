@@ -20,10 +20,10 @@ What WiiFin does today is listed in the [user guide](docs/USER_GUIDE.md#-what-wi
 ## 📁 Project Structure
 
 - `source/core/` – App, settings, playback sessions, interface sounds and music, text drawing, log
-- `source/input/` – Wii Remote, Classic Controller and GameCube controller
+- `source/input/` – Wii Remote, Nunchuk, Classic Controller, GameCube controller, USB mouse and keyboard
 - `source/jellyfin/` – Jellyfin API client (HTTPS via mbedTLS), remote control (WebSocket)
 - `source/player/` – MPlayer CE integration, video output, player overlay, subtitles, trickplay thumbnails
-- `source/ui/` – The screens: connection, profiles, home, libraries, details, music player, settings
+- `source/ui/` – The screens: connection, profiles, home, libraries, details, music player, settings, themes and the theme editor
 - `data/` – Fonts, sounds, pictures
 - `libs/` – Bundled mbedTLS and the prebuilt MPlayer CE (`libmplayer.a`)
 - `tools/` – WAD packager, linker script, MPlayer CE build (`tools/mplayer/`), test harness (`tools/test/`)

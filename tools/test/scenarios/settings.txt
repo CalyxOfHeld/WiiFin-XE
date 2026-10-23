@@ -1,3 +1,5 @@
+# Out of date: written for the old Settings (one page per section, no
+# group headers). Walk the new layout before using it again.
 # Every setting changed once from the Settings of WiiFin's menu (System
 # Settings, then View Settings: theme and backgrounds): the line WiiFin
 # logs on leaving shows each one changed; the music stops at once and the
