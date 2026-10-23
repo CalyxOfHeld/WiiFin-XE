@@ -10,8 +10,11 @@
  *                  from its features (its face, skin, hair, eyes, mouth,
  *                  glasses, beard, favourite colour behind)
  *   "file:NAME"    a PNG or JPEG in sd:/apps/WiiFin/pictures/
+ *   "builtin:jelly" the jellyfish of WiiFin's icon
  * Ui::avatar draws it, or the letter when it can't be found. */
 namespace Avatars {
+
+const char* const JELLY = "builtin:jelly";
 
 struct Mii {
     std::string id;          /* "mii:XXXXXXXX" */

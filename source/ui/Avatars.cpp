@@ -1,6 +1,7 @@
 #include "Avatars.h"
 #include "Ui.h"
 #include "JpegTexture.h"
+#include "../core/Lang.h"
 #include <grrlib.h>
 #include <ogc/isfs.h>
 #include <ogc/system.h>
@@ -12,6 +13,8 @@
 #include <map>
 #include <algorithm>
 
+extern unsigned char data_avatar_jelly_png[];
+
 namespace {
 
 std::string s_dir;                    /* pictures/, with its '/' */
@@ -21,6 +24,7 @@ bool s_miisRead = false;
 
 /* the pictures loaded, by name (nullptr: it would not load: not tried again) */
 std::map<std::string, GRRLIB_texImg*> s_tex;
+GRRLIB_texImg* s_jelly = nullptr;          /* the built-in jellyfish */
 
 /* ---- the Mii database ----------------------------------------------------
  * /shared2/menu/FaceLib/RFL_DB.dat: "RNOD", then 100 Miis of 74 bytes,
@@ -29,6 +33,7 @@ const char* DB_PATH = "/shared2/menu/FaceLib/RFL_DB.dat";
 const int MII_SIZE = 74, MII_SLOTS = 100;
 
 u16 be16(const u8* p) { return (u16)(p[0] << 8 | p[1]); }
+u32 be32(const u8* p) { return (u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3]; }
 /* bits [hi..lo] (15 = the top one) of the 16 at off */
 int bits(const u8* m, int off, int hi, int lo) { return (be16(m + off) >> lo) & ((1 << (hi - lo + 1)) - 1); }
 
@@ -162,16 +167,21 @@ GRRLIB_texImg* loadPicture(const std::string& name)
         fseek(f, 0, SEEK_END);
         const long n = ftell(f);
         fseek(f, 0, SEEK_SET);
-        /* a picture for a disc 40 px across: a big photo is refused */
-        u8* data = n > 0 && n < 3 * 1024 * 1024 ? (u8*)memalign(32, n) : nullptr;
+        /* a picture for a disc 40 px across: the file under 3 MB, a JPEG
+         * decoded small, a PNG no more than 1600 px; kept at 128 px (64 KB) */
+        u8* data = n > 24 && n < 3 * 1024 * 1024 ? (u8*)memalign(32, n) : nullptr;
         if (data && fread(data, 1, n, f) == (size_t)n) {
-            if (n > 3 && data[0] == 0xFF && data[1] == 0xD8) t = loadJPEGTexture(data, (u32)n);
-            else                                            t = GRRLIB_LoadTexture(data);
+            if (data[0] == 0xFF && data[1] == 0xD8) t = loadJPEGTexture(data, (u32)n, 256);
+            else if (!memcmp(data + 1, "PNG", 3)) {
+                const u32 w = be32(data + 16), h = be32(data + 20);
+                if (w && h && w <= 1600 && h <= 1600) t = GRRLIB_LoadTexture(data);
+            }
+            if (t && !(t->w && t->h)) { GRRLIB_FreeTexture(t); t = nullptr; }
+            if (t) t = shrinkTexture(t, 128);
         }
         free(data);
         fclose(f);
     }
-    if (t && (t->w > 1024 || t->h > 1024)) { GRRLIB_FreeTexture(t); t = nullptr; }   /* more than GX draws */
     SYS_Report("[Avatars] %s: %s\n", name.c_str(), t ? "loaded" : "not loaded");
     s_tex[name] = t;
     return t;
@@ -216,6 +226,8 @@ std::string Avatars::label(const std::string& pic)
         const Mii* m = findMii(pic);
         return m ? m->name : "Mii";
     }
+    /* TRANSLATORS: the jellyfish profile picture (from WiiFin's icon) */
+    if (pic == JELLY) return tr("Jellyfish");
     if (pic.compare(0, 5, "file:") == 0) {
         std::string n = pic.substr(5);
         const size_t dot = n.rfind('.');
@@ -230,6 +242,12 @@ bool Avatars::draw(const std::string& pic, float cx, float cy, float r)
         const Mii* m = findMii(pic);
         if (!m) return false;
         drawMii(m->raw, cx, cy, r);
+        return true;
+    }
+    if (pic == JELLY) {
+        if (!s_jelly) s_jelly = GRRLIB_LoadTexture(data_avatar_jelly_png);
+        if (!s_jelly) return false;
+        Ui::texCover(s_jelly, cx - r, cy - r, r * 2, r * 2, r, 1.0f);
         return true;
     }
     if (pic.compare(0, 5, "file:") == 0) {

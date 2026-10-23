@@ -42,6 +42,7 @@ ASSET_OFILES := \
 	$(BUILD)/jp_font_ttf.o \
 	$(BUILD)/button_start_png.o \
 	$(BUILD)/logo_wiifin_png.o \
+	$(BUILD)/avatar_jelly_png.o \
 	$(BUILD)/cursor_pointer_png.o \
 	$(BUILD)/cursor_hand_open_png.o \
 	$(BUILD)/cursor_hand_closed_png.o \
@@ -149,6 +150,10 @@ $(BUILD)/button_start_png.o: data/images/button_start.png
 $(BUILD)/logo_wiifin_png.o: data/images/logo_wiifin.png
 	xxd -i -n data_logo_wiifin_png $< > $(BUILD)/logo_wiifin_png.h
 	$(CC) -x c -c -o $@ $(BUILD)/logo_wiifin_png.h
+
+$(BUILD)/avatar_jelly_png.o: data/images/avatar_jelly.png
+	xxd -i -n data_avatar_jelly_png $< > $(BUILD)/avatar_jelly_png.h
+	$(CC) -x c -c -o $@ $(BUILD)/avatar_jelly_png.h
 
 # The interface's translations (lang/*.po), see source/core/Lang.cpp
 LANG_PO := $(sort $(wildcard lang/*.po))

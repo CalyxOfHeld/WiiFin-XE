@@ -67,34 +67,6 @@ u64 nowMs() { return ticks_to_millisecs(gettime()); }
 
 u32 be32(const u8* p) { return (u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3]; }
 
-/* big made at most KEEP_MAX across and down (each pixel the average of a
- * few under it); big freed.  No memory for it: big as it is */
-GRRLIB_texImg* shrink(GRRLIB_texImg* big)
-{
-    const u32 bw = big->w, bh = big->h;
-    if (bw <= KEEP_MAX && bh <= KEEP_MAX) return big;
-    const float k = (float)KEEP_MAX / (bw > bh ? bw : bh);
-    u32 w = ((u32)(bw * k) + 3) / 4 * 4, h = ((u32)(bh * k) + 3) / 4 * 4;
-    if (w < 4) w = 4;
-    if (h < 4) h = 4;
-    GRRLIB_texImg* t = GRRLIB_CreateEmptyTexture(w, h);
-    if (!t) return big;
-    for (u32 y = 0; y < h; ++y)
-        for (u32 x = 0; x < w; ++x) {
-            u32 r = 0, g = 0, b = 0, a = 0, n = 0;
-            for (int sy = 0; sy < 3; ++sy)
-                for (int sx = 0; sx < 3; ++sx) {
-                    const u32 ux = (u32)((x + (sx + 0.5f) / 3) * bw / w), uy = (u32)((y + (sy + 0.5f) / 3) * bh / h);
-                    const u32 c = GRRLIB_GetPixelFromtexImg(ux < bw ? ux : bw - 1, uy < bh ? uy : bh - 1, big);
-                    r += c >> 24; g += (c >> 16) & 0xFF; b += (c >> 8) & 0xFF; a += c & 0xFF; ++n;
-                }
-            GRRLIB_SetPixelTotexImg(x, y, t, (r / n) << 24 | (g / n) << 16 | (b / n) << 8 | (a / n));
-        }
-    GRRLIB_FlushTex(t);
-    GRRLIB_FreeTexture(big);
-    return t;
-}
-
 void freePicture()
 {
     if (s_own) GRRLIB_FreeTexture(s_own);
@@ -138,7 +110,7 @@ GRRLIB_texImg* ownPicture()
                     why = "not a PNG it could read";
                 }
             } else why = "not a PNG or JPEG";
-            if (t && t->w && t->h) s_own = shrink(t);
+            if (t && t->w && t->h) s_own = shrinkTexture(t, KEEP_MAX);
             else if (t) GRRLIB_FreeTexture(t);
         }
         free(data);

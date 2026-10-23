@@ -240,20 +240,64 @@ void ProfileView::render(ir_t& ir) {
 }
 
 /* -----------------------------------------------------------------------
- * The picture: the letter, each Mii of this Wii, each picture in pictures/
+ * The picture: each picture in pictures/, each Mii of this Wii, then the
+ * letter and the jellyfish; each group under its name, starting a row
  * ----------------------------------------------------------------------- */
-static const int   PK_COLS = 5, PK_ROWS = 3;
-static const float PK_X = 70, PK_Y = 112, PK_CW = 100, PK_CH = 92, PK_R = 30;
+static const int   PK_COLS = 5;
+static const float PK_X = 70, PK_Y = 104, PK_CW = 100, PK_CH = 92, PK_HEAD = 26, PK_R = 30;
+static const float PK_VIEW = 288;                     /* the rows' height on the card */
+
+static float pickRowH(const char* header) { return header ? PK_HEAD : PK_CH; }
+
+int ProfileView::pickRowOf(int sel) const
+{
+    for (int r = 0; r < (int)pickRows.size(); ++r)
+        if (!pickRows[r].header && sel >= pickRows[r].first && sel < pickRows[r].first + pickRows[r].count) return r;
+    return 0;
+}
+
+/* the selection's row in sight, and its group's name when that fits too */
+void ProfileView::pickFollow()
+{
+    const int r = pickRowOf(pickSel);
+    if (r < pickTop) pickTop = r;
+    if (pickTop == r && r > 0 && pickRows[r - 1].header) pickTop = r - 1;
+    for (;;) {
+        float h = 0;
+        for (int i = pickTop; i <= r; ++i) h += pickRowH(pickRows[i].header);
+        if (h <= PK_VIEW || pickTop >= r) break;
+        ++pickTop;
+    }
+}
 
 void ProfileView::openPicker()
 {
-    choices.assign(1, "");
-    for (const Avatars::Mii& m : Avatars::miis()) choices.push_back(m.id);
-    for (const std::string& f : Avatars::files()) choices.push_back(f);
+    choices.clear();
+    pickRows.clear();
+    /* a group: its name, then its choices PK_COLS a row */
+    auto group = [this](const char* name, const std::vector<std::string>& ids) {
+        if (ids.empty()) return;
+        PickRow h;
+        h.header = name;
+        pickRows.push_back(h);
+        for (size_t i = 0; i < ids.size(); i += PK_COLS) {
+            PickRow r;
+            r.first = (int)(choices.size() + i);
+            r.count = (int)(ids.size() - i < (size_t)PK_COLS ? ids.size() - i : PK_COLS);
+            pickRows.push_back(r);
+        }
+        choices.insert(choices.end(), ids.begin(), ids.end());
+    };
+    std::vector<std::string> miis;
+    for (const Avatars::Mii& m : Avatars::miis()) miis.push_back(m.id);
+    /* TRANSLATORS: the groups of profile pictures */
+    group(N_("Pictures"), Avatars::files());
+    group(N_("Miis"), miis);
+    group(N_("WiiFin"), { std::string(), std::string(Avatars::JELLY) });
     pickSel = 0;
     for (int i = 0; i < (int)choices.size(); ++i) if (choices[i] == profiles[focusedRow].picture) pickSel = i;
-    pickTop = pickSel / PK_COLS - (PK_ROWS - 1);
-    if (pickTop < 0) pickTop = 0;
+    pickTop = 0;
+    pickFollow();
     picking = true;
     SoundFX::play(SoundFX::FX::Select);
 }
@@ -262,21 +306,30 @@ ProfileResult ProfileView::updatePicker(ir_t& ir)
 {
     const int n = (int)choices.size(), was = pickSel;
     if (Input::isBackPressed()) { picking = false; SoundFX::play(SoundFX::FX::Back); return ProfileResult::None; }
-    if (Input::isLeftPressed()  && pickSel > 0)           pickSel--;
-    if (Input::isRightPressed() && pickSel < n - 1)       pickSel++;
-    if (Input::isUpPressed()    && pickSel >= PK_COLS)    pickSel -= PK_COLS;
-    if (Input::isDownPressed()  && pickSel / PK_COLS < (n - 1) / PK_COLS)
-        pickSel = pickSel + PK_COLS < n ? pickSel + PK_COLS : n - 1;
-    int hover = -1;
-    if (ir.valid)
-        for (int k = 0; k < PK_COLS * PK_ROWS && pickTop * PK_COLS + k < n; ++k) {
-            const float x = PK_X + (k % PK_COLS) * PK_CW, y = PK_Y + (k / PK_COLS) * PK_CH;
-            if (ir.x >= x && ir.x < x + PK_CW && ir.y >= y && ir.y < y + PK_CH) hover = pickTop * PK_COLS + k;
+    if (Input::isLeftPressed()  && pickSel > 0)     pickSel--;
+    if (Input::isRightPressed() && pickSel < n - 1) pickSel++;
+    /* up and down: the row of pictures above or below (past a group's
+     * name), the same column or its last */
+    const bool up = Input::isUpPressed(), down = Input::isDownPressed();
+    if (up || down) {
+        const int r = pickRowOf(pickSel), col = pickSel - pickRows[r].first;
+        for (int t = r + (up ? -1 : 1); t >= 0 && t < (int)pickRows.size(); t += up ? -1 : 1) {
+            if (pickRows[t].header) continue;
+            pickSel = pickRows[t].first + (col < pickRows[t].count ? col : pickRows[t].count - 1);
+            break;
         }
+    }
+    int hover = -1;
+    if (ir.valid) {
+        float y = PK_Y;
+        for (int r = pickTop; r < (int)pickRows.size() && y + pickRowH(pickRows[r].header) <= PK_Y + PK_VIEW; y += pickRowH(pickRows[r].header), ++r) {
+            if (pickRows[r].header || ir.y < y || ir.y >= y + PK_CH) continue;
+            const int c = (int)((ir.x - PK_X) / PK_CW);
+            if (ir.x >= PK_X && c < pickRows[r].count) hover = pickRows[r].first + c;
+        }
+    }
     if (hover >= 0) pickSel = hover;
-    /* a row at a time; the pointer at the edges scrolls too */
-    if (pickSel / PK_COLS < pickTop) pickTop = pickSel / PK_COLS;
-    if (pickSel / PK_COLS >= pickTop + PK_ROWS) pickTop = pickSel / PK_COLS - PK_ROWS + 1;
+    pickFollow();
     if (pickSel != was) SoundFX::play(SoundFX::FX::Move);
     if (Input::isAJustPressed() && (!ir.valid || hover >= 0)) {
         picking = false;
@@ -298,23 +351,36 @@ void ProfileView::renderPicker(ir_t& ir)
     /* TRANSLATORS: %s is the profile's name */
     snprintf(title, sizeof title, tr("A picture for %s"), p.shownName().c_str());
     Ui::textCentered(320, 66, title, 20, pal.text);
-    const int n = (int)choices.size();
-    for (int k = 0; k < PK_COLS * PK_ROWS && pickTop * PK_COLS + k < n; ++k) {
-        const int i = pickTop * PK_COLS + k;
-        const float x = PK_X + (k % PK_COLS) * PK_CW, y = PK_Y + (k / PK_COLS) * PK_CH;
-        const bool sel = i == pickSel;
-        Ui::avatar(x + PK_CW / 2, y + PK_R + 4, sel ? PK_R + 3 : PK_R, p.shownName().c_str(),
-                   sel ? Ui::pulse() : 0.0f, choices[i]);
-        const std::string label = i == 0 ? std::string(tr("Letter")) : Avatars::label(choices[i]);
-        std::string fit = label;
-        while (fit.size() > 1 && Ui::textWidth(fit.c_str(), 13) > PK_CW - 8) fit.pop_back();
-        Ui::textCentered(x + PK_CW / 2, y + PK_R * 2 + 14, fit.c_str(), 13, sel ? pal.accentDark : pal.textDim);
+    float y = PK_Y, above = 0, all = 0;
+    for (int r = 0; r < (int)pickRows.size(); ++r) {
+        if (r < pickTop) above += pickRowH(pickRows[r].header);
+        all += pickRowH(pickRows[r].header);
     }
-    const int rows = (n + PK_COLS - 1) / PK_COLS;
-    if (rows > PK_ROWS) Ui::scrollbar(574, PK_Y, PK_ROWS * PK_CH - 8, pickTop, PK_ROWS, rows);
-    Ui::textCentered(320, 392, Avatars::miis().empty() ? tr("No Miis found on this Wii.") : tr("The Miis are this Wii's, from the Mii Channel."),
+    for (int r = pickTop; r < (int)pickRows.size() && y + pickRowH(pickRows[r].header) <= PK_Y + PK_VIEW; y += pickRowH(pickRows[r].header), ++r) {
+        const PickRow& row = pickRows[r];
+        if (row.header) {   /* the group's name, a line after it */
+            const char* name = tr(row.header);
+            Ui::text(PK_X + 6, y + 4, name, 15, pal.accentDark);
+            const float lx = PK_X + 6 + Ui::textWidth(name, 15) + 10;
+            GRRLIB_Rectangle(lx, y + 13, PK_X + PK_COLS * PK_CW - 6 - lx, 1, Ui::alpha(pal.textDim, 0.4f), 1);
+            continue;
+        }
+        for (int c = 0; c < row.count; ++c) {
+            const int i = row.first + c;
+            const float x = PK_X + c * PK_CW;
+            const bool sel = i == pickSel;
+            Ui::avatar(x + PK_CW / 2, y + PK_R + 4, sel ? PK_R + 3 : PK_R, p.shownName().c_str(),
+                       sel ? Ui::pulse() : 0.0f, choices[i]);
+            const std::string label = choices[i].empty() ? std::string(tr("Letter")) : Avatars::label(choices[i]);
+            std::string fit = label;
+            while (fit.size() > 1 && Ui::textWidth(fit.c_str(), 13) > PK_CW - 8) fit.pop_back();
+            Ui::textCentered(x + PK_CW / 2, y + PK_R * 2 + 14, fit.c_str(), 13, sel ? pal.accentDark : pal.textDim);
+        }
+    }
+    if (all > PK_VIEW) Ui::scrollbar(574, PK_Y, PK_VIEW - 8, (int)above, (int)PK_VIEW, (int)all);
+    Ui::textCentered(320, 396, Avatars::miis().empty() ? tr("No Miis found on this Wii.") : tr("The Miis are this Wii's, from the Mii Channel."),
                      13, pal.textDim);
-    Ui::textCentered(320, 410, tr("Pictures of your own: PNG or JPEG files in apps/WiiFin/pictures/"), 13, pal.textDim);
+    Ui::textCentered(320, 414, tr("Pictures of your own: PNG or JPEG files in apps/WiiFin/pictures/"), 13, pal.textDim);
     static const Ui::Hint left[]  = { { "A", N_("Choose") } };
     static const Ui::Hint right[] = { { "B", N_("Cancel") } };
     Ui::bottomBar(left, 1, right, 1);

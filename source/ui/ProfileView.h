@@ -43,10 +43,15 @@ private:
     Keyboard    kb;
     std::string draft;
 
-    /* 2: its picture chosen from the letter, the Miis, pictures/ */
+    /* 2: its picture chosen: pictures/, the Miis, then the letter and the
+     * jellyfish, each group under its name */
     bool picking = false;
     std::vector<std::string> choices;
-    int  pickSel = 0, pickTop = 0;    /* pickTop: the first row shown */
+    struct PickRow { const char* header = nullptr; int first = 0, count = 0; };   /* a name, or choices[first..] */
+    std::vector<PickRow> pickRows;
+    int  pickSel = 0, pickTop = 0;    /* pickTop: the first of pickRows shown */
+    int  pickRowOf(int sel) const;
+    void pickFollow();
     void openPicker();
     ProfileResult updatePicker(ir_t& ir);
     void renderPicker(ir_t& ir);
