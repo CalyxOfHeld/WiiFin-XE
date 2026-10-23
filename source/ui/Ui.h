@@ -208,6 +208,12 @@ void avatar(float cx, float cy, float r, const char* name, float focus);
 
 /* Rotating loading ring (ring.png) centred at cx, cy. */
 void spinner(GRRLIB_texImg* ring, float cx, float cy);
+/* A load: the picture the TV shows now kept (from the frame buffer, at
+ * half size), drawn back dimmed under the spinner instead of a blank
+ * screen; let go once the load is done.  drawFrozen: false when none */
+bool freezeFrame();
+bool drawFrozen();
+void releaseFrozen();
 /* While a USB mouse has the pointer: its arrow drawn at x, y, true (the
  * screen then draws no Wii Remote cursor). */
 bool mouseCursor(float x, float y);

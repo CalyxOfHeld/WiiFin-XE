@@ -51,12 +51,13 @@ static void* fetchWorker(void*) {
 }
 
 /* During a load: true while the previous picture is to stay up (the first
- * LOADING_GRACE_MS), false once the spinner is to be drawn. */
+ * LOADING_GRACE_MS), false once the spinner is to be drawn.  The spinner
+ * goes over that picture, dimmed (kept from the frame buffer now). */
 bool LibraryView::loadingWait() {
     unsigned long long now = ticks_to_millisecs(gettime());
     if (!loadingSince) loadingSince = now;
     if (!spinnerSince && now - loadingSince < LOADING_GRACE_MS) return true;
-    if (!spinnerSince) spinnerSince = now;
+    if (!spinnerSince) { spinnerSince = now; Ui::freezeFrame(); }
     return false;
 }
 
@@ -131,7 +132,7 @@ const char* LibraryView::labelForType(const std::string& type) {
 }
 
 void LibraryView::drawLoadingFrame() {
-    Ui::background(false);
+    if (!Ui::drawFrozen()) Ui::background(false);
     Ui::spinner(ringTex, 320, 240);
     SoundFX::tickLoading();
     // Flush to screen and block on vsync. This serves two purposes:
@@ -155,7 +156,34 @@ int LibraryView::listWidth() const {
     return Ui::libraryStyle() == Ui::LibraryStyle::ListCover ? 384 : LIST_W;
 }
 
+/* A page of posters: the page is shown at once, its pictures filled in by
+ * a thread of their own as they come (below the main thread and the
+ * fetch worker: it takes only the time they leave) */
+static u8                    s_posterStack[64 * 1024] DEAD_AT_EXIT;
+static lwp_t                 s_posterThread = LWP_THREAD_NULL;
+static volatile bool         s_posterStop;
+static std::function<void()> s_posterFn;
+
+static void* posterWorker(void*) {
+    s_posterFn();
+    return nullptr;
+}
+
+/* waits out the picture on its way (one request at most) */
+void LibraryView::stopPosterLoader() {
+    if (s_posterThread == LWP_THREAD_NULL) return;
+    s_posterStop = true;
+    LWP_JoinThread(s_posterThread, nullptr);
+    s_posterThread = LWP_THREAD_NULL;
+    s_posterFn     = nullptr;
+}
+
+LibraryView::~LibraryView() {
+    stopPosterLoader();
+}
+
 void LibraryView::freePosters() {
+    stopPosterLoader();
     for (int i = 0; i < POSTER_VISIBLE; i++) {
         if (posterTextures[i]) {
             GRRLIB_FreeTexture(posterTextures[i]);
@@ -181,19 +209,30 @@ void LibraryView::loadPosters() {
     freePosters();
     int n = (int)items.size();
     if (n > POSTER_VISIBLE) n = POSTER_VISIBLE;
-    // Fetch and decode all posters inside one background pass so the spinner
-    // keeps animating through both network I/O and JPEG decode.
-    // loadJPEGTexture only does CPU/heap work; GRRLIB_FlushTex is just
-    // DCFlushRange (no GX), so it is safe to call from the worker thread.
-    runWithLoading([&]() {
-        for (int i = 0; i < n; i++) {
-            std::string imgBytes;
-            client.getItemImageBytes(serverUrl, auth, items[i].id, POSTER_W, POSTER_H, imgBytes);
-            if (!imgBytes.empty())
-                posterTextures[i] = loadJPEGTexture(
-                    (const u8*)imgBytes.data(), (u32)imgBytes.size());
+    // The posters come in the background, one by one, while the page is
+    // already up (an empty card until each arrives).  loadJPEGTexture only
+    // does CPU/heap work; GRRLIB_FlushTex is just DCFlushRange (no GX), so
+    // it is safe off the main thread.  A texture set after the page is
+    // left is freed by freePosters(), which first waits for the thread.
+    {
+        std::vector<std::string> ids;
+        for (int i = 0; i < n; i++) ids.push_back(items[i].id);
+        s_posterStop = false;
+        s_posterFn = [this, ids, url = serverUrl, a = auth]() {
+            for (int i = 0; i < (int)ids.size() && !s_posterStop; i++) {
+                std::string imgBytes;
+                client.getItemImageBytes(url, a, ids[i], POSTER_W, POSTER_H, imgBytes);
+                if (!imgBytes.empty() && !s_posterStop)
+                    posterTextures[i] = loadJPEGTexture(
+                        (const u8*)imgBytes.data(), (u32)imgBytes.size());
+            }
+        };
+        if (LWP_CreateThread(&s_posterThread, posterWorker, nullptr,
+                             s_posterStack, sizeof(s_posterStack), 40) < 0) {
+            s_posterThread = LWP_THREAD_NULL;
+            s_posterFn     = nullptr;
         }
-    });
+    }
 
     // Pre-compute truncated display labels
     {
@@ -230,6 +269,7 @@ void LibraryView::preparePlay(long long startTicks, const std::vector<JellyfinEp
 
     std::string url;
     std::string playSessionId;
+    stopPosterLoader();                 /* the connection is the player's */
     SoundFX::play(SoundFX::FX::Play);   /* heard while the server answers */
     // Show the spinner immediately in both framebuffers so the
     // film/series detail page is hidden during the network call.
@@ -1462,23 +1502,14 @@ bool LibraryView::updateState(ir_t& ir) {
 bool LibraryView::render(ir_t& ir) {
     const Ui::Palette& p = Ui::pal();
 
-    const bool loading = (state == State::LibsInit || state == State::LibsLoad ||
-        state == State::ItemsInit || state == State::ItemsLoad ||
-        state == State::PostersLoad || state == State::DetailLoad ||
-        state == State::SeasonsLoad || state == State::EpisodesLoad ||
-        state == State::MusicTracksLoad ||
-        state == State::CollectionsLoad || state == State::FavoritesLoad ||
-        state == State::MovieSuggestionsLoad ||
-        state == State::TVSuggestionsLoad || state == State::TVUpcomingLoad ||
-        state == State::MusicSuggestionsLoad || state == State::PlaylistsLoad ||
-        state == State::GlobalFavoritesLoad || state == State::SearchLoad ||
+    const bool loading = loadingState(state) ||
         /* the carousel home is built on the next update: no tile grid
          * flashing in between */
-        (state == State::LibsReady && flixHome() && !(browsePage ? catalog : browse).built()));
+        (state == State::LibsReady && flixHome() && !(browsePage ? catalog : browse).built());
     // Loading screen (shown one frame before blocking load), after a grace
     if (loading && loadingWait()) return false;
-    if (!loading) loadingSince = spinnerSince = 0;
-    Ui::background(!loading);
+    if (!loading) { loadingSince = spinnerSince = 0; Ui::releaseFrozen(); }
+    if (!loading || !Ui::drawFrozen()) Ui::background(!loading);
     if (loading) {
         if (ringTex) Ui::spinner(ringTex, 320, 240);
         else         Ui::textCentered(320, 200, tr("Loading..."), 22, p.textDim);

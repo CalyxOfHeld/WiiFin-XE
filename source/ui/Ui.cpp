@@ -1009,6 +1009,53 @@ bool mouseCursor(float x, float y)
     return true;
 }
 
+/* the frame buffer shown last: Y U Y V, two pixels a word, read every
+ * other line and pair at half size (each needs a frame-sized texture
+ * otherwise); in RGBA, through the 601 video levels */
+static GRRLIB_texImg* s_frozen = nullptr;
+
+bool freezeFrame()
+{
+    if (!rmode || !xfb[fb ^ 1]) return false;
+    const int W = rmode->fbWidth, H = rmode->xfbHeight, tw = W / 2, th = (H / 2) & ~3;
+    if (!s_frozen) s_frozen = GRRLIB_CreateEmptyTexture(tw, th);
+    if (!s_frozen) return false;
+    const u32* src = (const u32*)xfb[fb ^ 1];
+    auto clamp8 = [](int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); };
+    for (int y = 0; y < th; ++y) {
+        const u32* line = src + (y * 2) * (W / 2);
+        for (int x = 0; x < tw; ++x) {
+            const u32 w = line[x];
+            const int c = (int)(((w >> 24) & 0xFF) + ((w >> 8) & 0xFF)) / 2 - 16;
+            const int d = (int)((w >> 16) & 0xFF) - 128, e = (int)(w & 0xFF) - 128;
+            const int r = clamp8((298 * c + 409 * e + 128) >> 8);
+            const int g = clamp8((298 * c - 100 * d - 208 * e + 128) >> 8);
+            const int b = clamp8((298 * c + 516 * d + 128) >> 8);
+            GRRLIB_SetPixelTotexImg(x, y, s_frozen, (u32)(r << 24 | g << 16 | b << 8 | 0xFF));
+        }
+    }
+    GRRLIB_FlushTex(s_frozen);
+    return true;
+}
+
+bool drawFrozen()
+{
+    if (!s_frozen) return false;
+    /* the frame buffer holds the whole frame, margins of the screen area
+     * included: drawn over the whole frame, then the area as it was */
+    const float ky = lineScale();
+    GX_SetViewport(0.0f, 0.0f, 640.0f, 480.0f * ky, 0.0f, 1.0f);
+    GX_SetScissor(0, 0, 640, (u32)(480.0f * ky + 0.5f));
+    texRound(s_frozen, screenLeft(), 0, screenWidth(), 480, 0.5f, 0x7A7A7AFF);
+    setSafeArea(s_safeL, s_safeT, s_safeR, s_safeB);
+    return true;
+}
+
+void releaseFrozen()
+{
+    if (s_frozen) { GRRLIB_FreeTexture(s_frozen); s_frozen = nullptr; }
+}
+
 void spinner(GRRLIB_texImg* ring, float cx, float cy)
 {
     if (!ring) return;

@@ -18,6 +18,7 @@ public:
                 GRRLIB_texImg* ringTex,
                 JellyfinClient& client,
                 const JellyfinAuth& auth, const std::string& serverUrl);
+    ~LibraryView();
 
     // Returns true when the user exits (B from libraries grid) OR requests play.
     // If pendingPlayUrl is non-empty on return, the caller should play that URL
@@ -177,8 +178,10 @@ private:
 
     // Loading: no spinner for the first LOADING_GRACE_MS (the previous
     // picture stays), then at least SPINNER_MIN_MS of it: no blinking.
+    // The spinner is drawn over that picture dimmed, so a short one reads
+    // as "still working", not as a blank screen.
     static const int LOADING_GRACE_MS = 150;
-    static const int SPINNER_MIN_MS   = 300;
+    static const int SPINNER_MIN_MS   = 120;
     unsigned long long loadingSince = 0;   // ms, 0: not loading
     unsigned long long spinnerSince = 0;   // ms, 0: no spinner shown
     bool loadingWait();                    // true: keep the previous picture
@@ -420,6 +423,7 @@ private:
     void loadPlaylistsTab();
     void runWithLoading(std::function<void()> fn);
     void freePosters();
+    void stopPosterLoader();   // the page's posters still on their way
     void freeDetail();
     void drawCursor(ir_t& ir);
     void drawDetailView(ir_t& ir);

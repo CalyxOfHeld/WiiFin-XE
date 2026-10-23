@@ -209,13 +209,11 @@ void BrowseHome::buildHome(const std::vector<JellyfinLibrary>& libs)
         ADD_ROW(title, query, square, MAX_ITEMS);
     };
 
-    /* a library's part of a row of every library (expanded), empty ones
-     * dropped */
+    /* a library's part of a row of every library (expanded); not asked
+     * of the server here (a request per library on every home build), only
+     * once it is picked */
     auto addSection = [&](Row& r, const std::string& label, const std::string& query,
                           const std::string& parent, const char* types) {
-        std::vector<JellyfinItem> got;
-        client.getItemsByQuery(serverUrl, auth, query, got);
-        if (got.empty()) return;
         r.parts.push_back({ 0, label, query, parent, types });
     };
     auto pushRow = [&](Row& r) {
@@ -316,8 +314,9 @@ void BrowseHome::buildCatalog(const std::vector<JellyfinLibrary>& libs)
         }
     }
 
-    /* a row per library, as New Additions: its titles A-Z (All), then a
-     * part per genre; 2 opens it with every part listed on the left */
+    /* a row per library, as New Additions: its titles A-Z (All); 2 opens
+     * it with All and a part per genre listed on the left (the genres
+     * only named here: their titles are asked for once one is picked) */
     for (const auto& lib : libs) {
         const std::string& t = lib.collectionType;
         const char* types = t == "movies"  ? "Movie"
@@ -330,35 +329,35 @@ void BrowseHome::buildCatalog(const std::vector<JellyfinLibrary>& libs)
         r.title  = lib.name;
         r.square = t == "music";
         r.sort   = SORT_TITLE;
-        auto addPart = [&](const std::string& label, const std::string& filter, int cap) {
+        auto partQuery = [&](const std::string& filter, int cap) {
             snprintf(q, sizeof(q),
                      "/Users/%s/Items?ParentId=%s&Recursive=true&IncludeItemTypes=%s%s"
                      "&SortBy=SortName&SortOrder=Ascending&Limit=%d",
                      uid.c_str(), lib.id.c_str(), types, filter.c_str(), cap);
-            std::vector<JellyfinItem> got;
-            bool ok = client.getItemsByQuery(serverUrl, auth, q, got);
-            if (!ok && filter.empty()) {   /* All: the row's front, once more */
-                SYS_Report("[Home] %s, All: %s, again\n", t.c_str(), client.lastError().c_str());
-                got.clear();
-                ok = client.getItemsByQuery(serverUrl, auth, q, got);
-            }
-            if (got.empty()) {
-                if (filter.empty())
-                    SYS_Report("[Home] %s, All: %s\n", t.c_str(), ok ? "nothing" : client.lastError().c_str());
-                return;
-            }
-            if ((int)got.size() > cap) got.resize(cap);
-            r.sections.push_back({ (int)r.items.size(), label, q, lib.id, types, filter });
-            r.items.insert(r.items.end(), got.begin(), got.end());
+            return std::string(q);
         };
-        addPart(tr("All"), "", MAX_ITEMS);
+        r.query = partQuery("", MAX_ITEMS);
+        bool ok = client.getItemsByQuery(serverUrl, auth, r.query, r.items);
+        if (!ok) {   /* the row's front, once more */
+            SYS_Report("[Home] %s, All: %s, again\n", t.c_str(), client.lastError().c_str());
+            r.items.clear();
+            ok = client.getItemsByQuery(serverUrl, auth, r.query, r.items);
+        }
+        if (r.items.empty()) {
+            SYS_Report("[Home] %s, All: %s\n", t.c_str(), ok ? "nothing" : client.lastError().c_str());
+            continue;
+        }
+        if ((int)r.items.size() > MAX_ITEMS) r.items.resize(MAX_ITEMS);
 
         if (t == "movies" || t == "tvshows") {
             std::vector<JellyfinItem> genres;
             snprintf(q, sizeof(q), "/Genres?ParentId=%s&UserId=%s&SortBy=SortName&Limit=%d",
                      lib.id.c_str(), uid.c_str(), CATALOG_GENRES);
             client.getItemsByQuery(serverUrl, auth, q, genres);
-            for (const auto& g : genres) addPart(g.name, "&GenreIds=" + g.id, SECTION_ITEMS);
+            for (const auto& g : genres) {
+                const std::string filter = "&GenreIds=" + g.id;
+                r.parts.push_back({ 0, g.name, partQuery(filter, SECTION_ITEMS), lib.id, types, filter });
+            }
         }
         if (!r.items.empty()) {
             r.tex.assign(r.items.size(), nullptr);
@@ -1191,6 +1190,9 @@ void BrowseHome::expand()
     const std::vector<Row::Section>& parts = r.parts.empty() ? r.sections : r.parts;
     if (!parts.empty() && !r.query.empty()) {        /* first: every library at once */
         std::string types;                           /* what any of them hold */
+        /* the parts of one library (its genres): All is that library's */
+        std::string parent = parts[0].parent;
+        for (const auto& sec : parts) if (sec.parent != parent) parent.clear();
         for (const auto& sec : parts) {
             size_t a = 0;
             while (a < sec.types.size()) {
@@ -1202,7 +1204,7 @@ void BrowseHome::expand()
                 a = b + 1;
             }
         }
-        expSecs.push_back({ 0, tr("All"), r.query, "", types });
+        expSecs.push_back({ 0, tr("All"), r.query, parent, types });
     }
     const int skip = (int)expSecs.size();
     expSecs.insert(expSecs.end(), parts.begin(), parts.end());
