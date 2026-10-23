@@ -380,6 +380,16 @@ void pointerToScreen(ir_t& ir)
  * left blank otherwise, a band at the bottom of the TV) */
 static float lineScale() { return rmode ? rmode->efbHeight / 480.0f : 1.0f; }
 
+/* nothing drawn outside the screen area: the viewport only places the
+ * 640x480 picture, what is drawn past its edges (the next row's posters
+ * below 480) would reach into the black margins */
+static void safeScissor()
+{
+    const float ky = lineScale();
+    GX_SetScissor((u32)s_safeL, (u32)(s_safeT * ky + 0.5f),
+                  (u32)(640.0f * s_sx + 0.5f), (u32)(480.0f * s_sy * ky + 0.5f));
+}
+
 void setSafeArea(int l, int t, int r, int b)
 {
     auto clampi = [](int v, int hi) { return v < 0 ? 0 : (v > hi ? hi : v); };
@@ -392,6 +402,7 @@ void setSafeArea(int l, int t, int r, int b)
      * frame is cleared on every copy to the TV). */
     const float ky = lineScale();
     GX_SetViewport((f32)s_safeL, s_safeT * ky, 640.0f * s_sx, 480.0f * s_sy * ky, 0.0f, 1.0f);
+    safeScissor();
 }
 
 void safeArea(int& l, int& t, int& r, int& b) { l = s_safeL; t = s_safeT; r = s_safeR; b = s_safeB; }
@@ -404,13 +415,14 @@ void clip(float x, float y, float w, float h)
                        (int)(w * k * s_sx + 0.5f), (int)(h * s_sy * ky + 0.5f));
 }
 
-void clipReset() { GRRLIB_ClipReset(); }
+void clipReset() { safeScissor(); }
 
 /* ---- Components --------------------------------------------------------- */
 
 void background(bool withBand)
 {
     const Palette& p = pal();
+    safeScissor();   /* each frame: the player's video may have changed it */
     beginShapes();
     GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
     const float L = screenLeft(), R = screenRight();
