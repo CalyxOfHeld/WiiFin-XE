@@ -664,8 +664,9 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
             Row& row = rows[rowSel];
             float tw = tileW(row), st = stride(row);
             if (ir.y >= POSTER_Y && ir.y < POSTER_Y + POSTER_H) {
-                hoverLeft  = ir.x < X0 - 4;
-                hoverRight = ir.x > Ui::screenRight() - 24.0f;
+                /* the Libraries row has no side arrows: it goes round */
+                hoverLeft  = !row.wide && ir.x < X0 - 4;
+                hoverRight = !row.wide && ir.x > Ui::screenRight() - 24.0f;
                 for (int i = 0; i < (int)row.items.size(); ++i) {
                     float x = X0 + (i - row.scroll) * st;
                     if (x < X0 - 2 || x + tw > Ui::screenRight() - 24.0f) continue;   /* only whole tiles */
@@ -719,8 +720,14 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
         else headerFocus = 1;
     }
     if (down && rowSel + 1 < nRows) rowSel++;
-    if (left  && row.sel > 0)     row.sel--;
-    if (right && row.sel < n - 1) row.sel++;
+    /* the Libraries row: past either end, round to the other */
+    if (row.wide && n > 0) {
+        if (left)  row.sel = (row.sel + n - 1) % n;
+        if (right) row.sel = (row.sel + 1) % n;
+    } else {
+        if (left  && row.sel > 0)     row.sel--;
+        if (right && row.sel < n - 1) row.sel++;
+    }
     if (left || right) followSelection(row);
 
     if (a) {
@@ -852,8 +859,9 @@ void BrowseHome::drawRow(int r, float offY, float focus)
         }
     }
 
-    /* Scroll arrows (white triangles on the sides) */
-    if (focus > 0.5f) {
+    /* Scroll arrows (white triangles on the sides; not on the Libraries
+     * row, which goes round) */
+    if (focus > 0.5f && !row.wide) {
         float cy = y + POSTER_H * 0.5f;
         auto arrow = [&](bool leftSide) {
             bool hot = hoverArrow == (leftSide ? -1 : 1);
