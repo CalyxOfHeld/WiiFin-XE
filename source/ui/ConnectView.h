@@ -22,6 +22,9 @@ public:
 
     // Pre-fill server URL and username (called before showing the view)
     void setFields(const std::string& serverUrl, const std::string& username);
+    // A saved profile's sign-in changed (Edit Profile): its own title, Save
+    // for Connect, field (0 server, 1 user name, 2 password) focused first
+    void setEditing(int field);
 
     // Call every frame; returns None while running
     ConnectResult update(ir_t& ir);
@@ -45,6 +48,7 @@ private:
     // --- Fields (Credentials tab) ---
     enum class Field { Server, Username, Password, SubmitBtn };
     Field focusedField = Field::Server;
+    bool editing = false;               // setEditing()
     std::string fields[3]; // Server, Username, Password
     bool showPassword = false;
 

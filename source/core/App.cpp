@@ -760,6 +760,37 @@ void App::loop() {
         }
     };
 
+    /* ---- Helper: a profile's server, user name and password typed again
+     * (Edit Profile); signed in, it becomes that account, keeping its own
+     * nickname, picture, look and passcode ---- */
+    auto editSignIn = [&](SavedProfile& sp, int field) {
+        ConnectView cv(btnTex, cursorPointerTex, font, jellyfinClient);
+        cv.setFields(sp.serverUrl, sp.username);
+        cv.setEditing(field);
+        ConnectResult res = ConnectResult::None;
+        while (res == ConnectResult::None && running) {
+            Input::update();
+            Input::readIR(ir);
+            if (g_app_powerOff || g_app_reset) { running = false; break; }
+            if (Input::isHomePressed() && showHomeOverlay()) { running = false; break; }
+            res = cv.update(ir);
+            cv.render(ir);
+            GRRLIB_Render();
+        }
+        if (res != ConnectResult::Success) return;
+        if (sp.userId != cv.auth.userId) {
+            if (!sp.userId.empty() && sp.userId == g_app_startProfile) g_app_startProfile = cv.auth.userId;
+            sp.hiddenLibs.clear();   /* another account's libraries */
+        }
+        sp.serverUrl   = cv.serverUrl;
+        sp.username    = cv.username;
+        sp.serverName  = cv.auth.serverName;
+        sp.userId      = cv.auth.userId;
+        sp.accessToken = sp.signIn == SavedProfile::Password ? std::string() : cv.auth.accessToken;
+        saveSettings();
+        SYS_Report("[WiiFin] a profile's sign-in changed\n");
+    };
+
     /* ---- Helper: profile picker loop; autoOpen: that profile opened
      * first, as if picked (Open at Start-Up) ---- */
     auto runProfilePicker = [&](int autoOpen = -1) {
@@ -792,6 +823,14 @@ void App::loop() {
                 if (pv.selectedIdx >= 0 && pv.selectedIdx < (int)profiles.size()) {
                     profiles[pv.selectedIdx].nickname = pv.newName;
                     saveSettings();
+                    pickerFocus = pv.selectedIdx;
+                }
+                continue;
+            }
+            if (res == ProfileResult::EditSignIn) {
+                if (pv.selectedIdx >= 0 && pv.selectedIdx < (int)profiles.size()) {
+                    editSignIn(profiles[pv.selectedIdx], pv.editField);
+                    if (!running) return;
                     pickerFocus = pv.selectedIdx;
                 }
                 continue;

@@ -163,6 +163,11 @@ void ConnectView::setFields(const std::string& url, const std::string& uname) {
     serverUrl  = fields[0];
 }
 
+void ConnectView::setEditing(int field) {
+    editing = true;
+    focusedField = field == 1 ? Field::Username : field == 2 ? Field::Password : Field::Server;
+}
+
 void ConnectView::setStatus(const std::string& msg, bool isError) {
     statusMsg   = msg;
     statusError = isError;
@@ -489,7 +494,7 @@ static void line(int y, const char* s, int size, u32 col) {
 void ConnectView::renderBackground() {
     const Ui::Palette& p = Ui::pal();
     Ui::background();
-    Ui::text(28, 12, tr("Connect to Jellyfin"), 22, p.text);
+    Ui::text(28, 12, editing ? tr("Edit Profile") : tr("Connect to Jellyfin"), 22, p.text);
 
     // Tabs: one pill split into the segments update() hit-tests
     {
@@ -557,7 +562,7 @@ void ConnectView::renderCredentials(ir_t& ir) {
               focusedField == Field::Password && !kbActive, true);
 
     // Submit button
-    drawButton(320, 330, 200, 48, N_("Connect"),
+    drawButton(320, 330, 200, 48, editing ? N_("Save") : N_("Connect"),
                focusedField == Field::SubmitBtn && !kbActive);
 
     if (kbActive) {

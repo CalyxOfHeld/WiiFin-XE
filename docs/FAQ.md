@@ -83,6 +83,10 @@ Settings > View > **Keyboard Size**: Normal, Large or Larger.
 
 ## Profiles and settings
 
+### My server's address changed
+
+On "Who's watching?", press 1 (Y on a Classic Controller or GameCube controller) on the profile and choose **Server URL**. Type the new address and the password, then Save. The profile keeps its nickname, picture and settings.
+
 ### A profile opens on its own at start
 
 That profile has **Open at Start-Up** on. Hold B while WiiFin-XE starts to go to the menu instead, or turn it off in that profile's Sign-In settings.

@@ -14,6 +14,8 @@ enum class ProfileResult {
     Back,       /* user pressed B                                        */
     Rename,     /* selectedIdx is set — its nickname becomes newName     */
     Picture,    /* selectedIdx is set — its picture becomes newPicture   */
+    EditSignIn, /* selectedIdx is set — its server, user name and password
+                 * typed again (ConnectView), editField the one to start on */
 };
 
 class ProfileView {
@@ -28,6 +30,7 @@ public:
     int selectedIdx = 0; /* valid when result is Selected, DeleteOne or Rename */
     std::string newName; /* Rename: the nickname ("": the user name again) */
     std::string newPicture; /* Picture: "", "mii:<id>" or "file:<name>" (Avatars) */
+    int editField = 0;      /* EditSignIn: 0 the server, 1 the user name, 2 the password */
     void setFocus(int row) { if (row >= 0 && row <= (int)profiles.size()) focusedRow = row; }
 
 private:
@@ -39,7 +42,15 @@ private:
     bool irMode        = false;
     bool confirmDelete = false;
     int  confirmSel    = 1;       /* the question's button: 0 Delete, 1 Cancel */
-    bool renaming      = false;   /* 1: the keyboard, for its nickname */
+    bool renaming      = false;   /* the keyboard, for its nickname */
+
+    /* 1: Edit Profile, each of its details a row: the nickname, the
+     * server, the user name, the password, the picture */
+    bool editing = false;
+    int  editSel = 0;
+    static const int EDIT_ROWS = 5;
+    ProfileResult updateEdit(ir_t& ir);
+    void renderEdit();
     Keyboard    kb;
     std::string draft;
 

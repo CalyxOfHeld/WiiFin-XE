@@ -76,7 +76,10 @@ Theme files are short text files in `sd:/apps/WiiFin/themes/`, easy to share and
 - **Miis:** the Miis of this Wii, drawn as simple portraits from their Mii Channel data.
 - **WiiFin:** your profile's letter, or the jellyfish. New profiles start with the jellyfish.
 
-**Nicknames:** 1 on "Who's watching?" gives a profile a name of its own. The user name shows dimmed after it. Leave it empty to go back to the user name.
+**Edit Profile:** 1 (Y on a Classic Controller or GameCube controller) on "Who's watching?" lists a profile's details, each with its value:
+- **Nickname:** a name of its own. The user name shows dimmed after it. Leave it empty to go back to the user name.
+- **Server URL**, **Username** and **Password:** open the sign-in screen with the server and user name filled in. The password isn't kept on the Wii, so changing any of the three signs in again. Save keeps the profile's nickname, picture, look and passcode. Signing in as another account also clears its hidden libraries.
+- **Picture:** the same picker as 2.
 
 **Open at Start-Up** (a profile's Sign-In settings) opens that profile's home when WiiFin starts. Hold B while WiiFin starts to skip it.
 

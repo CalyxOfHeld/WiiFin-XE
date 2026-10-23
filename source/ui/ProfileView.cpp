@@ -26,6 +26,7 @@ ProfileResult ProfileView::update(ir_t& ir) {
     const int rowBefore = focusedRow;
 
     if (picking) return updatePicker(ir);
+    if (editing && !renaming) return updateEdit(ir);
 
     /* its nickname typed: Done keeps it (nothing: the user name again) */
     if (renaming) {
@@ -34,6 +35,7 @@ ProfileResult ProfileView::update(ir_t& ir) {
         if (r == Keyboard::Result::Cancel) { renaming = false; SoundFX::play(SoundFX::FX::Back); }
         if (r == Keyboard::Result::Enter) {
             renaming = false;
+            editing = false;
             size_t a = draft.find_first_not_of(' '), b = draft.find_last_not_of(' ');
             newName = a == std::string::npos ? "" : draft.substr(a, b - a + 1);
             selectedIdx = focusedRow;
@@ -107,11 +109,10 @@ ProfileResult ProfileView::update(ir_t& ir) {
         return ProfileResult::Back;
     }
 
-    /* 1 = a nickname for the profile */
+    /* 1 = Edit Profile */
     if (Input::is1Pressed() && focusedRow < (int)profiles.size()) {
-        renaming = true;
-        draft = profiles[focusedRow].shownName();
-        kb.reset();
+        editing = true;
+        editSel = 0;
         SoundFX::play(SoundFX::FX::Select);
         return ProfileResult::None;
     }
@@ -215,6 +216,8 @@ void ProfileView::render(ir_t& ir) {
         kb.render(ir);
     }
 
+    if (editing && !renaming && !picking) renderEdit();
+
     if (picking) {
         renderPicker(ir);
     } else if (renaming) {
@@ -223,8 +226,12 @@ void ProfileView::render(ir_t& ir) {
     } else if (confirmDelete) {
         static const Ui::Hint left[] = { { "A", N_("Select") }, { "B", N_("Cancel") } };
         Ui::bottomBar(left, 2);
+    } else if (editing) {
+        static const Ui::Hint left[]  = { { "A", N_("Change") } };
+        static const Ui::Hint right[] = { { "B", N_("Back") } };
+        Ui::bottomBar(left, 1, right, 1);
     } else {
-        static const Ui::Hint left[]  = { { "A", N_("Open") }, { "1", N_("Nickname") }, { "2", N_("Picture") },
+        static const Ui::Hint left[]  = { { "A", N_("Open") }, { "1", N_("Edit") }, { "2", N_("Picture") },
                                           { "-", N_("Delete") } };
         static const Ui::Hint right[] = { { "B", N_("Back") } };
         Ui::bottomBar(left, 4, right, 1);
@@ -333,6 +340,7 @@ ProfileResult ProfileView::updatePicker(ir_t& ir)
     if (pickSel != was) SoundFX::play(SoundFX::FX::Move);
     if (Input::isAJustPressed() && (!ir.valid || hover >= 0)) {
         picking = false;
+        editing = false;
         newPicture = choices[pickSel];
         selectedIdx = focusedRow;
         SoundFX::play(SoundFX::FX::Open);
@@ -381,4 +389,87 @@ void ProfileView::renderPicker(ir_t& ir)
     static const Ui::Hint left[]  = { { "A", N_("Choose") } };
     static const Ui::Hint right[] = { { "B", N_("Cancel") } };
     Ui::bottomBar(left, 1, right, 1);
+}
+
+/* -----------------------------------------------------------------------
+ * Edit Profile: each detail a row, its value after it.  The server, the
+ * user name and the password are typed on the sign-in screen: the
+ * password isn't kept, so changing any of them signs in again
+ * ----------------------------------------------------------------------- */
+static const float ED_X = 110, ED_W = 420, ED_Y = 70, ED_ROW0 = 118, ED_ROW_H = 50;
+
+ProfileResult ProfileView::updateEdit(ir_t& ir)
+{
+    const int was = editSel;
+    if (Input::isBackPressed()) { editing = false; SoundFX::play(SoundFX::FX::Back); return ProfileResult::None; }
+    if (Input::isUpPressed())   editSel = (editSel - 1 + EDIT_ROWS) % EDIT_ROWS;
+    if (Input::isDownPressed()) editSel = (editSel + 1) % EDIT_ROWS;
+    bool hover = false;
+    if (ir.valid && ir.x >= ED_X + 16 && ir.x <= ED_X + ED_W - 16) {
+        for (int i = 0; i < EDIT_ROWS; ++i) {
+            const float y = ED_ROW0 + i * ED_ROW_H;
+            if (ir.y >= y && ir.y < y + ED_ROW_H - 6) { editSel = i; hover = true; }
+        }
+    }
+    if (editSel != was) SoundFX::play(SoundFX::FX::Move);
+    if (!Input::isAJustPressed() || (ir.valid && !hover)) return ProfileResult::None;
+
+    switch (editSel) {
+    case 0:   /* the nickname: the keyboard, over this */
+        renaming = true;
+        draft = profiles[focusedRow].shownName();
+        kb.reset();
+        SoundFX::play(SoundFX::FX::Select);
+        return ProfileResult::None;
+    case 4:
+        openPicker();
+        return ProfileResult::None;
+    default:  /* the server, the user name, the password */
+        editing = false;
+        editField = editSel - 1;
+        selectedIdx = focusedRow;
+        SoundFX::play(SoundFX::FX::Open);
+        return ProfileResult::EditSignIn;
+    }
+}
+
+/* s cut to w pixels, "..." after it if it was longer */
+static std::string fitTo(std::string s, int size, float w)
+{
+    if (Ui::textWidth(s.c_str(), size) <= w) return s;
+    while (!s.empty() && Ui::textWidth((s + "...").c_str(), size) > w) {
+        s.pop_back();
+        while (!s.empty() && ((unsigned char)s.back() & 0xC0) == 0x80) s.pop_back();   /* a whole UTF-8 character */
+    }
+    return s + "...";
+}
+
+void ProfileView::renderEdit()
+{
+    const Ui::Palette& pal = Ui::pal();
+    const SavedProfile& p = profiles[focusedRow];
+    GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, pal.dim, 1);
+    Ui::card(ED_X, ED_Y, ED_W, ED_ROW0 - ED_Y + EDIT_ROWS * ED_ROW_H + 30, 18, 0.0f);
+    Ui::textCentered(320, ED_Y + 14, tr("Edit Profile"), 20, pal.text);
+
+    /* TRANSLATORS: Edit Profile, its rows */
+    static const char* const names[EDIT_ROWS] = { N_("Nickname"), N_("Server URL"), N_("Username"), N_("Password"), N_("Picture") };
+    const std::string values[EDIT_ROWS] = {
+        p.nickname.empty() ? std::string(tr("None")) : p.nickname,
+        p.serverUrl,
+        p.username.empty() ? std::string(tr("Quick Connect")) : p.username,
+        tr("Not kept on the Wii"),
+        p.picture.empty() ? std::string(tr("Letter")) : Avatars::label(p.picture),
+    };
+    for (int i = 0; i < EDIT_ROWS; ++i) {
+        const float y = ED_ROW0 + i * ED_ROW_H, x = ED_X + 16, w = ED_W - 32;
+        const bool on = i == editSel;
+        Ui::card(x, y, w, ED_ROW_H - 6, 12, on ? 1.0f : 0.0f);
+        const char* name = tr(names[i]);
+        Ui::text(x + 14, y + 11, name, 17, on ? pal.accentDark : pal.text);
+        const float room = w - 28 - Ui::textWidth(name, 17) - 16;
+        Ui::textRight(x + w - 14, y + 14, fitTo(values[i], 14, room).c_str(), 14, pal.textDim);
+    }
+    Ui::textCentered(320, ED_ROW0 + EDIT_ROWS * ED_ROW_H + 2,
+                     tr("Changing the server, user name or password signs in again."), 13, pal.textDim);
 }

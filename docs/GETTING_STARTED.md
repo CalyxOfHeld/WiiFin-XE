@@ -66,8 +66,8 @@ Signing in makes a **profile**. A new profile asks three things, shown on small 
 - **Its library view:** posters, a list, or a list with covers.
 
 On "Who's watching?":
+- **1** (Y on a Classic Controller or GameCube controller) opens **Edit Profile**: its nickname, server address, user name, password and picture.
 - **2** gives a profile its picture.
-- **1** gives it a nickname.
 - **−** deletes it.
 
 To have one profile open by itself when WiiFin-XE starts, turn on **Open at Start-Up** in its Sign-In settings. Hold B while WiiFin-XE starts to skip it.
