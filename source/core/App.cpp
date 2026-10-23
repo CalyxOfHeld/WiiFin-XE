@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <dirent.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <gccore.h>
 #include <ogc/machine/processor.h>
 #include <ogc/wiilaunch.h>
@@ -96,14 +97,61 @@ static void* powerWatch(void*)
     return nullptr;
 }
 
-/* WiiMC-SS XE's DOL, "" when it isn't there */
+/* a DOL there and sound: big enough, its entry point in the Wii's memory
+ * (not a half-copied or empty file) */
+static bool dolThere(const std::string& path)
+{
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    u8 head[0x100];
+    const bool ok = fread(head, 1, sizeof head, f) == sizeof head;
+    fclose(f);
+    const u32 entry = (u32)head[0xE0] << 24 | (u32)head[0xE1] << 16 | (u32)head[0xE2] << 8 | head[0xE3];
+    return ok && (entry & 0xF0000000) == 0x80000000;
+}
+
+/* an app's name in its meta.xml (<name>...</name>), "" without one */
+static std::string metaName(const std::string& meta)
+{
+    FILE* f = fopen(meta.c_str(), "rb");
+    if (!f) return "";
+    char buf[2048];
+    const size_t n = fread(buf, 1, sizeof buf - 1, f);
+    fclose(f);
+    buf[n] = 0;
+    const char* a = strstr(buf, "<name>");
+    const char* b = a ? strstr(a, "</name>") : nullptr;
+    return a && b ? std::string(a + 6, b) : "";
+}
+
+/* WiiMC-SS XE's DOL, "" when it isn't there.  apps/wiimc first (where it
+ * goes); else any app whose meta.xml names it WiiMC (a folder of another
+ * name), WiiMC-SS XE before another WiiMC.  Either plays local media; only
+ * XE comes back to WiiFin.  On the SD card, then a USB drive. */
 static std::string findWiiMC()
 {
-    const char* const TRY[] = {"sd:/apps/wiimc/boot.dol", "usb:/apps/wiimc/boot.dol"};
-    struct stat st;
-    for (const char* p : TRY)
-        if (stat(p, &st) == 0 && st.st_size > 0) return p;
-    return "";
+    for (const char* dev : { "sd:", "usb:" }) {
+        const std::string usual = std::string(dev) + "/apps/wiimc/boot.dol";
+        if (dolThere(usual)) return usual;
+    }
+    std::string other;
+    for (const char* dev : { "sd:", "usb:" }) {
+        const std::string apps = std::string(dev) + "/apps/";
+        DIR* d = opendir(apps.c_str());
+        if (!d) continue;
+        while (dirent* e = readdir(d)) {
+            if (e->d_name[0] == '.') continue;
+            std::string name = metaName(apps + e->d_name + "/meta.xml");
+            for (char& c : name) c = (char)tolower((unsigned char)c);
+            if (name.find("wiimc") == std::string::npos) continue;
+            const std::string dol = apps + e->d_name + "/boot.dol";
+            if (!dolThere(dol)) continue;
+            if (name.find("xe") != std::string::npos) { closedir(d); return dol; }
+            if (other.empty()) other = dol;
+        }
+        closedir(d);
+    }
+    return other;
 }
 
 /* Full-screen error card: title, two lines of explanation.  With retry, A
