@@ -239,26 +239,6 @@ void LibraryView::loadPosters() {
         }
     }
 
-    // Pre-compute truncated display labels
-    {
-        float ws   = WiiUtils::wsScaleX();
-        int   visW = (int)(POSTER_W * ws + 0.5f);
-        for (int i = 0; i < n; i++) {
-            std::string name = items[i].name;
-            if (Text::width(font, name.c_str(), 12) > (u32)visW) {
-                auto popCodePoint = [](std::string &s) {
-                    while (!s.empty() && (s.back() & 0xC0) == 0x80) s.pop_back();
-                    if (!s.empty()) s.pop_back();
-                };
-                while (!name.empty() &&
-                       Text::width(font, (name + "...").c_str(), 12) > (u32)visW)
-                    popCodePoint(name);
-                name += "...";
-            }
-            posterLabels[i] = name;
-        }
-    }
-
     posterSel = 0;
     state = globFavMode ? State::GlobalFavoritesReady : State::PostersReady;
 }
@@ -865,6 +845,7 @@ void LibraryView::loadMovieSuggestions() {
                                                     (u32)imgBytes.size());
         }
         client.getMoviesLatest(serverUrl, auth, movieLibId, 8, movieRecentItems);
+        if (movieRecentItems.size() > 8) movieRecentItems.resize(8);
         for (int i = 0; i < (int)movieRecentItems.size(); i++) {
             std::string imgBytes;
             client.getItemImageBytes(serverUrl, auth, movieRecentItems[i].id,
@@ -1079,6 +1060,7 @@ void LibraryView::loadTVSuggestions() {
                                                (u32)imgBytes.size());
         }
         client.getTVSeriesLatest(serverUrl, auth, tvLibId, 8, tvRecentItems);
+        if (tvRecentItems.size() > 8) tvRecentItems.resize(8);
         for (int i = 0; i < (int)tvRecentItems.size(); i++) {
             std::string imgBytes;
             client.getItemImageBytes(serverUrl, auth, tvRecentItems[i].id,
@@ -1107,6 +1089,7 @@ void LibraryView::loadTVUpcoming() {
     freeTVUpcoming();
     runWithLoading([&]() {
         client.getTVUpcoming(serverUrl, auth, 8, tvUpcomingItems);
+        if (tvUpcomingItems.size() > 8) tvUpcomingItems.resize(8);
         for (int i = 0; i < (int)tvUpcomingItems.size(); i++) {
             std::string imgBytes;
             client.getItemBackdropBytes(serverUrl, auth, tvUpcomingItems[i],
@@ -1132,6 +1115,7 @@ void LibraryView::loadMusicSuggestions() {
     freeMusicSuggestions();
     runWithLoading([&]() {
         client.getMusicLatest(serverUrl, auth, musicLibId, 8, musicRecentItems);
+        if (musicRecentItems.size() > 8) musicRecentItems.resize(8);
         for (int i = 0; i < (int)musicRecentItems.size(); i++) {
             std::string imgBytes;
             client.getItemImageBytes(serverUrl, auth, musicRecentItems[i].id,

@@ -294,6 +294,9 @@ void Text::endFrame()
 {
     for (auto& fsEntry : s_cache) {
         FaceSize& fs = fsEntry.second;
+        /* the kerning pairs on their own: Latin text alone never reaches
+         * 1500 glyphs, but its pairs keep growing */
+        if (fs.kerning.size() > 4000) fs.kerning.clear();
         if (fs.glyphs.size() < 1500) continue;
         for (auto& e : fs.glyphs) free(e.second.data);
         fs.glyphs.clear();

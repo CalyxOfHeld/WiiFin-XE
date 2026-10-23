@@ -1008,8 +1008,9 @@ void footer(const Hint* left, int nLeft, const Hint* right, int nRight, const ch
         snprintf(buf, sizeof(buf), "%s", center);
         snprintf(out, sizeof(out), "%s", buf);
         size_t len = strlen(buf);
-        while (len > 0 && textWidth(out, 14) > room) {
-            do { --len; } while (len > 0 && ((unsigned char)buf[len] & 0xC0) == 0x80);
+        if (len > 0 && textWidth(out, 14) > room) {
+            const float r = room - textWidth("...", 14);
+            len = r > 0 ? Text::fitBytes(s_font, buf, 14, r) : 0;
             buf[len] = 0;
             snprintf(out, sizeof(out), "%s...", buf);
         }

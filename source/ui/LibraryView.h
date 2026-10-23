@@ -234,7 +234,6 @@ private:
     static const int ARROW_HIT_R     = 17;  // hit-test radius (x and y)
     int posterSel = 0;
     GRRLIB_texImg* posterTextures[8] = {};
-    std::string    posterLabels[8];   // pre-truncated display titles, built in loadPosters()
 
     // Item detail
     JellyfinItemDetail detail;

@@ -130,12 +130,8 @@ static Look look()
 static std::string fit(const std::string& s, int size, int maxW)
 {
     if (Ui::textWidth(s.c_str(), size) <= maxW) return s;
-    std::string t = s;
-    while (!t.empty() && Ui::textWidth((t + "...").c_str(), size) > maxW) {
-        while (!t.empty() && ((unsigned char)t.back() & 0xC0) == 0x80) t.pop_back();
-        if (!t.empty()) t.pop_back();
-    }
-    return t + "...";
+    const float room = maxW - (float)Ui::textWidth("...", size);
+    return s.substr(0, room > 0 ? Text::fitBytes(Ui::font(), s.c_str(), size, room) : 0) + "...";
 }
 
 static float pillWidth(int i, bool catalog)

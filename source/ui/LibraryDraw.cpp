@@ -46,13 +46,12 @@ float focusOf(bool sel, bool hover) {
     return sel ? Ui::pulse() : (hover ? 0.55f : 0.0f);
 }
 
-// Shorten s (UTF-8) with "..." until it fits maxW pixels.
+// Shorten s (UTF-8) with "..." until it fits maxW pixels: one pass,
+// as many whole characters as fit beside the "..."
 std::string fitText(GRRLIB_ttfFont* f, std::string s, int size, int maxW) {
     if ((int)Text::width(f, s.c_str(), size) <= maxW) return s;
-    while (!s.empty() && (int)Text::width(f, (s + "...").c_str(), size) > maxW) {
-        while (!s.empty() && (s.back() & 0xC0) == 0x80) s.pop_back();
-        if (!s.empty()) s.pop_back();
-    }
+    const float room = maxW - (float)Text::width(f, "...", size);
+    s.resize(room > 0 ? Text::fitBytes(f, s.c_str(), size, room) : 0);
     return s + "...";
 }
 
