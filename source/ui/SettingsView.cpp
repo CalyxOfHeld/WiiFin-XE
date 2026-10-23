@@ -17,7 +17,7 @@
 
 /* The rows, by what they set (describe and activate take these) */
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
-           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_SIGNIN, R_STARTUP };
+           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -53,8 +53,8 @@ std::vector<int> SettingsView::sectionRows(int s) const
     switch (s) {
     case S_VIEW:
         /* the home and the libraries' look: a profile's (WiiFin's menu has neither) */
-        return profile ? std::vector<int>{ R_THEME, R_BACKGROUNDS, R_HOME, R_VIEW, R_START, R_DIM, R_AREA }
-                       : std::vector<int>{ R_THEME, R_BACKGROUNDS, R_START, R_DIM, R_AREA };
+        return profile ? std::vector<int>{ R_THEME, R_BACKGROUNDS, R_HOME, R_VIEW, R_START, R_DIM, R_HEADER, R_AREA }
+                       : std::vector<int>{ R_THEME, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA };
     case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT };
     case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT };
     case S_SIGNIN:   return profile ? std::vector<int>{ R_SIGNIN, R_STARTUP } : std::vector<int>{};
@@ -260,6 +260,12 @@ SettingsView::RowInfo SettingsView::describe(int id)
                           : N_("The rows home shows every row plainly"),
             Ui::dimRows() ? N_("Shaded") : N_("Shown"), Ui::dimRows() ? OFF : p.accent);
         break;
+    case R_HEADER:
+        set(N_("Header Buttons"),
+            Ui::classicHeader() ? N_("The rows home's header: search, a button to the other page, and your profile's circle for the menu")
+                                : N_("The rows home's header: search, home, browse and menu buttons, each with its icon"),
+            Ui::classicHeader() ? N_("Classic") : N_("Icons"), Ui::classicHeader() ? p.accent : OFF);
+        break;
     case R_SIGNIN: {
         static const char* const how[3]  = { N_("Automatic"), N_("Passcode"), N_("Password") };
         static const char* const desc[3] = {
@@ -321,6 +327,7 @@ void SettingsView::activate(int index) {
             break;
         case R_START: g_app_startBrowse = !g_app_startBrowse; break;
         case R_DIM:   Ui::setDimRows(!Ui::dimRows()); break;
+        case R_HEADER: Ui::setClassicHeader(!Ui::classicHeader()); break;
         case R_STARTUP:   /* this profile at start-up, or none; one at most */
             if (!profile || profile->userId.empty()) break;
             if (g_app_startProfile == profile->userId) g_app_startProfile.clear();

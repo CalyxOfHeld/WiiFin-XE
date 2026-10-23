@@ -121,6 +121,9 @@ bool clock12h()           { return s_clock12; }
 static bool s_dimRows = true;
 void setDimRows(bool on) { s_dimRows = on; }
 bool dimRows()           { return s_dimRows; }
+static bool s_classicHeader = false;
+void setClassicHeader(bool on) { s_classicHeader = on; }
+bool classicHeader()           { return s_classicHeader; }
 bool solidColors()           { return s_solid; }
 const Palette& pal()
 {

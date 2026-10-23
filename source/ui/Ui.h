@@ -51,6 +51,11 @@ bool clock12h();
  * look at at once), or all of them shown plainly */
 void setDimRows(bool on);
 bool dimRows();
+/* The rows home's header: search, home, browse and menu buttons with
+ * icons, or the classic one (search, one pill to the other page, the
+ * profile's avatar) */
+void setClassicHeader(bool on);
+bool classicHeader();
 
 /* Home screen layout: tile grid of libraries, or rows of poster carousels
  * (independent of the theme; picking the Flix theme switches to Rows). */

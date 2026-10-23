@@ -39,14 +39,32 @@ static const int   MAX_ITEMS  = 20;                  /* per row (home)          
 static const int   CATALOG_GENRES = 12;              /* parts of a library's row (browse page) */
 static const int   SECTION_ITEMS = 12;               /* per library (New Additions, Top Rated) */
 
-/* Header pills */
+/* Header pills.  Icons (default): search, home, browse and menu, each with
+ * its icon, the page shown marked.  Classic (View setting): search, one
+ * pill to the other page, the profile's avatar for the menu. */
 static const float PILL_Y = 9, PILL_H = 26;
 #define AVATAR_CX (Ui::screenRight() - 24.0f)
 static const float AVATAR_CY = 22, AVATAR_R = 14;
+enum HeadBtn { HB_SEARCH, HB_HOME, HB_BROWSE, HB_MENU, HB_TOGGLE, HB_AVATAR };
+static int headCount() { return Ui::classicHeader() ? 3 : 4; }   /* focus 0..n-1 */
+static int pillCount() { return Ui::classicHeader() ? 2 : 4; }   /* the rest: avatar */
+static HeadBtn headBtn(int i)
+{
+    if (Ui::classicHeader()) return i == 0 ? HB_SEARCH : i == 1 ? HB_TOGGLE : HB_AVATAR;
+    return (HeadBtn)i;
+}
+/* Up from the rows: the button to the other page */
+static int headUp(bool catalog) { return Ui::classicHeader() || catalog ? 1 : 2; }
 static const char* pillLabel(int i, bool catalog)
 {
     /* TRANSLATORS: the pills at the top right of the home screen, in lower case */
-    return i == 0 ? tr("search") : (catalog ? tr("home") : tr("browse"));
+    switch (headBtn(i)) {
+    case HB_SEARCH: return tr("search");
+    case HB_HOME:   return tr("home");
+    case HB_BROWSE: return tr("browse");
+    case HB_MENU:   return tr("menu");
+    default:        return catalog ? tr("home") : tr("browse");
+    }
 }
 
 static u32 lerpCol(u32 a, u32 b, float t) { return Ui::mix(a, b, t); }
@@ -120,12 +138,25 @@ static std::string fit(const std::string& s, int size, int maxW)
     return t + "...";
 }
 
-static float pillWidth(int i, bool catalog) { return Ui::textWidth(pillLabel(i, catalog), 15) + (i == 0 ? 40 : 28); }
+static float pillWidth(int i, bool catalog)
+{
+    return Ui::textWidth(pillLabel(i, catalog), 15) + (headBtn(i) == HB_TOGGLE ? 28 : 40);
+}
 static float pillX(int i, bool catalog)
 {
-    float right = AVATAR_CX - AVATAR_R - 10;
-    float w1 = pillWidth(1, catalog), w0 = pillWidth(0, catalog);
-    return i == 1 ? right - w1 : right - w1 - 8 - w0;
+    float x = Ui::classicHeader() ? AVATAR_CX - AVATAR_R - 10 : Ui::screenRight() - 12;
+    for (int k = pillCount() - 1; k >= i; --k) {
+        x -= pillWidth(k, catalog);
+        if (k > i) x -= 8;
+    }
+    return x;
+}
+/* the "more rows above" arrow: mid-screen, or left of the pills if they
+ * reach that far (4:3) */
+static float upArrowX(bool catalog)
+{
+    const float x = pillX(0, catalog) - 22;
+    return x < 320 ? x : 320;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -639,15 +670,17 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
     }
     if (mode == Mode::Catalog && Input::isBackPressed()) return Action::Back;
     /* B on the home: the avatar, its menu open */
-    if (mode == Mode::Home && Input::isBackPressed()) { headerFocus = 2; irMode = false; return Action::Profiles; }
+    if (mode == Mode::Home && Input::isBackPressed()) { headerFocus = headCount() - 1; irMode = false; return Action::Profiles; }
 
     /* L / R (the GameCube's and Classic's triggers, the Wii Remote's -):
      * from the rows, to search (L) or the avatar (R); in the header, the
      * header's buttons in turn, round and round.  + stays Browse (above) */
     const bool l = Input::isLPressed(), r = Input::isRPressed();
+    const int  nHead = headCount();
+    const bool catalog = mode == Mode::Catalog;
     if (l || r) {
-        if (headerFocus < 0) headerFocus = l ? 0 : 2;
-        else                 headerFocus = (headerFocus + (l ? 2 : 1)) % 3;
+        if (headerFocus < 0) headerFocus = l ? 0 : nHead - 1;
+        else                 headerFocus = (headerFocus + (l ? nHead - 1 : 1)) % nHead;
         irMode = false;
         return Action::None;
     }
@@ -657,12 +690,12 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
     int  hoverTile = -1;
     bool hoverNextRow = false, hoverUpArrow = false, hoverLeft = false, hoverRight = false;
     if (ir.valid && irMode) {
-        for (int i = 0; i < 2; ++i)
-            if (ir.x >= pillX(i, mode == Mode::Catalog) && ir.x < pillX(i, mode == Mode::Catalog) + pillWidth(i, mode == Mode::Catalog) && ir.y >= PILL_Y && ir.y < PILL_Y + PILL_H)
+        for (int i = 0; i < pillCount(); ++i)
+            if (ir.x >= pillX(i, catalog) && ir.x < pillX(i, catalog) + pillWidth(i, catalog) && ir.y >= PILL_Y && ir.y < PILL_Y + PILL_H)
                 hoverHeader = i;
-        if (fabsf(ir.x - AVATAR_CX) < AVATAR_R + 4 && fabsf(ir.y - AVATAR_CY) < AVATAR_R + 4)
+        if (Ui::classicHeader() && fabsf(ir.x - AVATAR_CX) < AVATAR_R + 4 && fabsf(ir.y - AVATAR_CY) < AVATAR_R + 4)
             hoverHeader = 2;
-        hoverUpArrow = rowSel > 0 && fabsf(ir.x - 320) < 20 && ir.y < 44;
+        hoverUpArrow = rowSel > 0 && fabsf(ir.x - upArrowX(catalog)) < 20 && ir.y < 44;
         if (nRows > 0) {
             Row& row = rows[rowSel];
             float tw = tileW(row), st = stride(row);
@@ -697,21 +730,24 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
     /* ---- Header ---- */
     if (headerFocus >= 0) {
         /* past either end, round to the other */
-        if (left)  headerFocus = (headerFocus + 2) % 3;
-        if (right) headerFocus = (headerFocus + 1) % 3;
+        if (left)  headerFocus = (headerFocus + nHead - 1) % nHead;
+        if (right) headerFocus = (headerFocus + 1) % nHead;
         if (down && nRows > 0) headerFocus = -1;
         if (a) {
-            int f = headerFocus;
             if (!irMode || hoverHeader >= 0) {
-                if (f == 0) return Action::Search;
-                if (f == 1) return Action::Browse;
-                return Action::Profiles;
+                switch (headBtn(headerFocus)) {
+                case HB_SEARCH: return Action::Search;
+                case HB_TOGGLE: return Action::Browse;
+                case HB_HOME:   return catalog ? Action::Back : Action::None;    /* there already */
+                case HB_BROWSE: return catalog ? Action::None : Action::Browse;
+                default:        return Action::Profiles;
+                }
             }
         }
         return Action::None;
     }
     if (nRows == 0) {
-        if (up) headerFocus = 1;
+        if (up) headerFocus = headUp(catalog);
         return Action::None;
     }
 
@@ -720,7 +756,7 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
     int n = (int)row.items.size();
     if (up) {
         if (rowSel > 0) rowSel--;
-        else headerFocus = 1;
+        else headerFocus = headUp(catalog);
     }
     if (down && rowSel + 1 < nRows) rowSel++;
     /* the Libraries row: past either end, round to the other */
@@ -991,31 +1027,58 @@ void BrowseHome::drawHeader()
     }
 
     /* "More rows above" arrow */
-    if (rowSel > 0)
-        Ui::triangle(320, 13, 332, 29, 308, 29, L.band ? 0xFFFFFFE8 : L.arrow);
+    const bool catalog = mode == Mode::Catalog;
+    if (rowSel > 0) {
+        const float ax = upArrowX(catalog);
+        Ui::triangle(ax, 13, ax + 12, 29, ax - 12, 29, L.band ? 0xFFFFFFE8 : L.arrow);
+    }
 
-    /* search / browse pills */
-    for (int i = 0; i < 2; ++i) {
-        float x = pillX(i, mode == Mode::Catalog), w = pillWidth(i, mode == Mode::Catalog);
+    /* the pills: search, then browse / home / menu */
+    for (int i = 0; i < pillCount(); ++i) {
+        float x = pillX(i, catalog), w = pillWidth(i, catalog);
         bool f = headerFocus == i;
+        const HeadBtn b = headBtn(i);
         if (f) Ui::shadow(x - 3, PILL_Y - 3, w + 6, PILL_H + 6, PILL_H * 0.5f + 3, 8.0f, L.pillGlow);
         else   Ui::shadow(x, PILL_Y + 2, w, PILL_H, PILL_H * 0.5f, 4.0f, L.tileShadow);
         Ui::roundRect(x, PILL_Y, w, PILL_H, PILL_H * 0.5f, L.pillTop, L.pillBottom);
         Ui::roundBorder(x, PILL_Y, w, PILL_H, PILL_H * 0.5f, f ? 2.0f : 1.5f, f ? L.pillFocus : L.pillBorder);
         float tx = x + w * 0.5f;
-        if (i == 0) {
-            /* magnifier */
+        /* the icons, drawn alike: 2 px strokes in the label's colour, in
+         * a 14 px box left of it */
+        const float cx = x + 17, cy = PILL_Y + 13;
+        const u32   ic = L.pillText;
+        switch (b) {
+        case HB_SEARCH: {   /* magnifier */
             float mx = x + 15, my = PILL_Y + 12;
-            Ui::roundBorder(mx - 5, my - 5, 10, 10, 5, 2.0f, L.pillText);
-            Ui::triangle(mx + 3, my + 4, mx + 5, my + 2, mx + 9, my + 8, L.pillText);
-            Ui::triangle(mx + 3, my + 4, mx + 9, my + 8, mx + 7, my + 10, L.pillText);
-            tx += 7;
+            Ui::roundBorder(mx - 5, my - 5, 10, 10, 5, 2.0f, ic);
+            Ui::triangle(mx + 3, my + 4, mx + 5, my + 2, mx + 9, my + 8, ic);
+            Ui::triangle(mx + 3, my + 4, mx + 9, my + 8, mx + 7, my + 10, ic);
+            break;
         }
-        Ui::textCentered(tx, PILL_Y + 4, pillLabel(i, mode == Mode::Catalog), 15, L.pillText);
+        case HB_HOME:       /* house: roof, walls, a door */
+            Ui::triangle(cx - 7, cy - 1, cx, cy - 7, cx + 7, cy - 1, ic);
+            Ui::roundBorder(cx - 4.5f, cy - 2, 9, 8, 1, 2.0f, ic);
+            Ui::roundRect(cx - 1, cy + 2, 2, 4, 0, ic);
+            break;
+        case HB_BROWSE:     /* four tiles */
+            for (int k = 0; k < 4; ++k)
+                Ui::roundBorder(cx - 6 + (k % 2) * 7, cy - 6 + (k / 2) * 7, 5, 5, 1, 1.5f, ic);
+            break;
+        case HB_MENU:       /* three bars */
+            for (int k = 0; k < 3; ++k)
+                Ui::roundRect(cx - 6, cy - 5 + k * 4.5f, 12, 2, 1, ic);
+            break;
+        default: break;
+        }
+        if (b != HB_TOGGLE) tx += 7;
+        Ui::textCentered(tx, PILL_Y + 4, pillLabel(i, catalog), 15, L.pillText);
+        /* the page shown: a short bar under its label */
+        if ((b == HB_HOME && !catalog) || (b == HB_BROWSE && catalog))
+            Ui::roundRect(tx - 8, PILL_Y + PILL_H - 4, 16, 2, 1, L.pillFocus);
     }
 
-    /* profile avatar */
-    {
+    /* profile avatar (classic) */
+    if (Ui::classicHeader()) {
         bool f = headerFocus == 2;
         Ui::avatar(AVATAR_CX, AVATAR_CY, f ? AVATAR_R + 1 : AVATAR_R, userName.c_str(), f ? 1.0f : 0.0f);
     }
