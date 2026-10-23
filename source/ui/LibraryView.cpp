@@ -11,6 +11,7 @@
 
 #include "../jellyfin/JellyfinClient.h"
 #include "../core/SoundFX.h"
+#include "../core/AppInternal.h"
 #include <ogcsys.h>
 #include <cmath>
 #include "../core/Utils.h"
@@ -32,6 +33,7 @@ LibraryView::LibraryView(GRRLIB_ttfFont* f, GRRLIB_ttfFont* jf, GRRLIB_texImg* c
                           const JellyfinAuth& a, const std::string& url)
     : font(f), jpFont(jf), cursorTex(cursor), ringTex(ring), client(c), auth(a), serverUrl(url),
       browse(c, url, a), catalog(c, url, a, BrowseHome::Mode::Catalog), feed(c, url, a) {
+    browsePage = g_app_startBrowse;   /* Start Screen */
 }
 
 // ---------------------------------------------------------------------------
@@ -1273,7 +1275,8 @@ bool LibraryView::update(ir_t& ir) {
     const int tab = ir.valid && Input::isAJustPressed() && !loadingState(state) ? Ui::tabAt(ir.x, ir.y) : -1;
     if (tab >= 0) goToTab(tab);
     else          done = updateState(ir);
-    if (pressed) {
+    /* the profile menu opened now has had its sound (openProfileMenu) */
+    if (pressed && !profileMenu) {
         const bool paged = pageKey() != page0, moved = focusKey() != focus0;
         if (done) {
             /* playback has its own sound (preparePlay, App); leaving with B */

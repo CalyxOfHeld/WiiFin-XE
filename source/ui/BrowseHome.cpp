@@ -497,6 +497,8 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
     if (Input::is1Pressed()) return Action::Search;
     if (Input::isActionPressed()) return Action::Browse;
     if (mode == Mode::Catalog && Input::isBackPressed()) return Action::Back;
+    /* B on the home: the avatar, its menu open */
+    if (mode == Mode::Home && Input::isBackPressed()) { headerFocus = 2; irMode = false; return Action::Profiles; }
 
     /* L / R (the GameCube's and Classic's triggers, the Wii Remote's -):
      * from the rows, to search (L) or the avatar (R); in the header, the

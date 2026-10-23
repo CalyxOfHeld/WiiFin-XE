@@ -21,6 +21,10 @@ bool appFromLoader();
 /* the profile WiiFin opens when it starts (its userId), empty: the menu.
  * The Sign-In setting Open at Start-Up, wiifin.cfg's start_profile */
 extern std::string g_app_startProfile;
+/* the rows home opens on browse (the libraries) when true, else on home
+ * (Continue Watching...).  The setting Start Screen, wiifin.cfg's
+ * start_browse */
+extern bool g_app_startBrowse;
 /* g_app_exitToLoader, when it can be: where leaving goes */
 inline bool appExitsToLoader() { return g_app_exitToLoader && appFromLoader(); }
 

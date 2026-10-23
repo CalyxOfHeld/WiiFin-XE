@@ -50,6 +50,7 @@ volatile bool g_app_reset    = false;
 volatile bool g_restartApp = false;
 bool g_app_exitToLoader = true;
 std::string g_app_startProfile;
+bool g_app_startBrowse = true;
 /* the loader's mark, read at start-up (main menu) before anything could
  * write over low memory */
 bool appFromLoader()

@@ -70,6 +70,8 @@ void App::loadSettings() {
             g_app_exitToLoader = atoi(val) != 0;
         } else if (strcmp(key, "start_profile") == 0) {
             g_app_startProfile = val;
+        } else if (strcmp(key, "start_browse") == 0) {
+            g_app_startBrowse = atoi(val) != 0;
         } else if (strcmp(key, "language") == 0) {
             Lang::chooseKey(val);
         } else if (strcmp(key, "clock_12h") == 0) {
@@ -210,6 +212,7 @@ void App::saveSettings() {
     fprintf(f, "video_zoom=%d\n",       (int)VideoSurface::zoom());
     fprintf(f, "exit_to_loader=%d\n",   g_app_exitToLoader ? 1 : 0);
     fprintf(f, "start_profile=%s\n",    sanitizeConfigValue(g_app_startProfile).c_str());
+    fprintf(f, "start_browse=%d\n",     g_app_startBrowse ? 1 : 0);
     {
         int l, t, r, b;
         Ui::safeArea(l, t, r, b);
