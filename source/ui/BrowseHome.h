@@ -10,8 +10,9 @@
 /* -----------------------------------------------------------------------
  * BrowseHome — home screen of the Flix theme.
  *
- * Rows of categories (continue watching, next up, latest and top rated
- * per library, favourites), each a horizontal carousel of posters, like the
+ * Rows of categories (continue watching, favourites, next up, new
+ * additions and top rated with a part per library), each a horizontal
+ * carousel of posters, like the
  * video channels of the Wii era.  The focused row sits on a lighter band
  * with an info panel under the selected poster; the next row peeks in
  * below.  Up/Down slide between rows, Left/Right scroll the carousel.
@@ -67,7 +68,12 @@ private:
         int                         sel    = 0;
         float                       scroll = 0.0f;   /* animated, follows `first` */
         int                         first  = 0;      /* first visible tile         */
+        /* a row of several parts, one after the other (New Additions, Top
+         * Rated: one per library): where each starts, its name */
+        struct Section { int start; std::string label; };
+        std::vector<Section>        sections;
     };
+    static int sectionOf(const Row& r, int i);   /* -1: no sections */
     enum TileState : unsigned char { TILE_NONE, TILE_LOADING, TILE_READY, TILE_FAILED };
 
     JellyfinClient&     client;

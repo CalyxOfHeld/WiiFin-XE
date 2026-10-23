@@ -33,6 +33,7 @@ static const float INFO_Y     = 240, INFO_H = 52;
 #define INFO_W (Ui::screenWidth() - 56.0f)
 static const int   MAX_ITEMS  = 20;                  /* per row (home)           */
 static const int   CATALOG_ITEMS = 60;               /* per row (browse page)    */
+static const int   SECTION_ITEMS = 12;               /* per library (New Additions, Top Rated) */
 
 /* Header pills */
 static const float PILL_Y = 9, PILL_H = 26;
@@ -200,39 +201,56 @@ void BrowseHome::buildHome(const std::vector<JellyfinLibrary>& libs)
         ADD_ROW(title, query, square, MAX_ITEMS);
     };
 
+    /* one part of a row of several (one per library), empty ones dropped */
+    auto addSection = [&](Row& r, const std::string& label, const std::string& query) {
+        std::vector<JellyfinItem> got;
+        client.getItemsByQuery(serverUrl, auth, query, got);
+        if (got.empty()) return;
+        if ((int)got.size() > SECTION_ITEMS) got.resize(SECTION_ITEMS);
+        r.sections.push_back({ (int)r.items.size(), label });
+        r.items.insert(r.items.end(), got.begin(), got.end());
+    };
+    auto pushRow = [&](Row& r) {
+        if (r.items.empty()) return;
+        r.tex.assign(r.items.size(), nullptr);
+        r.st.assign(r.items.size(), TILE_NONE);
+        rows.push_back(std::move(r));
+    };
+
     char q[320];
-    char title[160];
     snprintf(q, sizeof(q), "/Users/%s/Items/Resume?Limit=%d&MediaTypes=Video", uid.c_str(), MAX_ITEMS);
     add(tr("Continue Watching"), q, false);
-    snprintf(q, sizeof(q), "/Shows/NextUp?UserId=%s&Limit=%d", uid.c_str(), MAX_ITEMS);
-    add(tr("Next Up"), q, false);
-
-    for (const auto& lib : libs) {
-        const std::string& t = lib.collectionType;
-        bool music = (t == "music");
-        if (!(t == "movies" || t == "tvshows" || music || t == "homevideos" ||
-              t == "musicvideos" || t.empty() || t == "mixed"))
-            continue;
-        snprintf(q, sizeof(q), "/Users/%s/Items/Latest?ParentId=%s&Limit=%d",
-                 uid.c_str(), lib.id.c_str(), MAX_ITEMS);
-        /* TRANSLATORS: a row of the home screen; %s is the name of a library */
-        snprintf(title, sizeof(title), tr("New in %s"), lib.name.c_str());
-        add(title, q, music);
-        if (t == "movies" || t == "tvshows") {
-            snprintf(q, sizeof(q),
-                     "/Users/%s/Items?ParentId=%s&Recursive=true&IncludeItemTypes=%s"
-                     "&SortBy=CommunityRating,SortName&SortOrder=Descending&Limit=%d",
-                     uid.c_str(), lib.id.c_str(), t == "movies" ? "Movie" : "Series", MAX_ITEMS);
-            /* TRANSLATORS: a row of the home screen; %s is the name of a library */
-            snprintf(title, sizeof(title), tr("Top Rated %s"), lib.name.c_str());
-            add(title, q, false);
-        }
-    }
-
     snprintf(q, sizeof(q),
              "/Users/%s/Items?Filters=IsFavorite&Recursive=true"
              "&IncludeItemTypes=Movie,Series,Episode&SortBy=SortName&Limit=%d", uid.c_str(), MAX_ITEMS);
     add(tr("My Favorites"), q, false);
+    snprintf(q, sizeof(q), "/Shows/NextUp?UserId=%s&Limit=%d", uid.c_str(), MAX_ITEMS);
+    add(tr("Next Up"), q, false);
+
+    /* the latest and the best rated of every library, each in one row: a
+     * part per library, its name over its first poster */
+    Row added, top;
+    added.title = tr("New Additions");
+    top.title   = tr("Top Rated");
+    for (const auto& lib : libs) {
+        const std::string& t = lib.collectionType;
+        if (!(t == "movies" || t == "tvshows" || t == "music" || t == "homevideos" ||
+              t == "musicvideos" || t.empty() || t == "mixed"))
+            continue;
+        snprintf(q, sizeof(q), "/Users/%s/Items/Latest?ParentId=%s&Limit=%d",
+                 uid.c_str(), lib.id.c_str(), SECTION_ITEMS);
+        addSection(added, lib.name, q);
+        if (t == "movies" || t == "tvshows") {
+            snprintf(q, sizeof(q),
+                     "/Users/%s/Items?ParentId=%s&Recursive=true&IncludeItemTypes=%s"
+                     "&SortBy=CommunityRating,SortName&SortOrder=Descending&Limit=%d",
+                     uid.c_str(), lib.id.c_str(), t == "movies" ? "Movie" : "Series", SECTION_ITEMS);
+            addSection(top, lib.name, q);
+        }
+    }
+    pushRow(added);
+    pushRow(top);
+
     snprintf(q, sizeof(q),
              "/Users/%s/Items?Filters=IsFavorite&Recursive=true"
              "&IncludeItemTypes=MusicAlbum&SortBy=SortName&Limit=%d", uid.c_str(), MAX_ITEMS);
@@ -301,6 +319,20 @@ void BrowseHome::buildCatalog(const std::vector<JellyfinLibrary>& libs)
             ADD_ROW(g.name + " \xc2\xb7 " + lib.name, q, false, MAX_ITEMS);
         }
     }
+}
+
+int BrowseHome::sectionOf(const Row& r, int i)
+{
+    int s = -1;
+    for (int k = 0; k < (int)r.sections.size() && r.sections[k].start <= i; ++k) s = k;
+    return s;
+}
+
+/* an album in a row of portrait posters (New Additions): square, its whole
+ * cover in the middle of the tile */
+static bool squareInTall(bool rowSquare, bool rowWide, const JellyfinItem& it)
+{
+    return !rowSquare && !rowWide && it.type == "MusicAlbum";
 }
 
 const JellyfinItem* BrowseHome::selectedItem() const
@@ -439,6 +471,7 @@ void BrowseHome::loaderLoop()
          * or narrower request came back blurred once cropped */
         int h = (int)POSTER_H,
             w = rows[r].wide ? (int)(POSTER_H * 16.0f / 9.0f) : rows[r].square ? h : (int)POSTER_W;
+        if (squareInTall(rows[r].square, rows[r].wide, it)) h = w;
         std::string bytes;
         client.getItemImageBytes(serverUrl, auth, id, w, h, bytes);
         /* seasons without artwork of their own: use the series poster */
@@ -642,13 +675,32 @@ void BrowseHome::drawRow(int r, float offY, float focus)
     const bool  focused = focus > 0.5f && headerFocus < 0;
     const Look  L = look();
 
-    /* Row title (bold for the focused row) */
+    /* Row title (bold for the focused row); a row of parts adds the part
+     * shown (the selection's, or the first poster's), and the name of each
+     * part further along over its first poster, a line between parts */
     u32 tc = lerpCol(L.titleDim, L.title, focus);
-    Ui::text(X0 - 2, y - 25, row.title.c_str(), 16, tc);
-    if (focus > 0.5f) Ui::text(X0 - 1, y - 25, row.title.c_str(), 16, tc);
+    int n = (int)row.items.size();
+    std::string head = row.title;
+    int cur = -1;
+    if (!row.sections.empty()) {
+        int lead = (int)ceilf(row.scroll - 0.05f);
+        cur = sectionOf(row, focus > 0.5f ? row.sel : (lead < 0 ? 0 : lead));
+        if (cur >= 0) head += "  \xc2\xb7  " + row.sections[cur].label;
+    }
+    Ui::text(X0 - 2, y - 25, head.c_str(), 16, tc);
+    if (focus > 0.5f) Ui::text(X0 - 1, y - 25, head.c_str(), 16, tc);
+    const float headEnd = X0 - 2 + Ui::textWidth(head.c_str(), 16) + 18;
+    for (int s = 0; s < (int)row.sections.size(); ++s) {
+        const float sx = X0 + (row.sections[s].start - row.scroll) * st;
+        if (sx > Ui::screenRight() || sx < Ui::screenLeft()) continue;
+        if (row.sections[s].start > 0)
+            GRRLIB_Rectangle(sx - GAP * ws * 0.5f - 1, y, 2, POSTER_H, Ui::alpha(L.titleDim, 0.6f), 1);
+        if (s == cur || sx < headEnd) continue;
+        std::string lab = fit(row.sections[s].label, 14, (int)(Ui::screenRight() - 24.0f - sx));
+        Ui::text(sx, y - 23, lab.c_str(), 14, tc);
+    }
 
     u32 tint = lerpCol(L.dimTint, 0xFFFFFFFF, focus);
-    int n = (int)row.items.size();
     int first = (int)floorf(row.scroll) - 1;
     for (int pass = 0; pass < 2; ++pass) {           /* selected tile last */
         for (int i = first < 0 ? 0 : first; i < n; ++i) {
@@ -669,7 +721,12 @@ void BrowseHome::drawRow(int r, float offY, float focus)
             LWP_MutexLock(texLock);
             GRRLIB_texImg* tex = row.tex[i];
             LWP_MutexUnlock(texLock);
-            if (tex) {
+            if (tex && squareInTall(row.square, row.wide, row.items[i])) {
+                const float sq = dw / ws;   /* as tall as it is wide, on screen */
+                Ui::roundRect(dx, dy, dw, dh, 5, lerpCol(L.phTopDim, L.phTop, focus),
+                              lerpCol(L.phBottomDim, L.phBottom, focus));
+                Ui::texCover(tex, dx, dy + (dh - sq) * 0.5f, dw, sq, 3, 1.0f, tint);
+            } else if (tex) {
                 Ui::texCover(tex, dx, dy, dw, dh, 5, (dw / ws) / dh, tint);
             } else {
                 Ui::roundRect(dx, dy, dw, dh, 5, lerpCol(L.phTopDim, L.phTop, focus),
