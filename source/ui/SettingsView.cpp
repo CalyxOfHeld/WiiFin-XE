@@ -452,7 +452,7 @@ void SettingsView::render(ir_t& ir) {
                 !appFromLoader() ? N_("Started as a channel: leaving goes to the Wii Menu")
                 : toLoader       ? N_("Exit and the HOME menu go back to the Homebrew Channel")
                                  : N_("Exit and the HOME menu go to the Wii Menu"),
-                toLoader ? N_("Homebrew Channel") : N_("Wii Menu"), toLoader ? p.accent : 0x8A9099FF);
+                toLoader ? N_("HBC") : N_("Wii Menu"), toLoader ? p.accent : 0x8A9099FF);
     }
     if (profile) {
         static const char* const how[3]  = { N_("Automatic"), N_("Passcode"), N_("Password") };
