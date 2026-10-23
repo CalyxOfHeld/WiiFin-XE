@@ -1,8 +1,10 @@
 #pragma once
 #include <grrlib.h>
 #include <wiiuse/wpad.h>
+#include <string>
 #include <vector>
 #include "../jellyfin/JellyfinClient.h"
+#include "Keyboard.h"
 #include "PinPad.h"
 
 struct SavedProfile;
@@ -29,23 +31,37 @@ private:
     bool&           musicEnabled;
     SavedProfile*   profile;
 
-    /* the sections (View, System, Sign-In), then one's rows */
-    int section = -1;             /* -1: the sections to pick from */
-    std::vector<int> rows;        /* the open section's rows (Row in the .cpp) */
-    int   menuSel = 0;
-    float menuFocus[3] = {};
-    int  sectionCount() const;
-    void openSection(int s);
-    bool updateMenu(ir_t& ir);
-    void renderMenu(ir_t& ir);
-
+    /* One screen: the sections on the left (Search, View, Playback,
+     * System, Sign-In), the open one's settings listed on the right */
+    std::vector<int> sections;    /* those offered (Sign-In: a profile's) */
+    int   section   = 1;          /* the one open (Section in the .cpp) */
+    int   sideSel   = 1;          /* place in sections */
+    bool  sideFocus = true;       /* the highlight on the sections, else on the settings */
+    float sideAnim[5] = {};
+    std::vector<int> rows;        /* the open section's settings (Row in the .cpp) */
     int   selectedIndex = 0;      /* place in rows */
-    float pageAnim      = 0.0f;   /* page slide                   */
+    int   top           = 0;      /* first row shown */
+    float focusAnim[32] = {};     /* one per place in rows */
     bool  irMode        = false;
-    float focusAnim[16] = {};     /* one per place in rows */
-    int   pages() const;
+    /* what the pointer was on: it takes the highlight when that changes */
+    int   lastHoverSide = -1, lastHoverRow = -1;
+    void openSection(int s);
+    std::vector<int> sectionRows(int s) const;
+    int  visibleRows() const;
+    float rowsTop() const;
+    void follow();
 
-    /* the Sign-In row's choice, applied on leaving its section (a new
+    /* Search: every setting whose name or description has what is typed */
+    Keyboard    kb;
+    bool        typing = false;
+    std::string query;
+    void runSearch();
+
+    /* what a setting shows: its name, what it does, its value */
+    struct RowInfo { std::string label, desc, value; u32 col = 0; };
+    RowInfo describe(int id);
+
+    /* the Sign-In row's choice, applied on leaving the settings (a new
      * passcode asked then) */
     int    signInWant = -1;
     bool   leaveSignIn();
@@ -60,8 +76,6 @@ private:
     u64   calHeldSince  = 0;      /* d-pad auto-repeat */
     u64   calLastStep   = 0;
 
-    void drawRow(int id, const char* label, const char* desc,
-                 const char* value, u32 pillCol);
     void activate(int id);
     void updateCalibration();
     void renderCalibration();

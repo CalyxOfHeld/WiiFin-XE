@@ -1,5 +1,6 @@
 #include "SettingsView.h"
 #include "Ui.h"
+#include "LibraryDraw.h"
 #include "../player/vo_wiifin.h"
 #include "../player/WiiPlayer.h"
 #include "../core/SoundFX.h"
@@ -11,62 +12,97 @@
 #include "../core/AppInternal.h"
 #include "../version.h"
 #include <stdio.h>
+#include <ctype.h>
 #include <ogc/lwp_watchdog.h>
 
-/* The rows, by what they set (drawRow and activate take these) */
+/* The rows, by what they set (describe and activate take these) */
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
            R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_SIGNIN, R_STARTUP };
 
-/* the sections: a profile's own look (WiiFin's menu: the start-up one,
- * theme and backgrounds only), what every profile shares, how a profile
- * signs in */
-static const char* const SECTIONS[3] = { N_("View Settings"), N_("System Settings"), N_("Sign-In Settings") };
-/* in the menu, a profile's two sections first: View, Sign-In, System */
-static int sectionAt(int i, bool profile) { return profile && i > 0 ? 3 - i : i; }
+/* The sections, on the left: a search through all of them, then the look
+ * (a profile's own; WiiFin's menu: the start-up one), playback, what
+ * every profile shares, how a profile signs in */
+enum Section { S_SEARCH, S_VIEW, S_PLAYBACK, S_SYSTEM, S_SIGNIN, S_COUNT };
+static const char* const SECTIONS[S_COUNT] = {
+    N_("Search"), N_("View"), N_("Playback"), N_("System"), N_("Sign-In")
+};
 
-/* Row layout (also used for pointer hit-testing).  Settings come in pages
- * of PER_PAGE rows, turned with arrows on the screen edges like the Wii
- * System Settings. */
-static const int ROW_X = 64, ROW_W = 512, ROW_H = 54;
-static const int ROW_Y0 = 72, ROW_STEP = 64;
-static const int PER_PAGE = 4;
-/* the sections' buttons */
-static const int SB_W = 320, SB_H = 52, SB_Y0 = 110, SB_STEP = 72;
-/* page arrows sit on the screen edges (wider in 16:9) */
-#define ARROW_L_CX (Ui::screenLeft() + 30.0f)
-#define ARROW_R_CX (Ui::screenRight() - 30.0f)
-static const int ARROW_CY  = ROW_Y0 + (PER_PAGE * ROW_STEP - 10) / 2;   /* middle of the rows */
-static const int ARROW_HIT = 24;
-
-static bool overArrow(const ir_t& ir, float cx)
-{
-    return ir.valid && ir.x >= cx - ARROW_HIT && ir.x < cx + ARROW_HIT &&
-           ir.y >= ARROW_CY - ARROW_HIT && ir.y < ARROW_CY + ARROW_HIT;
-}
+/* Layout: the sections in a column on the left, the settings on the
+ * right (to the screen's edge in 16:9), what the highlighted one does
+ * under them */
+#define SIDE_X (Ui::screenLeft() + 28.0f)
+static const float SIDE_W = 150, LIST_Y = 66, ROW_H = 40, ROW_STEP = 46;
+#define PANE_X (SIDE_X + SIDE_W + 16.0f)
+#define PANE_W (Ui::screenRight() - 28.0f - PANE_X)
+static const float FIELD_H = 34;              /* the search's text, over its matches */
+static const float DESC_Y = 352, DESC_H = 62; /* the highlighted setting, said in full */
 
 SettingsView::SettingsView(GRRLIB_texImg* btn, GRRLIB_ttfFont* f, JellyfinClient& c, bool& music,
                            SavedProfile* prof)
-    : btnTex(btn), font(f), client(c), musicEnabled(music), profile(prof) {}
-
-int SettingsView::sectionCount() const { return profile ? 3 : 2; }
-int SettingsView::pages() const { return ((int)rows.size() + PER_PAGE - 1) / PER_PAGE; }
-
-void SettingsView::openSection(int s) {
-    section = s;
-    selectedIndex = 0;
-    pageAnim = 0.0f;
-    for (float& f : focusAnim) f = 0.0f;
-    if (s == 0) rows = profile ? std::vector<int>{ R_THEME, R_BACKGROUNDS, R_HOME, R_VIEW }
-                               : std::vector<int>{ R_THEME, R_BACKGROUNDS };
-    else if (s == 1) rows = { R_MUSIC, R_SOUNDS, R_CLOCK, R_LANGUAGE, R_AREA,
-                              R_SSL, R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT, R_EXIT, R_START, R_DIM };
-    else rows = { R_SIGNIN, R_STARTUP };
+    : btnTex(btn), font(f), client(c), musicEnabled(music), profile(prof)
+{
+    sections = { S_SEARCH, S_VIEW, S_PLAYBACK, S_SYSTEM };
+    if (profile) sections.push_back(S_SIGNIN);
     signInWant = profile ? profile->signIn : -1;
+    kb.setEnterLabel(N_("Done"));
+    openSection(S_VIEW);
 }
 
-/* B in the Sign-In section: its choice applied; a passcode new to the
- * profile is typed first (twice), the section left once it is.  False:
- * the pad is up */
+std::vector<int> SettingsView::sectionRows(int s) const
+{
+    switch (s) {
+    case S_VIEW:
+        /* the home and the libraries' look: a profile's (WiiFin's menu has neither) */
+        return profile ? std::vector<int>{ R_THEME, R_BACKGROUNDS, R_HOME, R_VIEW, R_START, R_DIM, R_AREA }
+                       : std::vector<int>{ R_THEME, R_BACKGROUNDS, R_START, R_DIM, R_AREA };
+    case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT };
+    case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT };
+    case S_SIGNIN:   return profile ? std::vector<int>{ R_SIGNIN, R_STARTUP } : std::vector<int>{};
+    default:         return {};
+    }
+}
+
+void SettingsView::openSection(int s)
+{
+    section = s;
+    for (int i = 0; i < (int)sections.size(); ++i) if (sections[i] == s) sideSel = i;
+    selectedIndex = top = 0;
+    for (float& f : focusAnim) f = 0.0f;
+    if (s == S_SEARCH) runSearch();
+    else               rows = sectionRows(s);
+}
+
+/* every setting whose name or description (as shown, translated) has the
+ * query, letters in either case */
+void SettingsView::runSearch()
+{
+    rows.clear();
+    if (query.empty()) return;
+    auto lower = [](std::string s) { for (char& c : s) c = (char)tolower((unsigned char)c); return s; };
+    const std::string q = lower(query);
+    for (int s : sections)
+        for (int id : sectionRows(s)) {
+            const RowInfo r = describe(id);
+            if (lower(r.label).find(q) != std::string::npos || lower(r.desc).find(q) != std::string::npos)
+                rows.push_back(id);
+        }
+    if (selectedIndex >= (int)rows.size()) selectedIndex = rows.empty() ? 0 : (int)rows.size() - 1;
+    follow();
+}
+
+float SettingsView::rowsTop() const { return section == S_SEARCH ? LIST_Y + FIELD_H + 8 : LIST_Y; }
+int   SettingsView::visibleRows() const { return (int)((DESC_Y - 6 - rowsTop() + (ROW_STEP - ROW_H)) / ROW_STEP); }
+
+void SettingsView::follow()
+{
+    const int vis = visibleRows();
+    if (selectedIndex < top) top = selectedIndex;
+    if (selectedIndex >= top + vis) top = selectedIndex - vis + 1;
+    if (top < 0) top = 0;
+}
+
+/* Leaving the settings: the Sign-In row's choice applied; a passcode new
+ * to the profile is typed first (twice).  False: the pad is up */
 bool SettingsView::leaveSignIn() {
     if (!profile || signInWant < 0 || signInWant == profile->signIn) return true;
     if (signInWant == SavedProfile::Passcode) {
@@ -79,64 +115,174 @@ bool SettingsView::leaveSignIn() {
     return true;
 }
 
-bool SettingsView::updateMenu(ir_t& ir) {
-    if (Input::isBackPressed()) { SoundFX::play(SoundFX::FX::Back); return true; }
-    const int n = sectionCount(), was = menuSel;
-    if (Input::isUpPressed())   menuSel = (menuSel + n - 1) % n;
-    if (Input::isDownPressed()) menuSel = (menuSel + 1) % n;
-    int hover = -1;
-    if (ir.valid)
-        for (int i = 0; i < n; ++i) {
-            int by = SB_Y0 + i * SB_STEP;
-            if (ir.x >= 320 - SB_W / 2 && ir.x <= 320 + SB_W / 2 && ir.y >= by && ir.y <= by + SB_H) hover = i;
-        }
-    if (hover >= 0) menuSel = hover;
-    if (menuSel != was) SoundFX::play(SoundFX::FX::Move);
-    if (Input::isAJustPressed() && (!ir.valid || hover >= 0)) {
-        SoundFX::play(SoundFX::FX::Open);
-        openSection(sectionAt(menuSel, profile));
-    }
-    return false;
-}
-
-void SettingsView::renderMenu(ir_t& ir) {
+SettingsView::RowInfo SettingsView::describe(int id)
+{
     const Ui::Palette& p = Ui::pal();
-    Ui::background();
-    Ui::header(tr("Settings"));
-    for (int i = 0; i < sectionCount(); ++i) {
-        menuFocus[i] = Ui::approach(menuFocus[i], i == menuSel ? 1.0f : 0.0f);
-        float grow = 6.0f * menuFocus[i];
-        Ui::button(320 - SB_W / 2 - grow, SB_Y0 + i * SB_STEP - grow * 0.25f, SB_W + grow * 2, SB_H + grow * 0.5f,
-                   SECTIONS[sectionAt(i, profile)], 20, menuFocus[i]);
+    const u32 OFF = 0x8A9099FF;
+    RowInfo r;
+    auto set = [&](const char* label, const char* desc, const char* value, u32 col) {
+        r.label = tr(label); r.desc = tr(desc); r.value = tr(value); r.col = col;
+    };
+    switch (id) {
+    case R_SSL:
+        set(N_("SSL Verification"), N_("Validate the server HTTPS certificate (disable for self-signed certs)"),
+            client.sslVerify ? N_("ON") : N_("OFF"), client.sslVerify ? p.ok : OFF);
+        break;
+    case R_MUSIC:
+        set(N_("Background Music"), N_("Play background music in menus"),
+            musicEnabled ? N_("ON") : N_("OFF"), musicEnabled ? p.ok : OFF);
+        break;
+    case R_SOUNDS:
+        set(N_("Interface Sounds"),
+            SoundFX::enabled() ? N_("Sounds in the menus; your own in sounds/ on the SD card")
+                               : N_("The menus stay silent"),
+            SoundFX::enabled() ? N_("ON") : N_("OFF"), SoundFX::enabled() ? p.ok : OFF);
+        break;
+    case R_QUALITY: {
+        static const u32 qualityCol[JellyfinClient::VIDEO_QUALITY_COUNT] =
+            { 0xD98A2EFF, 0x34A8DDFF, 0x3DAF5AFF, 0x9A5BD6FF };
+        /* the chosen bitrate, and what the connection measured at the first
+         * video holds it to (it is not the setting changing on its own) */
+        char desc[160];
+        const int q = client.videoQuality;
+        if (client.measuredKbps() > 0 && client.linkQuality() < q)
+            snprintf(desc, sizeof(desc),
+                     tr("%.1f Mb/s; your connection (%.1f Mb/s measured) holds videos to %.1f"),
+                     JellyfinClient::qualityBitrate(q) / 1000000.0, client.measuredKbps() / 1000.0,
+                     client.videoBitrate() / 1000000.0);
+        else if (q == JellyfinClient::VIDEO_QUALITY_COUNT - 1)
+            snprintf(desc, sizeof(desc),
+                     tr("%.1f Mb/s: sharpest, for a wired adapter. Lower it if videos stutter"),
+                     JellyfinClient::qualityBitrate(q) / 1000000.0);
+        else
+            snprintf(desc, sizeof(desc),
+                     tr("Video bitrate: %.1f Mb/s. Lower it if playback keeps buffering"),
+                     JellyfinClient::qualityBitrate(q) / 1000000.0);
+        r.label = tr("Video Quality");
+        r.desc  = desc;
+        r.value = tr(JellyfinClient::videoQualityName(q));
+        r.col   = qualityCol[q];
+        break;
     }
-    const char* version = "WiiFin v" WIIFIN_VERSION;
-    std::string credits = std::string(tr("Made with \xe2\x9d\xa4 for Jellyfin")) + "  \xe2\x80\xa2  github.com/fabienmillet/WiiFin";
-    Ui::textCentered(320, 348, version, 15, p.accentDark);
-    Ui::textCentered(320, 370, credits.c_str(), 12, p.textDim);
-    static const Ui::Hint left[]  = { { "UD", N_("Choose") }, { "A", N_("Open") } };
-    static const Ui::Hint right[] = { { "B", N_("Back") } };
-    Ui::bottomBar(left, 2, right, 1);
-}
-
-void SettingsView::drawRow(int id, const char* label, const char* desc,
-                           const char* valStr, u32 pillCol) {
-    const Ui::Palette& p = Ui::pal();
-    int i = -1;   /* its place in the open section */
-    for (int k = 0; k < (int)rows.size(); ++k) if (rows[k] == id) i = k;
-    if (i < 0) return;
-    float x = ROW_X + (i / PER_PAGE - pageAnim) * Ui::screenWidth();   /* pages slide sideways */
-    float y = ROW_Y0 + (i % PER_PAGE) * ROW_STEP;
-    if (x < Ui::screenLeft() - ROW_W - 20 || x > Ui::screenRight() + 20) return;
-    Ui::card(x, y, ROW_W, ROW_H, 14, focusAnim[i]);
-    label = tr(label); desc = tr(desc); valStr = tr(valStr);
-    Ui::text(x + 18, y + 8,  label, 18, p.text);
-    Ui::text(x + 18, y + 31, desc,  12, p.textDim);
-
-    // Value pill on the right
-    int pw = Ui::textWidth(valStr, 15) + 28;
-    float px = x + ROW_W - pw - 16, py = y + (ROW_H - 26) * 0.5f;
-    Ui::roundRect(px, py, pw, 26, 13, Ui::mix(pillCol, 0xFFFFFFFF, 0.15f), pillCol);
-    Ui::textCentered(px + pw * 0.5f, py + 4, valStr, 15, p.textOnAccent);
+    case R_DIRECT:
+        set(N_("Direct Play"),
+            client.directPlay ? N_("Files the Wii can decode play as they are (SD DivX, DVD...): no server work")
+                              : N_("Every video is converted by the server"),
+            client.directPlay ? N_("Auto") : N_("OFF"), client.directPlay ? p.ok : OFF);
+        break;
+    case R_SMOOTH:
+        set(N_("Smooth Motion"),
+            g_wiifin_smooth_motion ? N_("Blends frames on picture changes: films move evenly on 60 Hz TVs")
+                                   : N_("Each frame shown as is (24 fps films judder slightly on 60 Hz)"),
+            g_wiifin_smooth_motion ? N_("ON") : N_("OFF"), g_wiifin_smooth_motion ? p.ok : OFF);
+        break;
+    case R_THEME: {
+        static const char* themeDesc[Ui::THEME_COUNT] = {
+            N_("Light, like the Wii Menu"),
+            N_("Dark, for movie nights"),
+            N_("Red and charcoal, browse in rows like the old video channels"),
+            N_("Black, silver and green"),
+            N_("Dark grey and orange"),
+        };
+        static const u32 themeCol[Ui::THEME_COUNT] = { 0x34A8DDFF, 0x45546BFF, 0xD81F26FF, 0x7DC242FF, 0xF47521FF };
+        const int t = (int)Ui::theme();
+        set(N_("Theme"), themeDesc[t], Ui::themeName(Ui::theme()), themeCol[t]);
+        break;
+    }
+    case R_HOME: {
+        const bool rowsHome = Ui::homeLayout() == Ui::HomeLayout::Rows;
+        set(N_("Home Screen"), rowsHome ? N_("Rows of posters to browse, like the old video channels")
+                                        : N_("A grid of your libraries"),
+            rowsHome ? N_("Rows") : N_("Grid"), rowsHome ? p.accent : OFF);
+        break;
+    }
+    case R_VIEW: {
+        static const char* name[Ui::LIBRARY_STYLE_COUNT] = { N_("Posters"), N_("List"), N_("List + Posters") };
+        static const char* desc[Ui::LIBRARY_STYLE_COUNT] = {
+            N_("Browse libraries with their artwork"),
+            N_("Libraries as text lists: quickest to browse big ones"),
+            N_("Text lists, with the cover of the selected title"),
+        };
+        const int v = (int)Ui::libraryStyle();
+        set(N_("Library View"), desc[v], name[v], v == 0 ? OFF : p.accent);
+        break;
+    }
+    case R_LIGHT:
+        set(N_("Disc Slot Light"),
+            g_wiifin_disc_light ? N_("Pulses with the sound, as bright as the Wii Settings say")
+                                : N_("Stays dark during playback"),
+            g_wiifin_disc_light ? N_("ON") : N_("OFF"), g_wiifin_disc_light ? p.ok : OFF);
+        break;
+    case R_AREA: {
+        int l, t, rr, b;
+        Ui::safeArea(l, t, rr, b);
+        const bool full = !(l | t | rr | b);
+        set(N_("Screen Area"), N_("Shrink the interface if your TV crops the edges (overscan)"),
+            full ? N_("Full") : N_("Adjusted"), full ? OFF : p.accent);
+        break;
+    }
+    case R_BACKGROUNDS:
+        set(N_("Backgrounds"),
+            Ui::solidColors() ? N_("Solid colours: no bands on TVs that show them in gradients")
+                              : N_("Soft gradients, like the Wii Menu"),
+            Ui::solidColors() ? N_("Solid") : N_("Gradient"), Ui::solidColors() ? p.accent : OFF);
+        break;
+    case R_CLOCK:
+        set(N_("Clock"),
+            Ui::clock12h() ? N_("1:30 PM, the date as month/day") : N_("13:30, the date as day/month"),
+            Ui::clock12h() ? N_("12-hour") : N_("24-hour"), p.accent);
+        break;
+    case R_LANGUAGE:
+        /* each language by its own name */
+        set(N_("Language"),
+            Lang::choice() < 0 ? N_("The Wii's language, as set in the Wii Settings") : N_("Chosen here, whatever the Wii's language"),
+            "", Lang::choice() < 0 ? OFF : p.accent);
+        r.value = Lang::name(Lang::current());
+        break;
+    case R_EXIT: {
+        const bool toLoader = appExitsToLoader();
+        set(N_("Exit To"),
+            !appFromLoader() ? N_("Started as a channel: leaving goes to the Wii Menu")
+            : toLoader       ? N_("Exit and the HOME menu go back to the Homebrew Channel")
+                             : N_("Exit and the HOME menu go to the Wii Menu"),
+            toLoader ? N_("HBC") : N_("Wii Menu"), toLoader ? p.accent : OFF);
+        break;
+    }
+    case R_START:
+        set(N_("Start Screen"),
+            g_app_startBrowse ? N_("The rows home opens on browse: your libraries")
+                              : N_("The rows home opens on home: Continue Watching"),
+            g_app_startBrowse ? N_("Browse") : N_("Home"), g_app_startBrowse ? OFF : p.accent);
+        break;
+    case R_DIM:
+        set(N_("Other Rows"),
+            Ui::dimRows() ? N_("The rows home shades the rows under the one you're on")
+                          : N_("The rows home shows every row plainly"),
+            Ui::dimRows() ? N_("Shaded") : N_("Shown"), Ui::dimRows() ? OFF : p.accent);
+        break;
+    case R_SIGNIN: {
+        static const char* const how[3]  = { N_("Automatic"), N_("Passcode"), N_("Password") };
+        static const char* const desc[3] = {
+            N_("Opens at once on this Wii"),
+            N_("Asks the profile's four-digit passcode first"),
+            N_("Asks the password (or Quick Connect) each time"),
+        };
+        const int m = signInWant >= 0 && signInWant < 3 ? signInWant : 0;
+        set(N_("Sign-In"), desc[m], how[m], m == 0 ? OFF : p.accent);
+        break;
+    }
+    case R_STARTUP: {
+        const bool on = profile && !profile->userId.empty() && g_app_startProfile == profile->userId;
+        set(N_("Open at Start-Up"),
+            on ? N_("Opens when WiiFin starts; hold B at start to skip")
+            : g_app_startProfile.empty() ? N_("WiiFin starts at its own menu")
+                                         : N_("Another profile opens at start-up: A makes it this one"),
+            on ? N_("ON") : N_("OFF"), on ? p.ok : OFF);
+        break;
+    }
+    default: break;
+    }
+    return r;
 }
 
 void SettingsView::activate(int index) {
@@ -265,12 +411,10 @@ void SettingsView::renderCalibration()
 
 // ---------------------------------------------------------------
 bool SettingsView::update(ir_t& ir) {
-    bool aPressed = Input::isAJustPressed();
-
     if (calibrating) { updateCalibration(); return false; }
     if (pinStep) {
         const int r = pin.update(ir);
-        if (r < 0) { pinStep = 0; signInWant = profile->signIn; return false; }   /* the section, as it was */
+        if (r < 0) { pinStep = 0; signInWant = profile->signIn; return false; }   /* the settings, as they were */
         if (r == 0) return false;
         if (pinStep == 1) {
             pinFirst = pin.code();
@@ -285,220 +429,197 @@ bool SettingsView::update(ir_t& ir) {
             profile->passHash = PinPad::hash(profile->passSalt, pin.code());
             profile->signIn   = SavedProfile::Passcode;
             pinStep = 0;
-            section = -1;
             SoundFX::play(SoundFX::FX::Start);
             SYS_Report("[Settings] sign-in %d\n", profile->signIn);
+            return true;   /* the passcode was asked on the way out */
         }
         return false;
     }
-    if (section < 0) return updateMenu(ir);
 
-    if (ir.valid) irMode = true;
-    else          irMode = false;   /* no pointer on the screen: the D-pad drives, A acts on the highlighted item */
-
-    if (Input::isBackPressed()) {
-        SoundFX::play(SoundFX::FX::Back);
-        if (section != 2 || leaveSignIn()) section = -1;
+    /* typing the search: the matches follow each letter */
+    if (typing) {
+        kb.setOrigin((640 - kb.width()) * 0.5f, 214);
+        const std::string was = query;
+        const Keyboard::Result r = kb.update(ir, query, 32);
+        if (query != was) { selectedIndex = top = 0; runSearch(); }
+        if (r == Keyboard::Result::Enter || r == Keyboard::Result::Cancel) {
+            typing = false;
+            sideFocus = rows.empty() || r == Keyboard::Result::Cancel;
+            SoundFX::play(r == Keyboard::Result::Enter ? SoundFX::FX::Open : SoundFX::FX::Back);
+        }
         return false;
     }
-    const int NUM_SETTINGS = (int)rows.size(), PAGES = pages();
 
-    const int page = selectedIndex / PER_PAGE;
-    const int selBefore = selectedIndex;
-    bool activated = false;
-    /* Up/Down walk through every row (pages follow); Left/Right and -/+
-     * (L/R on the Classic and GameCube controllers) turn pages */
-    if (Input::isUpPressed())   { selectedIndex = (selectedIndex - 1 + NUM_SETTINGS) % NUM_SETTINGS; irMode = false; }
-    if (Input::isDownPressed()) { selectedIndex = (selectedIndex + 1) % NUM_SETTINGS; irMode = false; }
-    auto turn = [&](int to) {
-        if (to < 0 || to >= PAGES) return;
-        int slot = selectedIndex % PER_PAGE;
-        selectedIndex = to * PER_PAGE + slot;
-        if (selectedIndex >= NUM_SETTINGS) selectedIndex = NUM_SETTINGS - 1;
-    };
-    if (Input::isLeftPressed())  { turn(page - 1); irMode = false; }
-    if (Input::isRightPressed()) { turn(page + 1); irMode = false; }
-    if (Input::isLPressed())     { turn(page - 1); irMode = false; }
-    if (Input::isRPressed())     { turn(page + 1); irMode = false; }
+    irMode = ir.valid;   /* no pointer on the screen: the D-pad drives, A acts on the highlighted item */
+    const bool a = Input::isAJustPressed();
+    const int  n = (int)rows.size(), nSide = (int)sections.size();
+    const int  selBefore = selectedIndex, sideBefore = sideSel, secBefore = section;
+    const bool focusBefore = sideFocus;
 
-    /* the pointer picks among the rows of the page shown now: of the one
-     * before, the row under it took the page back (-/+ did nothing) */
-    const int shown = selectedIndex / PER_PAGE;
-    int hovered = -1;
+    /* 1: the search, from anywhere */
+    if (Input::is1Pressed()) {
+        openSection(S_SEARCH);
+        typing = true;
+        kb.reset();
+        SoundFX::play(SoundFX::FX::Open);
+        return false;
+    }
+
+    /* the pointer: a section, or a setting */
+    int hoverSide = -1, hoverRow = -1;
     if (ir.valid) {
-        for (int i = shown * PER_PAGE; i < NUM_SETTINGS && i < (shown + 1) * PER_PAGE; i++) {
-            int ry = ROW_Y0 + (i % PER_PAGE) * ROW_STEP;
-            if (ir.x >= ROW_X && ir.x <= ROW_X + ROW_W && ir.y >= ry && ir.y <= ry + ROW_H)
-                hovered = i;
+        for (int i = 0; i < nSide; ++i) {
+            const float y = LIST_Y + i * ROW_STEP;
+            if (ir.x >= SIDE_X && ir.x < SIDE_X + SIDE_W && ir.y >= y && ir.y < y + ROW_H) hoverSide = i;
         }
-        if (hovered >= 0) { selectedIndex = hovered; irMode = true; }
+        const float y0 = rowsTop();
+        for (int k = 0; k < visibleRows() && top + k < n; ++k) {
+            const float y = y0 + k * ROW_STEP;
+            if (ir.x >= PANE_X && ir.x < PANE_X + PANE_W && ir.y >= y && ir.y < y + ROW_H) hoverRow = top + k;
+        }
+        if (section == S_SEARCH && ir.x >= PANE_X && ir.x < PANE_X + PANE_W &&
+            ir.y >= LIST_Y && ir.y < LIST_Y + FIELD_H && a) {
+            typing = true;   /* A on the search's field: type again */
+            SoundFX::play(SoundFX::FX::Open);
+            return false;
+        }
     }
+    const bool newSide = hoverSide >= 0 && hoverSide != lastHoverSide;
+    const bool newRow  = hoverRow  >= 0 && hoverRow  != lastHoverRow;
+    lastHoverSide = hoverSide; lastHoverRow = hoverRow;
 
-    if (aPressed) {
-        if (overArrow(ir, ARROW_L_CX))      turn(page - 1);
-        else if (overArrow(ir, ARROW_R_CX)) turn(page + 1);
-        else if (ir.valid) { if (hovered >= 0) { activate(rows[hovered]); activated = true; } }
-        else if (!irMode) { activate(rows[selectedIndex]); activated = true; }
+    if (sideFocus) {
+        if (Input::isBackPressed()) {
+            SoundFX::play(SoundFX::FX::Back);
+            return leaveSignIn();
+        }
+        if (Input::isUpPressed())   sideSel = (sideSel + nSide - 1) % nSide;
+        if (Input::isDownPressed()) sideSel = (sideSel + 1) % nSide;
+        if (newSide) sideSel = hoverSide;
+        /* the section highlighted shows its settings at once */
+        if (sections[sideSel] != section) openSection(sections[sideSel]);
+        const bool open = (a && (!ir.valid || hoverSide >= 0)) || Input::isRightPressed();
+        if (open) {
+            if (section == S_SEARCH && (a || rows.empty())) { typing = true; kb.reset(); }
+            else if (!rows.empty())                         sideFocus = false;
+        }
+        if (newRow) { sideFocus = false; selectedIndex = hoverRow; }
+        else if (a && hoverRow >= 0) { sideFocus = false; selectedIndex = hoverRow; }   /* A on one: it, next A changes it */
+    } else {
+        if (Input::isBackPressed() || Input::isLeftPressed()) {
+            sideFocus = true;
+            SoundFX::play(SoundFX::FX::Back);
+            return false;
+        }
+        if (n > 0) {
+            if (Input::isUpPressed())   selectedIndex = (selectedIndex + n - 1) % n;
+            if (Input::isDownPressed()) selectedIndex = (selectedIndex + 1) % n;
+            if (Input::isLPressed())    selectedIndex = selectedIndex - visibleRows() < 0 ? 0 : selectedIndex - visibleRows();
+            if (Input::isRPressed())    selectedIndex = selectedIndex + visibleRows() >= n ? n - 1 : selectedIndex + visibleRows();
+        }
+        if (newRow) selectedIndex = hoverRow;
+        if (newSide) { sideFocus = true; sideSel = hoverSide; if (sections[sideSel] != section) openSection(sections[sideSel]); }
+        follow();
+        if (a && n > 0 && (!ir.valid || hoverRow >= 0)) {
+            activate(rows[selectedIndex]);
+            if (section == S_SEARCH) {   /* the match changed its words: still listed */
+                const int id = rows[selectedIndex];
+                runSearch();
+                for (int i = 0; i < (int)rows.size(); ++i) if (rows[i] == id) selectedIndex = i;
+                if (rows.empty()) sideFocus = true;
+                follow();
+            }
+            SoundFX::play(SoundFX::FX::Start);   /* turning Interface Sounds on plays it */
+            return false;
+        }
     }
-    /* turning Interface Sounds on plays this one: what they sound like */
-    if (activated)                                    SoundFX::play(SoundFX::FX::Start);
-    else if (selectedIndex / PER_PAGE != page)        SoundFX::play(SoundFX::FX::Page);
-    else if (selectedIndex != selBefore)              SoundFX::play(SoundFX::FX::Move);
+    if (typing)                                                SoundFX::play(SoundFX::FX::Open);
+    else if (section != secBefore)                             SoundFX::play(SoundFX::FX::Page);
+    else if (selectedIndex != selBefore || sideSel != sideBefore || sideFocus != focusBefore)
+                                                               SoundFX::play(SoundFX::FX::Move);
     return false;
+}
+
+/* s in at most two lines of w pixels (size 13), a word at a time */
+static void wrap2(const std::string& s, float w, std::string& l1, std::string& l2)
+{
+    l1 = s; l2.clear();
+    if (Ui::textWidth(s.c_str(), 13) <= w) return;
+    size_t cut = std::string::npos, sp = s.find(' ');
+    while (sp != std::string::npos && Ui::textWidth(s.substr(0, sp).c_str(), 13) <= w) { cut = sp; sp = s.find(' ', sp + 1); }
+    if (cut == std::string::npos) return;
+    l1 = s.substr(0, cut);
+    l2 = s.substr(cut + 1);
 }
 
 void SettingsView::render(ir_t& ir) {
     if (calibrating) { renderCalibration(); return; }
     if (pinStep) { Ui::background(); pin.render(ir); return; }
-    if (section < 0) { renderMenu(ir); return; }
     const Ui::Palette& p = Ui::pal();
-    const int NUM_SETTINGS = (int)rows.size(), PAGES = pages();
-    for (int i = 0; i < NUM_SETTINGS; ++i)
-        focusAnim[i] = Ui::approach(focusAnim[i], i == selectedIndex ? 1.0f : 0.0f);
-
-    const int page = selectedIndex / PER_PAGE;
-    pageAnim = Ui::approach(pageAnim, (float)page, 0.25f);
+    const int n = (int)rows.size(), vis = visibleRows();
 
     Ui::background();
     Ui::header(tr("Settings"), tr(SECTIONS[section]));
 
-
-    drawRow(0, N_("SSL Verification"),
-            N_("Validate the server HTTPS certificate (disable for self-signed certs)"),
-            client.sslVerify ? N_("ON") : N_("OFF"), client.sslVerify ? p.ok : 0x8A9099FF);
-    drawRow(1, N_("Background Music"), N_("Play background music in menus"),
-            musicEnabled ? N_("ON") : N_("OFF"), musicEnabled ? p.ok : 0x8A9099FF);
-    drawRow(2, N_("Interface Sounds"),
-            SoundFX::enabled() ? N_("Sounds in the menus; your own in sounds/ on the SD card")
-                               : N_("The menus stay silent"),
-            SoundFX::enabled() ? N_("ON") : N_("OFF"), SoundFX::enabled() ? p.ok : 0x8A9099FF);
-    {
-        static const u32 qualityCol[JellyfinClient::VIDEO_QUALITY_COUNT] =
-            { 0xD98A2EFF, 0x34A8DDFF, 0x3DAF5AFF, 0x9A5BD6FF };
-        /* the chosen bitrate, and what the connection measured at the first
-         * video holds it to (it is not the setting changing on its own) */
-        char desc[128];
-        const int q = client.videoQuality;
-        if (client.measuredKbps() > 0 && client.linkQuality() < q)
-            snprintf(desc, sizeof(desc),
-                     tr("%.1f Mb/s; your connection (%.1f Mb/s measured) holds videos to %.1f"),
-                     JellyfinClient::qualityBitrate(q) / 1000000.0, client.measuredKbps() / 1000.0,
-                     client.videoBitrate() / 1000000.0);
-        else if (q == JellyfinClient::VIDEO_QUALITY_COUNT - 1)
-            snprintf(desc, sizeof(desc),
-                     tr("%.1f Mb/s: sharpest, for a wired adapter. Lower it if videos stutter"),
-                     JellyfinClient::qualityBitrate(q) / 1000000.0);
-        else
-            snprintf(desc, sizeof(desc),
-                     tr("Video bitrate: %.1f Mb/s. Lower it if playback keeps buffering"),
-                     JellyfinClient::qualityBitrate(q) / 1000000.0);
-        drawRow(3, N_("Video Quality"), desc,
-                JellyfinClient::videoQualityName(client.videoQuality),
-                qualityCol[client.videoQuality]);
+    /* the sections: the open one lit, brighter with the highlight on it */
+    for (int i = 0; i < (int)sections.size(); ++i) {
+        const bool open = sections[i] == section;
+        sideAnim[i] = Ui::approach(sideAnim[i], open ? (sideFocus || typing ? 1.0f : 0.45f) : 0.0f);
+        Ui::button(SIDE_X, LIST_Y + i * ROW_STEP, SIDE_W, ROW_H, tr(SECTIONS[sections[i]]), 16,
+                   sideAnim[i] > 0.01f ? (sideFocus && open ? Ui::pulse() : 1.0f) * sideAnim[i] : 0.0f);
     }
-    drawRow(4, N_("Direct Play"),
-            client.directPlay ? N_("Files the Wii can decode play as they are (SD DivX, DVD...): no server work")
-                              : N_("Every video is converted by the server"),
-            client.directPlay ? N_("Auto") : N_("OFF"), client.directPlay ? p.ok : 0x8A9099FF);
-    drawRow(5, N_("Smooth Motion"),
-            g_wiifin_smooth_motion ? N_("Blends frames on picture changes: films move evenly on 60 Hz TVs")
-                                   : N_("Each frame shown as is (24 fps films judder slightly on 60 Hz)"),
-            g_wiifin_smooth_motion ? N_("ON") : N_("OFF"), g_wiifin_smooth_motion ? p.ok : 0x8A9099FF);
+    /* who made it, under the sections */
     {
-        static const char* themeDesc[Ui::THEME_COUNT] = {
-            N_("Light, like the Wii Menu"),
-            N_("Dark, for movie nights"),
-            N_("Red and charcoal, browse in rows like the old video channels"),
-            N_("Black, silver and green"),
-            N_("Dark grey and orange"),
-        };
-        static const u32 themeCol[Ui::THEME_COUNT] = { 0x34A8DDFF, 0x45546BFF, 0xD81F26FF, 0x7DC242FF, 0xF47521FF };
-        int t = (int)Ui::theme();
-        drawRow(6, N_("Theme"), themeDesc[t], Ui::themeName(Ui::theme()), themeCol[t]);
-    }
-    {
-        bool rows = Ui::homeLayout() == Ui::HomeLayout::Rows;
-        drawRow(7, N_("Home Screen"), rows ? N_("Rows of posters to browse, like the old video channels")
-                                       : N_("A grid of your libraries"),
-                rows ? N_("Rows") : N_("Grid"), rows ? p.accent : 0x8A9099FF);
-    }
-    {
-        static const char* name[Ui::LIBRARY_STYLE_COUNT] = { N_("Posters"), N_("List"), N_("List + Posters") };
-        static const char* desc[Ui::LIBRARY_STYLE_COUNT] = {
-            N_("Browse libraries with their artwork"),
-            N_("Libraries as text lists: quickest to browse big ones"),
-            N_("Text lists, with the cover of the selected title"),
-        };
-        int v = (int)Ui::libraryStyle();
-        drawRow(8, N_("Library View"), desc[v], name[v], v == 0 ? 0x8A9099FF : p.accent);
-    }
-    drawRow(9, N_("Disc Slot Light"),
-            g_wiifin_disc_light ? N_("Pulses with the sound, as bright as the Wii Settings say")
-                                : N_("Stays dark during playback"),
-            g_wiifin_disc_light ? N_("ON") : N_("OFF"), g_wiifin_disc_light ? p.ok : 0x8A9099FF);
-    {
-        int l, t, r, b;
-        Ui::safeArea(l, t, r, b);
-        bool full = !(l | t | r | b);
-        drawRow(10, N_("Screen Area"), N_("Shrink the interface if your TV crops the edges (overscan)"),
-                full ? N_("Full") : N_("Adjusted"), full ? 0x8A9099FF : p.accent);
-    }
-    drawRow(11, N_("Backgrounds"),
-            Ui::solidColors() ? N_("Solid colours: no bands on TVs that show them in gradients")
-                              : N_("Soft gradients, like the Wii Menu"),
-            Ui::solidColors() ? N_("Solid") : N_("Gradient"), Ui::solidColors() ? p.accent : 0x8A9099FF);
-    drawRow(12, N_("Clock"),
-            Ui::clock12h() ? N_("1:30 PM, the date as month/day") : N_("13:30, the date as day/month"),
-            Ui::clock12h() ? N_("12-hour") : N_("24-hour"), p.accent);
-    /* each language by its own name */
-    drawRow(13, N_("Language"),
-            Lang::choice() < 0 ? N_("The Wii's language, as set in the Wii Settings") : N_("Chosen here, whatever the Wii's language"),
-            Lang::name(Lang::current()), Lang::choice() < 0 ? 0x8A9099FF : p.accent);
-    {
-        const bool toLoader = appExitsToLoader();
-        drawRow(R_EXIT, N_("Exit To"),
-                !appFromLoader() ? N_("Started as a channel: leaving goes to the Wii Menu")
-                : toLoader       ? N_("Exit and the HOME menu go back to the Homebrew Channel")
-                                 : N_("Exit and the HOME menu go to the Wii Menu"),
-                toLoader ? N_("HBC") : N_("Wii Menu"), toLoader ? p.accent : 0x8A9099FF);
-    }
-    drawRow(R_START, N_("Start Screen"),
-            g_app_startBrowse ? N_("The rows home opens on browse: your libraries")
-                              : N_("The rows home opens on home: Continue Watching"),
-            g_app_startBrowse ? N_("Browse") : N_("Home"), g_app_startBrowse ? 0x8A9099FF : p.accent);
-    drawRow(R_DIM, N_("Other Rows"),
-            Ui::dimRows() ? N_("The rows home shades the rows under the one you're on")
-                          : N_("The rows home shows every row plainly"),
-            Ui::dimRows() ? N_("Shaded") : N_("Shown"), Ui::dimRows() ? 0x8A9099FF : p.accent);
-    if (profile) {
-        static const char* const how[3]  = { N_("Automatic"), N_("Passcode"), N_("Password") };
-        static const char* const desc[3] = {
-            N_("Opens at once on this Wii"),
-            N_("Asks the profile's four-digit passcode first"),
-            N_("Asks the password (or Quick Connect) each time"),
-        };
-        const int m = signInWant >= 0 && signInWant < 3 ? signInWant : 0;
-        drawRow(R_SIGNIN, N_("Sign-In"), desc[m], how[m], m == 0 ? 0x8A9099FF : p.accent);
-        const bool on = !profile->userId.empty() && g_app_startProfile == profile->userId;
-        drawRow(R_STARTUP, N_("Open at Start-Up"),
-                on ? N_("Opens when WiiFin starts; hold B at start to skip")
-                : g_app_startProfile.empty() ? N_("WiiFin starts at its own menu")
-                                             : N_("Another profile opens at start-up: A makes it this one"),
-                on ? N_("ON") : N_("OFF"), on ? p.ok : 0x8A9099FF);
+        const float y = LIST_Y + sections.size() * ROW_STEP + 14;
+        Ui::textCentered(SIDE_X + SIDE_W / 2, y, "WiiFin-XE v" WIIFIN_VERSION, 12, p.accentDark);
+        Ui::textCentered(SIDE_X + SIDE_W / 2, y + 18, tr("Made with \xe2\x9d\xa4 for Jellyfin"), 11, p.textDim);
     }
 
-    /* page arrows on the screen edges + page dots */
-    if (PAGES > 1) {
-        Ui::pageArrow(ARROW_L_CX, ARROW_CY, true,  page > 0,         overArrow(ir, ARROW_L_CX));
-        Ui::pageArrow(ARROW_R_CX, ARROW_CY, false, page < PAGES - 1, overArrow(ir, ARROW_R_CX));
-        const float GAP = 16, y = ROW_Y0 + PER_PAGE * ROW_STEP + 2;
-        float x0 = 320 - (PAGES - 1) * GAP * 0.5f;
-        for (int i = 0; i < PAGES; ++i)
-            Ui::circle(x0 + i * GAP, y, i == page ? 4.5f : 3.5f,
-                       i == page ? p.accent : Ui::alpha(p.cardBorder, 0.9f));
+    /* the search's text, over its matches */
+    if (section == S_SEARCH) {
+        Ui::field(PANE_X, LIST_Y, PANE_W, FIELD_H, query.c_str(), 16, typing);
+        if (query.empty() && !typing)
+            Ui::text(PANE_X + 14, LIST_Y + 8, tr("A to type: any setting, by name or what it does"), 14, p.textDim);
     }
 
-    static const Ui::Hint left[]  = { { "UD", N_("Choose") }, { "A", N_("Change") }, { "-/+", N_("Page") } };
-    static const Ui::Hint right[] = { { "B", N_("Back") } };
-    Ui::bottomBar(left, PAGES > 1 ? 3 : 2, right, 1);
+    /* the settings */
+    const float y0 = rowsTop();
+    for (int i = 0; i < n && i < 32; ++i)
+        focusAnim[i] = Ui::approach(focusAnim[i], !sideFocus && !typing && i == selectedIndex ? 1.0f : 0.0f);
+    for (int k = 0; k < vis && top + k < n; ++k) {
+        const int i = top + k;
+        const RowInfo r = describe(rows[i]);
+        const float y = y0 + k * ROW_STEP;
+        Ui::card(PANE_X, y, PANE_W, ROW_H, 12, i < 32 ? focusAnim[i] : 0.0f);
+        const int pw = Ui::textWidth(r.value.c_str(), 14) + 26;
+        const float px = PANE_X + PANE_W - pw - 10, py = y + (ROW_H - 24) * 0.5f;
+        std::string label = LibDraw::fitText(font, r.label, 17, (int)(px - PANE_X - 26));
+        Ui::text(PANE_X + 14, y + 10, label.c_str(), 17, p.text);
+        Ui::roundRect(px, py, pw, 24, 12, Ui::mix(r.col, 0xFFFFFFFF, 0.15f), r.col);
+        Ui::textCentered(px + pw * 0.5f, py + 3, r.value.c_str(), 14, p.textOnAccent);
+    }
+    if (n > vis) Ui::scrollbar(PANE_X + PANE_W + 8, y0, vis * ROW_STEP - (ROW_STEP - ROW_H), top, vis, n);
+    if (n == 0 && section == S_SEARCH && !query.empty())
+        Ui::textCentered(PANE_X + PANE_W / 2, y0 + 20, tr("No setting matches"), 15, p.textDim);
+
+    /* what the highlighted setting does, in full */
+    if (!typing && !sideFocus && selectedIndex < n) {
+        const RowInfo r = describe(rows[selectedIndex]);
+        std::string l1, l2;
+        wrap2(r.desc, PANE_W - 28, l1, l2);
+        Ui::roundRect(PANE_X, DESC_Y, PANE_W, DESC_H, 12, Ui::alpha(p.cardBottom, 0.6f));
+        Ui::text(PANE_X + 14, DESC_Y + 10, LibDraw::fitText(font, l1, 13, (int)PANE_W - 28).c_str(), 13, p.text);
+        if (!l2.empty())
+            Ui::text(PANE_X + 14, DESC_Y + 32, LibDraw::fitText(font, l2, 13, (int)PANE_W - 28).c_str(), 13, p.text);
+    }
+
+    if (typing) {
+        Ui::card((640 - kb.width()) * 0.5f - 10, 204, kb.width() + 20, kb.height() + 20, 16, 0.0f);
+        kb.render(ir);
+        return;   /* the keyboard says its own buttons */
+    }
+    static const Ui::Hint side[] = { { "UD", N_("Choose") }, { "A", N_("Open") }, { "1", N_("Search") }, { "B", N_("Back") } };
+    static const Ui::Hint list[] = { { "UD", N_("Choose") }, { "A", N_("Change") }, { "1", N_("Search") }, { "B", N_("Sections") } };
+    const Ui::Hint* h = sideFocus ? side : list;
+    Ui::bottomBar(h, 3, h + 3, 1);
 }
