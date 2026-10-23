@@ -18,7 +18,6 @@ extern unsigned char data_logo_wiifin_png[];
 static GRRLIB_texImg* s_logo = nullptr;
 static int            s_logoUsers = 0;
 
-/* Defined in LibraryView.cpp: decodes a JPEG into an RGBA8 texture. */
 #include "JpegTexture.h"
 
 /* ---- Layout (640x480; rows, band and header span the whole screen, which
