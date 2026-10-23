@@ -18,6 +18,10 @@ struct SavedProfile {
     enum SignIn { Auto = 0, Passcode = 1, Password = 2 };
     int signIn = Auto;
     std::string passSalt, passHash;   /* the passcode's SHA-256, never the code */
+
+    /* libraries left off its home (ids, comma-separated): All Libraries
+     * still lists and opens them */
+    std::string hiddenLibs;
 };
 
 /* The look a profile has, or WiiFin's start-up one (the menus) */

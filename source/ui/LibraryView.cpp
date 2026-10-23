@@ -603,9 +603,11 @@ void LibraryView::loadLibraries() {
     bool ok = false; std::string err;
     runWithLoading([&]() {
         client.logServerInfo(serverUrl);
-        ok = client.getLibraries(serverUrl, auth, libraries);
+        allLibraries.clear();
+        ok = client.getLibraries(serverUrl, auth, allLibraries);
         if (!ok) err = client.lastError();
     });
+    filterLibraries();
     if (!ok && client.tokenRefused) {   /* back to the sign-in, for this profile */
         SYS_Report("[Library] the server refused the profile's token\n");
         exitTo = Exit::SignIn;
@@ -1260,6 +1262,7 @@ bool LibraryView::update(ir_t& ir) {
     Remote::PlayRequest play;
     if (!loadingState(state) && Remote::takePlay(play) && startRemotePlay(play)) return true;
     if (profileMenu) return updateProfileMenu(ir);
+    if (libManager)  return updateLibManager(ir);
 
     /* interface sounds, from what this frame's input changed: the screen
      * (opened, or left with B), the page or tab, or the highlight */
@@ -1345,10 +1348,14 @@ void LibraryView::openItem(const JellyfinItem& it, State returnState) {
 }
 
 // Open library `index` (tile grid or the "Libraries" row of the browse page).
-void LibraryView::openLibrary(int index) {
-    currentLibId     = libraries[index].id;
-    currentLibName   = libraries[index].name;
-    currentLibType   = libraries[index].collectionType;
+void LibraryView::openLibrary(int index) { openLibrary(libraries[index]); }
+
+// Any library, hidden ones too (All Libraries).
+void LibraryView::openLibrary(const JellyfinLibrary& lib) {
+    openedLib        = lib;
+    currentLibId     = openedLib.id;
+    currentLibName   = openedLib.name;
+    currentLibType   = openedLib.collectionType;
     if (listSortLib != currentLibId) {   /* another library: by name, no filter */
         listSort = ListSort();
         listSortLib.clear();
@@ -1537,6 +1544,7 @@ bool LibraryView::render(ir_t& ir) {
     case State::SearchReady:            renderSearchResults(ir); break;
     default: break;
     }
+    if (libManager)  renderLibManager(ir);
     if (profileMenu) renderProfileMenu(ir);
 
     drawCursor(ir);

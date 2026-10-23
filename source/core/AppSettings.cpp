@@ -116,6 +116,7 @@ void App::loadSettings() {
             if (strcmp(field, "sign_in")       == 0) profiles[idx].signIn       = atoi(val);
             if (strcmp(field, "pass_salt")     == 0) profiles[idx].passSalt     = val;
             if (strcmp(field, "pass_hash")     == 0) profiles[idx].passHash     = val;
+            if (strcmp(field, "hidden_libs")   == 0) profiles[idx].hiddenLibs   = val;
         } else {
             /* Legacy single-profile keys — migrate on first load */
             if (strcmp(key, "server_url")   == 0) {
@@ -238,6 +239,8 @@ void App::saveSettings() {
             fprintf(f, "profile.%d.pass_salt=%s\n", i, sanitizeConfigValue(p.passSalt).c_str());
             fprintf(f, "profile.%d.pass_hash=%s\n", i, sanitizeConfigValue(p.passHash).c_str());
         }
+        if (!p.hiddenLibs.empty())
+            fprintf(f, "profile.%d.hidden_libs=%s\n", i, sanitizeConfigValue(p.hiddenLibs).c_str());
     }
     fflush(f);
     fclose(f);

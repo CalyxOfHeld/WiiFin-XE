@@ -51,6 +51,10 @@ bool LibraryView::updateHome(ir_t& ir, bool aPressed) {
         case BrowseHome::Action::Profiles:
             openProfileMenu();
             return false;
+        case BrowseHome::Action::Libraries:   // 2 on the Libraries row
+            openLibManager();
+            irMode = false;
+            break;
         case BrowseHome::Action::Expand:      // 2: the row as a page
             page.stopLoader();
             runWithLoading([&]() { page.expand(); });
@@ -93,6 +97,9 @@ bool LibraryView::updateHome(ir_t& ir, bool aPressed) {
             irMode = false;
             return false;
         }
+
+        // [2] → every library, the hidden ones too
+        if (Input::is2Pressed()) { openLibManager(); irMode = false; return false; }
 
         // D-pad navigation in library grid
         if (Input::isLeftPressed())  { if (libSel > 0)   libSel--; irMode = false; }
@@ -332,9 +339,10 @@ void LibraryView::renderHome(ir_t& ir) {
             Ui::textCentered(tx + TILE_W / 2, ty + 44, name.c_str(), 18,
                              Ui::mix(p.text, p.accentDark, f));
         }
-        const Ui::Hint l[] = { { "A", avatarFocus ? N_("Menu") : N_("Open") }, { "1", N_("Search") } };
+        const Ui::Hint l[] = { { "A", avatarFocus ? N_("Menu") : N_("Open") }, { "1", N_("Search") },
+                               { "2", N_("All Libraries") } };
         const Ui::Hint r[] = { { "-/+", N_("Tab") } };
-        Ui::footer(l, 2, r, 1);
+        Ui::footer(l, 3, r, 1);
 
     } else {
         // ---- Activity page ----
@@ -437,12 +445,13 @@ void LibraryView::renderGlobalFavorites(ir_t& ir) {
  * The profile menu, A on the avatar: back to the libraries, the profiles,
  * the settings (signed in still), or WiiFin's own menu
  * --------------------------------------------------------------- */
-static const char* const PROFILE_MENU[5] = {
-    N_("Now Playing"), N_("Back to Jellyfin"), N_("Switch Profile"), N_("Settings"), N_("WiiFin Menu")
+static const char* const PROFILE_MENU[6] = {
+    N_("Now Playing"), N_("Back to Jellyfin"), N_("All Libraries"), N_("Switch Profile"), N_("Settings"),
+    N_("WiiFin Menu")
 };
 /* Now Playing, first, while a music session plays */
 static int pmFirst() { return MusicSession::active() ? 0 : 1; }
-static int pmCount() { return 5 - pmFirst(); }
+static int pmCount() { return 6 - pmFirst(); }
 static const int PM_W = 300, PM_BH = 42, PM_STEP = 54;
 static int pmTop() { return 240 - (pmCount() * PM_STEP + 50) / 2 + 50; }
 
@@ -474,11 +483,12 @@ bool LibraryView::updateProfileMenu(ir_t& ir) {
     switch (entry) {
     case 0: exitTo = Exit::NowPlaying; break;
     case 1: SoundFX::play(SoundFX::FX::Back); return false;
-    case 2: exitTo = Exit::Profiles;   break;
-    case 3: exitTo = Exit::Settings;   break;
+    case 2: state = State::LibsReady; openLibManager(); return false;
+    case 3: exitTo = Exit::Profiles;   break;
+    case 4: exitTo = Exit::Settings;   break;
     default: exitTo = Exit::WiiFinMenu; break;
     }
-    SoundFX::play(entry == 3 || entry == 0 ? SoundFX::FX::Open : SoundFX::FX::Back);
+    SoundFX::play(entry == 4 || entry == 0 ? SoundFX::FX::Open : SoundFX::FX::Back);
     return true;
 }
 

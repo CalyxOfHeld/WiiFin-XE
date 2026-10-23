@@ -332,8 +332,17 @@ void BrowseHome::buildCatalog(const std::vector<JellyfinLibrary>& libs)
                      "&SortBy=SortName&SortOrder=Ascending&Limit=%d",
                      uid.c_str(), lib.id.c_str(), types, filter.c_str(), cap);
             std::vector<JellyfinItem> got;
-            client.getItemsByQuery(serverUrl, auth, q, got);
-            if (got.empty()) return;
+            bool ok = client.getItemsByQuery(serverUrl, auth, q, got);
+            if (!ok && filter.empty()) {   /* All: the row's front, once more */
+                SYS_Report("[Home] %s, All: %s, again\n", t.c_str(), client.lastError().c_str());
+                got.clear();
+                ok = client.getItemsByQuery(serverUrl, auth, q, got);
+            }
+            if (got.empty()) {
+                if (filter.empty())
+                    SYS_Report("[Home] %s, All: %s\n", t.c_str(), ok ? "nothing" : client.lastError().c_str());
+                return;
+            }
             if ((int)got.size() > cap) got.resize(cap);
             r.sections.push_back({ (int)r.items.size(), label, q, lib.id, types, filter });
             r.items.insert(r.items.end(), got.begin(), got.end());
@@ -619,11 +628,12 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
 
     if (Input::is1Pressed()) return Action::Search;
     if (Input::isActionPressed()) return Action::Browse;
-    /* 2: the focused row as a page (its part, in a row of parts; not the
-     * Libraries row: nothing to ask the server) */
-    if (Input::is2Pressed() && headerFocus < 0 && rowSel < nRows &&
-        (!rows[rowSel].sections.empty() || !rows[rowSel].query.empty()))
-        return Action::Expand;
+    /* 2: the focused row as a page (its part, in a row of parts); on the
+     * Libraries row: every library, the hidden ones too */
+    if (Input::is2Pressed() && headerFocus < 0 && rowSel < nRows) {
+        if (rows[rowSel].wide) return Action::Libraries;
+        if (!rows[rowSel].sections.empty() || !rows[rowSel].query.empty()) return Action::Expand;
+    }
     if (mode == Mode::Catalog && Input::isBackPressed()) return Action::Back;
     /* B on the home: the avatar, its menu open */
     if (mode == Mode::Home && Input::isBackPressed()) { headerFocus = 2; irMode = false; return Action::Profiles; }
@@ -1008,6 +1018,10 @@ void BrowseHome::render(const ir_t& ir)
     /* Focused-row band */
     const Look L = look();
     Ui::roundRect(Ui::screenLeft() - 20, BAND_Y, Ui::screenWidth() + 40, bandHeight(), 16, L.bandTop, L.bandBottom);
+    /* and on to the bottom of the screen, under the shade below (no edge
+     * where the band would end) */
+    GRRLIB_Rectangle(Ui::screenLeft(), BAND_Y + bandHeight() - 1, Ui::screenWidth(),
+                     480 - (BAND_Y + bandHeight()) + 1, L.bandBottom, 1);
     Ui::roundRect(Ui::screenLeft() - 20, BAND_Y, Ui::screenWidth() + 40, 1.5f, 0.75f, L.bandEdge);
 
     if (rows.empty()) {
@@ -1049,10 +1063,16 @@ void BrowseHome::render(const ir_t& ir)
         const Ui::Hint hCat[]  = { { "A", N_("Open") }, { "2", N_("Expand") }, { "1", N_("Search") }, { "B", N_("Home") } };
         Ui::Hint h[4];
         int nh = 0;
-        const bool canExpand = rowSel < (int)rows.size() &&
-                               (!rows[rowSel].sections.empty() || !rows[rowSel].query.empty());
-        for (const Ui::Hint& e : mode == Mode::Catalog ? hCat : hHome)
-            if (canExpand || strcmp(e.button, "2") != 0) h[nh++] = e;
+        const bool libs = rowSel < (int)rows.size() && rows[rowSel].wide;
+        const bool canExpand = libs || (rowSel < (int)rows.size() &&
+                               (!rows[rowSel].sections.empty() || !rows[rowSel].query.empty()));
+        for (const Ui::Hint& e : mode == Mode::Catalog ? hCat : hHome) {
+            if (!canExpand && strcmp(e.button, "2") == 0) continue;
+            h[nh] = e;
+            /* TRANSLATORS: 2 on the browse page's Libraries row: every library, the hidden ones too */
+            if (libs && strcmp(e.button, "2") == 0) h[nh].label = N_("All Libraries");
+            ++nh;
+        }
         float w = 0;
         for (int i = 0; i < nh; ++i) w += Ui::hintWidth(h[i]);
         float x = Ui::screenRight() - 14 - w;

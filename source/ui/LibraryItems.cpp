@@ -344,14 +344,14 @@ bool LibraryView::updatePosterGrid(ir_t& ir, bool aPressed) {
             } else if (currentLibType == "movies") {
                 // Go back to Collections tab with the original library
                 currentLibId   = movieLibId;
-                currentLibName = libraries[libSel].name;
+                currentLibName = openedLib.name;
                 movieTab       = 1;
                 itemPage       = 0;
                 state          = State::CollectionsLoad;
             } else {
                 // Boxsets library: go back to the boxsets poster grid
-                currentLibId   = libraries[libSel].id;
-                currentLibName = libraries[libSel].name;
+                currentLibId   = openedLib.id;
+                currentLibName = openedLib.name;
                 itemPage       = 0;
                 state          = State::ItemsInit;
             }

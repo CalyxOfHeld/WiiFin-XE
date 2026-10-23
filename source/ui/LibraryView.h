@@ -43,6 +43,12 @@ public:
      * the settings left it (theme, home screen, library view) */
     void onSettingsClosed();
 
+    /* the profile's libraries left off the home (ids, comma-separated);
+     * hiddenChanged: All Libraries closed with others, for the profile */
+    void setHiddenLibraries(const std::string& ids);
+    std::string hiddenLibraries() const;
+    bool hiddenChanged = false;
+
     // Name of the signed-in user (header avatar).
     void setUserName(const std::string& name) {
         userName = name; browse.setUserName(name); catalog.setUserName(name);
@@ -130,8 +136,23 @@ private:
     State state = State::LibsInit;
 
     // Libraries
-    std::vector<JellyfinLibrary> libraries;
+    std::vector<JellyfinLibrary> libraries;      // the ones shown on the home
+    std::vector<JellyfinLibrary> allLibraries;   // every one (All Libraries)
+    std::vector<std::string>     hiddenLibs;     // ids left off the home
+    JellyfinLibrary              openedLib;      // the library open (hidden ones too)
     int  libSel = 0;
+    bool isHidden(const std::string& id) const;
+    void filterLibraries();                      // libraries = allLibraries - hidden
+    /* All Libraries (2 on the Libraries row, or the profile menu): every
+     * library, A opens it, 1 shows or hides it on the home */
+    bool  libManager    = false;
+    bool  libManagerDirty = false;
+    int   libManagerSel = 0, libManagerTop = 0;
+    void openLibManager();
+    void closeLibManager();
+    bool updateLibManager(ir_t& ir);
+    void renderLibManager(ir_t& ir);
+    void openLibrary(const JellyfinLibrary& lib);
     bool  irMode  = false;
     float irLastX  = -1.0f;
     float irLastY  = -1.0f;
@@ -289,7 +310,7 @@ private:
      * WiiFin's menu */
     bool  profileMenu        = false;
     int   profileMenuSel     = 0;
-    float profileMenuFocus[5] = {};
+    float profileMenuFocus[6] = {};
     void openProfileMenu();
     bool updateProfileMenu(ir_t& ir);
     void renderProfileMenu(ir_t& ir);

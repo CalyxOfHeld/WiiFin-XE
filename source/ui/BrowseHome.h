@@ -25,7 +25,7 @@
 class BrowseHome {
 public:
     /* Expand: 2 on a row: expand() it, inside a loading screen */
-    enum class Action { None, Open, Search, Browse, Back, Profiles, Expand };
+    enum class Action { None, Open, Search, Browse, Back, Profiles, Expand, Libraries };
     /* Home: what to watch now (resume, next up, latest, top rated, favourites).
      * Catalog: the "browse" page (libraries, every title A-Z, genres). */
     enum class Mode { Home, Catalog };

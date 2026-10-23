@@ -531,6 +531,7 @@ void App::loop() {
         LibraryView lv(font, jpFont, cursorPointerTex, ringTex,
                        jellyfinClient, auth, p.serverUrl);
         lv.setUserName(p.username);
+        lv.setHiddenLibraries(p.hiddenLibs);
         /* the server's remote control, while this profile is open */
         jellyfinClient.postCapabilities(p.serverUrl, auth);
         Remote::start(p.serverUrl, auth.accessToken, jellyfinClient.sslVerify);
@@ -542,6 +543,11 @@ void App::loop() {
                 if (g_app_powerOff || g_app_reset) { running = false; break; }
                 if (Input::isHomePressed() && showHomeOverlay()) { running = false; break; }
                 if (lv.update(ir)) break;
+                if (lv.hiddenChanged) {   /* All Libraries closed: the profile's from now on */
+                    lv.hiddenChanged = false;
+                    p.hiddenLibs = lv.hiddenLibraries();
+                    saveSettings();
+                }
                 if (lv.render(ir)) GRRLIB_Render();
                 else               VIDEO_WaitVSync();   /* the previous picture stays */
             }
