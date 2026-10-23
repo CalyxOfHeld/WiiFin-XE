@@ -105,9 +105,8 @@ jobs:
           sed -i "s|<version>.*</version>|<version>$v</version>|" pkg/apps/WiiFin/meta.xml
           sed -i "s|<release_date>.*</release_date>|<release_date>$(date -u +%Y%m%d%H%M%S)</release_date>|" \
             pkg/apps/WiiFin/meta.xml
-          # HBC icon: 128x48, the logo centred on transparency
-          convert assets/logo_wiifin.png -trim +repage -resize 128x48 \
-            -background none -gravity center -extent 128x48 pkg/apps/WiiFin/icon.png
+          # HBC icon: WiiFin-XE's, made by tools/hbc_icon.py
+          cp apps/WiiFin/icon.png pkg/apps/WiiFin/icon.png
           (cd pkg && zip -qr ../WiiFin-hbc.zip apps)
 
       - uses: actions/upload-artifact@v4
