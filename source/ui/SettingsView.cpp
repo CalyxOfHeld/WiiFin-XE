@@ -53,18 +53,62 @@ SettingsView::SettingsView(GRRLIB_texImg* btn, GRRLIB_ttfFont* f, JellyfinClient
     openSection(S_VIEW);
 }
 
-std::vector<int> SettingsView::sectionRows(int s) const
+/* A section's settings in groups, each under a header that A folds and
+ * unfolds (all open at first; folded stays so while WiiFin runs).  In
+ * rows, a header is H_BASE + its group. */
+enum Group { G_THEME, G_HOME, G_SCREEN, G_VIDEO, G_WII, G_SOUND, G_SAVER, G_CLOCK, G_BUTTONS, G_CONNECTION, G_COUNT };
+static const char* const GROUPS[G_COUNT] = {
+    /* TRANSLATORS: Settings: the headers over groups of settings */
+    N_("Theme"), N_("Home and Libraries"), N_("Screen and Keyboard"), N_("Video"), N_("Speaker and Disc Light"),
+    N_("Sound"), N_("Screensaver"), N_("Clock and Language"), N_("Buttons and Exit"), N_("Connection")
+};
+static const int H_BASE = 1000;
+static bool s_folded[G_COUNT] = {};
+struct RowGroup { int group; std::vector<int> rows; };   /* group -1: no header */
+
+static std::vector<RowGroup> sectionGroups(int s, bool profile)
 {
     switch (s) {
     case S_VIEW:
         /* the home and the libraries' look: a profile's (WiiFin's menu has neither) */
-        return profile ? std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER, R_AREA, R_KB_SIZE }
-                       : std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA, R_KB_SIZE };
-    case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT, R_SPEAKER };
-    case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_SAVER, R_SAVER_LOGO, R_SAVER_SPEED, R_SAVER_EFFECT, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT, R_POWER_BTN, R_RESET_BTN };
-    case S_SIGNIN:   return profile ? std::vector<int>{ R_SIGNIN, R_STARTUP } : std::vector<int>{};
-    default:         return {};
+        return { { G_THEME,  { R_THEME, R_CUSTOMIZE, R_BACKGROUNDS } },
+                 { G_HOME,   profile ? std::vector<int>{ R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER }
+                                     : std::vector<int>{ R_START, R_DIM, R_HEADER } },
+                 { G_SCREEN, { R_AREA, R_KB_SIZE } } };
+    case S_PLAYBACK:
+        return { { G_VIDEO, { R_QUALITY, R_DIRECT, R_SMOOTH } },
+                 { G_WII,   { R_SPEAKER, R_LIGHT } } };
+    case S_SYSTEM:
+        return { { G_SOUND,      { R_MUSIC, R_SOUNDS } },
+                 { G_SAVER,      { R_SAVER, R_SAVER_LOGO, R_SAVER_SPEED, R_SAVER_EFFECT } },
+                 { G_CLOCK,      { R_CLOCK, R_LANGUAGE } },
+                 { G_BUTTONS,    { R_EXIT, R_POWER_BTN, R_RESET_BTN } },
+                 { G_CONNECTION, { R_SSL } } };
+    case S_SIGNIN:
+        return profile ? std::vector<RowGroup>{ { -1, { R_SIGNIN, R_STARTUP } } } : std::vector<RowGroup>{};
+    default:
+        return {};
     }
+}
+
+static bool isHeader(int id) { return id >= H_BASE; }
+
+std::vector<int> SettingsView::sectionRows(int s) const
+{
+    std::vector<int> out;
+    for (const RowGroup& g : sectionGroups(s, profile != nullptr)) out.insert(out.end(), g.rows.begin(), g.rows.end());
+    return out;
+}
+
+/* what the list shows: each header, its settings unless folded */
+std::vector<int> SettingsView::shownRows(int s) const
+{
+    std::vector<int> out;
+    for (const RowGroup& g : sectionGroups(s, profile != nullptr)) {
+        if (g.group >= 0) out.push_back(H_BASE + g.group);
+        if (g.group < 0 || !s_folded[g.group]) out.insert(out.end(), g.rows.begin(), g.rows.end());
+    }
+    return out;
 }
 
 void SettingsView::openSection(int s)
@@ -74,7 +118,7 @@ void SettingsView::openSection(int s)
     selectedIndex = top = 0;
     for (float& f : focusAnim) f = 0.0f;
     if (s == S_SEARCH) runSearch();
-    else               rows = sectionRows(s);
+    else               rows = shownRows(s);
 }
 
 /* every setting whose name or description (as shown, translated) has the
@@ -96,13 +140,31 @@ void SettingsView::runSearch()
 }
 
 float SettingsView::rowsTop() const { return section == S_SEARCH ? LIST_Y + FIELD_H + 8 : LIST_Y; }
-int   SettingsView::visibleRows() const { return (int)((DESC_Y - 6 - rowsTop() + (ROW_STEP - ROW_H)) / ROW_STEP); }
+
+/* a header is shorter than a setting */
+static const float HDR_H = 26, HDR_STEP = 32;
+float SettingsView::rowHeight(int i) const { return isHeader(rows[i]) ? HDR_H : ROW_H; }
+float SettingsView::rowStep(int i) const   { return isHeader(rows[i]) ? HDR_STEP : ROW_STEP; }
+/* rows from..to (both in) fit between the top and the description */
+bool SettingsView::fits(int from, int to) const
+{
+    float y = rowsTop();
+    for (int i = from; i <= to; ++i) y += rowStep(i);
+    return y - (rowStep(to) - rowHeight(to)) <= DESC_Y - 6;
+}
+int SettingsView::visibleRows() const
+{
+    int k = 0;
+    while (top + k < (int)rows.size() && fits(top, top + k)) ++k;
+    return k > 0 ? k : 1;
+}
 
 void SettingsView::follow()
 {
-    const int vis = visibleRows();
+    const int n = (int)rows.size();
     if (selectedIndex < top) top = selectedIndex;
-    if (selectedIndex >= top + vis) top = selectedIndex - vis + 1;
+    while (top < selectedIndex && !fits(top, selectedIndex)) ++top;
+    while (top > 0 && n > 0 && fits(top - 1, n - 1)) --top;   /* no room left empty at the end */
     if (top < 0) top = 0;
 }
 
@@ -413,6 +475,14 @@ SettingsView::RowInfo SettingsView::describe(int id)
 }
 
 void SettingsView::activate(int index) {
+    if (isHeader(index)) {   /* fold or unfold its group; the highlight stays on it */
+        bool& folded = s_folded[index - H_BASE];
+        folded = !folded;
+        rows = shownRows(section);
+        for (int i = 0; i < (int)rows.size(); ++i) if (rows[i] == index) selectedIndex = i;
+        follow();
+        return;
+    }
     switch (index) {
         case 0: client.sslVerify = !client.sslVerify; break;
         case 1: musicEnabled = !musicEnabled; MusicBGM::setEnabled(musicEnabled); break;
@@ -709,10 +779,11 @@ bool SettingsView::update(ir_t& ir) {
             const float y = LIST_Y + i * ROW_STEP;
             if (ir.x >= SIDE_X && ir.x < SIDE_X + SIDE_W && ir.y >= y && ir.y < y + ROW_H) hoverSide = i;
         }
-        const float y0 = rowsTop();
-        for (int k = 0; k < visibleRows() && top + k < n; ++k) {
-            const float y = y0 + k * ROW_STEP;
-            if (ir.x >= PANE_X && ir.x < PANE_X + PANE_W && ir.y >= y && ir.y < y + ROW_H) hoverRow = top + k;
+        float y = rowsTop();
+        for (int k = 0, vis = visibleRows(); k < vis && top + k < n; ++k) {
+            const int i = top + k;
+            if (ir.x >= PANE_X && ir.x < PANE_X + PANE_W && ir.y >= y && ir.y < y + rowHeight(i)) hoverRow = i;
+            y += rowStep(i);
         }
         if (section == S_SEARCH && ir.x >= PANE_X && ir.x < PANE_X + PANE_W &&
             ir.y >= LIST_Y && ir.y < LIST_Y + FIELD_H && a) {
@@ -758,7 +829,9 @@ bool SettingsView::update(ir_t& ir) {
         if (newSide) { sideFocus = true; sideSel = hoverSide; if (sections[sideSel] != section) openSection(sections[sideSel]); }
         follow();
         if (a && n > 0 && (!ir.valid || hoverRow >= 0)) {
+            const bool header = isHeader(rows[selectedIndex]);
             activate(rows[selectedIndex]);
+            if (header) { SoundFX::play(SoundFX::FX::Select); return false; }
             if (wantsLibraries) {   /* the settings close for the list */
                 SoundFX::play(SoundFX::FX::Open);
                 return leaveSignIn();
@@ -828,11 +901,34 @@ void SettingsView::render(ir_t& ir) {
     const float y0 = rowsTop();
     for (int i = 0; i < n && i < 32; ++i)
         focusAnim[i] = Ui::approach(focusAnim[i], !sideFocus && !typing && i == selectedIndex ? 1.0f : 0.0f);
-    for (int k = 0; k < vis && top + k < n; ++k) {
+    float y = y0;
+    for (int k = 0; k < vis && top + k < n; ++k, y += rowStep(top + k - 1)) {
         const int i = top + k;
+        const float f = i < 32 ? focusAnim[i] : 0.0f;
+        if (isHeader(rows[i])) {   /* a group's header: its name, folded or not */
+            const int g = rows[i] - H_BASE;
+            Ui::roundRect(PANE_X, y, PANE_W, HDR_H, 9, Ui::alpha(p.cardBottom, 0.45f));
+            if (f > 0.01f) {
+                Ui::shadow(PANE_X - 2, y - 2, PANE_W + 4, HDR_H + 4, 11, 8.0f, Ui::alpha(p.glow, f));
+                Ui::roundBorder(PANE_X, y, PANE_W, HDR_H, 9, 2.0f + f, Ui::alpha(p.focus, f));
+            }
+            const float cx = PANE_X + 16, cy = y + HDR_H * 0.5f;
+            const u32 c = Ui::mix(p.textDim, p.accentDark, f);
+            if (s_folded[g]) Ui::triangle(cx - 3, cy - 6, cx + 4, cy, cx - 3, cy + 6, c);   /* > folded */
+            else             Ui::triangle(cx - 6, cy - 3, cx + 6, cy - 3, cx, cy + 4, c);   /* v open */
+            Ui::text(PANE_X + 30, y + 5, tr(GROUPS[g]), 15, Ui::mix(p.text, p.accentDark, f));
+            if (s_folded[g]) {
+                int count = 0;
+                for (const RowGroup& rg : sectionGroups(section, profile != nullptr))
+                    if (rg.group == g) count = (int)rg.rows.size();
+                char m[48];
+                snprintf(m, sizeof(m), tr("%d hidden"), count);
+                Ui::textRight(PANE_X + PANE_W - 14, y + 6, m, 13, p.textDim);
+            }
+            continue;
+        }
         const RowInfo r = describe(rows[i]);
-        const float y = y0 + k * ROW_STEP;
-        Ui::card(PANE_X, y, PANE_W, ROW_H, 12, i < 32 ? focusAnim[i] : 0.0f);
+        Ui::card(PANE_X, y, PANE_W, ROW_H, 12, f);
         const int pw = Ui::textWidth(r.value.c_str(), 14) + 26;
         const float px = PANE_X + PANE_W - pw - 10, py = y + (ROW_H - 24) * 0.5f;
         std::string label = LibDraw::fitText(font, r.label, 17, (int)(px - PANE_X - 26));
@@ -840,15 +936,19 @@ void SettingsView::render(ir_t& ir) {
         Ui::roundRect(px, py, pw, 24, 12, Ui::mix(r.col, 0xFFFFFFFF, 0.15f), r.col);
         Ui::textCentered(px + pw * 0.5f, py + 3, r.value.c_str(), 14, p.textOnAccent);
     }
-    if (n > vis) Ui::scrollbar(PANE_X + PANE_W + 8, y0, vis * ROW_STEP - (ROW_STEP - ROW_H), top, vis, n);
+    if (n > vis) Ui::scrollbar(PANE_X + PANE_W + 8, y0, DESC_Y - 6 - y0, top, vis, n);
     if (n == 0 && section == S_SEARCH && !query.empty())
         Ui::textCentered(PANE_X + PANE_W / 2, y0 + 20, tr("No setting matches"), 15, p.textDim);
 
     /* what the highlighted setting does, in full */
     if (!typing && !sideFocus && selectedIndex < n) {
-        const RowInfo r = describe(rows[selectedIndex]);
+        std::string desc;
+        if (isHeader(rows[selectedIndex]))
+            desc = tr(s_folded[rows[selectedIndex] - H_BASE] ? "A shows the settings in this group." : "A hides the settings in this group.");
+        else
+            desc = describe(rows[selectedIndex]).desc;
         std::string l1, l2;
-        wrap2(r.desc, PANE_W - 28, l1, l2);
+        wrap2(desc, PANE_W - 28, l1, l2);
         Ui::roundRect(PANE_X, DESC_Y, PANE_W, DESC_H, 12, Ui::alpha(p.cardBottom, 0.6f));
         Ui::text(PANE_X + 14, DESC_Y + 10, LibDraw::fitText(font, l1, 13, (int)PANE_W - 28).c_str(), 13, p.text);
         if (!l2.empty())

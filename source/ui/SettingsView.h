@@ -51,8 +51,12 @@ private:
     /* what the pointer was on: it takes the highlight when that changes */
     int   lastHoverSide = -1, lastHoverRow = -1;
     void openSection(int s);
-    std::vector<int> sectionRows(int s) const;
-    int  visibleRows() const;
+    std::vector<int> sectionRows(int s) const;   /* every setting, for the search */
+    std::vector<int> shownRows(int s) const;     /* group headers, and the settings of the open ones */
+    float rowHeight(int i) const;
+    float rowStep(int i) const;
+    bool  fits(int from, int to) const;
+    int  visibleRows() const;                    /* from top */
     float rowsTop() const;
     void follow();
 
