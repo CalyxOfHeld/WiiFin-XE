@@ -3,6 +3,7 @@
 #include "AppInternal.h"
 #include "../ui/Ui.h"
 #include "Utils.h"
+#include <unistd.h>
 #include "Lang.h"
 #include "SoundFX.h"
 #include "../player/VideoSurface.h"
@@ -22,14 +23,20 @@ void App::loadSettings() {
     startView = currentView();
     if (settingsPath.empty()) return;
     FILE* f = fopen(settingsPath.c_str(), "r");
-    if (!f) return;
+    if (!f) {
+        /* the power cut between a save's two steps: the new copy is whole */
+        const std::string tmp = settingsPath + ".tmp";
+        if (rename(tmp.c_str(), settingsPath.c_str()) == 0) f = fopen(settingsPath.c_str(), "r");
+        if (!f) return;
+        SYS_Report("[Settings] wiifin.cfg taken from wiifin.cfg.tmp\n");
+    }
 
     profiles.clear();
     int profileCount = 0;
     SavedProfile legacyProfile;
     bool hasLegacy = false;
 
-    char line[512];
+    char line[2048];   /* a profile's hidden libraries: 33 bytes each */
     while (fgets(line, sizeof(line), f)) {
         char* nl = strchr(line, '\n'); if (nl) *nl = '\0';
         char* eq = strchr(line, '=');
@@ -238,7 +245,10 @@ void App::logSettings() {
 
 void App::saveSettings() {
     if (settingsPath.empty()) return;
-    FILE* f = fopen(settingsPath.c_str(), "w");
+    /* written to wiifin.cfg.tmp, then put in place: a power cut while
+     * writing leaves the old wiifin.cfg as it was */
+    const std::string tmp = settingsPath + ".tmp";
+    FILE* f = fopen(tmp.c_str(), "w");
     if (!f) return;
     fprintf(f, "ssl_verify=%d\n",      jellyfinClient.sslVerify ? 1 : 0);
     fprintf(f, "music_enabled=%d\n",    musicEnabled ? 1 : 0);
@@ -309,5 +319,15 @@ void App::saveSettings() {
             fprintf(f, "profile.%d.picture=%s\n", i, sanitizeConfigValue(p.picture).c_str());
     }
     fflush(f);
-    fclose(f);
+    fsync(fileno(f));   /* libfat writes the file size on sync only */
+    const bool ok = !ferror(f);
+    if (fclose(f) != 0 || !ok) {
+        SYS_Report("[Settings] wiifin.cfg not saved: the SD card refused it\n");
+        remove(tmp.c_str());
+        return;
+    }
+    /* libfat's rename doesn't replace a file */
+    remove(settingsPath.c_str());
+    if (rename(tmp.c_str(), settingsPath.c_str()) != 0)
+        SYS_Report("[Settings] wiifin.cfg.tmp could not be renamed\n");
 }

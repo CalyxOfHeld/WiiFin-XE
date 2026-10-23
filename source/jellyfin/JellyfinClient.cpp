@@ -423,6 +423,7 @@ static std::string decodeJsonString(const std::string& s, bool newlines = false)
                         else if (cp == 0x2018 || cp == 0x2019)    out += '\'';
                         else if (cp == 0x201C || cp == 0x201D)    out += '"';
                         else if (cp == 0x2026)                  { out += "..."; }
+                        else if (cp >= 0xD800 && cp <= 0xDFFF)  { }   // emoji and the like (a surrogate half): no font has them
                         else if (cp < 0x80) {
                             out += (char)cp;
                         } else if (cp < 0x800) {
@@ -582,7 +583,7 @@ static std::string decodeChunked(const char* headers, int headersLen,
         }
         pos = crlf + 2; // skip \r\n after size
         if (chunkSize == 0) break; // last chunk
-        if (pos + (int)chunkSize > bodyLen) break; // truncated
+        if (chunkSize > (size_t)(bodyLen - pos)) break; // truncated (or nonsense)
         out.append(body + pos, chunkSize);
         pos += (int)chunkSize + 2; // skip chunk data + trailing \r\n
     }
@@ -904,7 +905,7 @@ bool chunkedComplete(const char* body, int len) {
         int crlf = pos;
         while (crlf + 1 < len && !(body[crlf] == '\r' && body[crlf + 1] == '\n')) crlf++;
         if (crlf + 1 >= len) return false;
-        long size = strtol(body + pos, nullptr, 16);
+        unsigned long size = strtoul(body + pos, nullptr, 16);
         pos = crlf + 2;
         if (size == 0) {
             /* Optional trailers end with an empty line */
@@ -914,6 +915,7 @@ bool chunkedComplete(const char* body, int len) {
                     return true;
             return false;
         }
+        if (size > (unsigned long)(len - pos)) return false;   /* more to come (or nonsense) */
         pos += (int)size + 2;
     }
     return false;

@@ -445,6 +445,7 @@ void session(Ws& w) {
         if (opcode == 9) { if (!sendFrame(w, 10, payload)) return; continue; }   /* ping */
         if (opcode == 10) continue;                                 /* pong */
         if (opcode == 1 || opcode == 0) {
+            if (partial.size() + payload.size() > 256 * 1024) return;   /* reconnects */
             partial += payload;
             if (fin) { handle(partial, keepAliveMs); partial.clear(); }
         }

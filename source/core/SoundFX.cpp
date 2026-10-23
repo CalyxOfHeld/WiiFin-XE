@@ -228,6 +228,7 @@ static PcmBuf decodeWav(const unsigned char* d, size_t len, unsigned maxSecs)
                 tmp.push_back(bits == 16 ? (int16_t)le16(i) : (int16_t)((d[i] - 128) << 8));
             return toPcmBuf(tmp, rate, (int)channels);
         }
+        if (n > len - body) break;
         o = body + n + (n & 1);
     }
     return PcmBuf{};

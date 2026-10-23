@@ -174,8 +174,8 @@ bool Trickplay::decodeTile(const std::string& jpeg, int tile, std::vector<GRRLIB
 
     struct jpeg_decompress_struct cinfo __attribute__((aligned(32)));
     ErrMgr jerr __attribute__((aligned(32)));
-    u8* band = nullptr;
-    JSAMPROW* rows = nullptr;
+    u8* volatile band = nullptr;   /* volatile: kept across the longjmp */
+    JSAMPROW* volatile rows = nullptr;
     cinfo.err = jpeg_std_error(&jerr.pub);
     jerr.pub.error_exit     = errExit;
     jerr.pub.output_message = noOutput;

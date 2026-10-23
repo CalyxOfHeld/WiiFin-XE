@@ -39,7 +39,14 @@ static void* stopThreadFunc(void*) {
     return nullptr;
 }
 
+static bool s_stopStuck = false;   /* the last one abandoned, still on s_stopStack */
+
 static void mp3PlayerStopSafe() {
+    if (s_stopStuck && !s_stopDone) {
+        SYS_Report("[DBG] mp3PlayerStopSafe: the last stop is still stuck, skipped\n");
+        return;
+    }
+    s_stopStuck = false;
     s_stopDone = false;
     lwp_t t = LWP_THREAD_NULL;
     if (LWP_CreateThread(&t, stopThreadFunc, nullptr,
@@ -57,6 +64,7 @@ static void mp3PlayerStopSafe() {
         SYS_Report("[DBG] mp3PlayerStopSafe: completed normally\n");
     } else {
         SYS_Report("[DBG] mp3PlayerStopSafe: TIMEOUT — abandoning stuck thread\n");
+        s_stopStuck = true;
         /* Thread is leaked but we avoid the freeze.  The abandoned thread
          * will eventually return when ASND_End() tears down the DSP. */
     }

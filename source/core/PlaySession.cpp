@@ -99,8 +99,13 @@ static void runWithPlayerUI(PlayerView& view, ir_t& ir, const char* msg,
     s_playWorkFn   = std::move(fn);
     s_playWorkDone = false;
     lwp_t thread;
-    LWP_CreateThread(&thread, playWorker, nullptr,
-                     s_playWorkStack, sizeof(s_playWorkStack), 50);
+    if (LWP_CreateThread(&thread, playWorker, nullptr,
+                         s_playWorkStack, sizeof(s_playWorkStack), 50) != 0) {
+        SYS_Report("[Play] no worker thread: the work done here\n");
+        s_playWorkFn();
+        s_playWorkFn = nullptr;
+        return;
+    }
     while (!s_playWorkDone) {
         Input::update();
         Input::readIR(ir);
