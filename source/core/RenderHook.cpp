@@ -7,6 +7,7 @@
 #include "../ui/Ui.h"
 #include "Text.h"
 #include "MusicSession.h"
+#include "Screensaver.h"
 
 extern "C" {
 void (*g_wiifin_before_render)(void) = nullptr;
@@ -18,6 +19,7 @@ void __wrap_GRRLIB_Render(void)
     MusicSession::pump();
     Ui::drawNotice();
     if (g_wiifin_before_render) g_wiifin_before_render();
+    Screensaver::draw();   /* over everything */
     __real_GRRLIB_Render();
     Ui::frameShown();
     Text::endFrame();

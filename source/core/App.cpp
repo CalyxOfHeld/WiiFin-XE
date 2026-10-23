@@ -5,6 +5,7 @@
 #include "Text.h"
 #include "Lang.h"
 #include "../ui/Ui.h"
+#include "../ui/Avatars.h"
 #include "Utils.h"
 #include "Input.h"
 #include "MusicBGM.h"
@@ -297,6 +298,7 @@ void App::init(const char* argv0) {
         Log::open(settingsPath.substr(0, settingsPath.rfind('/') + 1));
         loadSdFonts(settingsPath.substr(0, settingsPath.rfind('/') + 1));
         Ui::loadThemes(settingsPath.substr(0, settingsPath.rfind('/') + 1) + "themes");
+        Avatars::setDir(settingsPath.substr(0, settingsPath.rfind('/') + 1));
     }
     SYS_Report("[WiiFin] v%s, IOS%d v%d, %s, MEM1 %u KB / MEM2 %u KB free, settings %s\n",
                WIIFIN_VERSION, (int)IOS_GetVersion(), (int)IOS_GetRevision(),
@@ -552,6 +554,7 @@ void App::loop() {
         LibraryView lv(font, jpFont, cursorPointerTex, ringTex,
                        jellyfinClient, auth, p.serverUrl);
         lv.setUserName(p.shownName());
+        Avatars::setCurrent(p.picture);
         lv.setHiddenLibraries(p.hiddenLibs);
         /* the server's remote control, while this profile is open */
         jellyfinClient.postCapabilities(p.serverUrl, auth);
@@ -714,6 +717,14 @@ void App::loop() {
             if (res == ProfileResult::Rename) {
                 if (pv.selectedIdx >= 0 && pv.selectedIdx < (int)profiles.size()) {
                     profiles[pv.selectedIdx].nickname = pv.newName;
+                    saveSettings();
+                    pickerFocus = pv.selectedIdx;
+                }
+                continue;
+            }
+            if (res == ProfileResult::Picture) {
+                if (pv.selectedIdx >= 0 && pv.selectedIdx < (int)profiles.size()) {
+                    profiles[pv.selectedIdx].picture = pv.newPicture;
                     saveSettings();
                     pickerFocus = pv.selectedIdx;
                 }

@@ -4,6 +4,8 @@
 #include "../player/vo_wiifin.h"
 #include "../player/WiiPlayer.h"
 #include "../core/SoundFX.h"
+#include "../core/Screensaver.h"
+#include "../player/RemoteSpeaker.h"
 #include "../core/MusicBGM.h"
 #include "../core/Text.h"
 #include "../core/Lang.h"
@@ -17,7 +19,8 @@
 
 /* The rows, by what they set (describe and activate take these) */
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
-           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS, R_CUSTOMIZE };
+           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS, R_CUSTOMIZE,
+           R_SAVER, R_SPEAKER };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -55,8 +58,8 @@ std::vector<int> SettingsView::sectionRows(int s) const
         /* the home and the libraries' look: a profile's (WiiFin's menu has neither) */
         return profile ? std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER, R_AREA }
                        : std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA };
-    case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT };
-    case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT };
+    case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT, R_SPEAKER };
+    case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_SAVER, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT };
     case S_SIGNIN:   return profile ? std::vector<int>{ R_SIGNIN, R_STARTUP } : std::vector<int>{};
     default:         return {};
     }
@@ -229,8 +232,11 @@ SettingsView::RowInfo SettingsView::describe(int id)
         int l, t, rr, b;
         Ui::safeArea(l, t, rr, b);
         const bool full = !(l | t | rr | b);
+        int np;
+        const Ui::ScreenPreset* ps = Ui::screenPresets(np);
+        const int snap = Ui::screenPreset();
         set(N_("Screen Area"), N_("Shrink the interface if your TV crops the edges (overscan)"),
-            full ? N_("Full") : N_("Adjusted"), full ? OFF : p.accent);
+            full ? N_("Full") : snap >= 0 ? ps[snap].name : N_("Adjusted"), full ? OFF : p.accent);
         break;
     }
     case R_BACKGROUNDS:
@@ -239,6 +245,28 @@ SettingsView::RowInfo SettingsView::describe(int id)
                               : N_("Soft gradients, like the Wii Menu"),
             Ui::solidColors() ? N_("Solid") : N_("Gradient"), Ui::solidColors() ? p.accent : OFF);
         break;
+    case R_SAVER: {
+        const int m = Screensaver::minutes();
+        static char v[24];
+        /* TRANSLATORS: the screensaver starts after this many minutes */
+        if (m > 0) snprintf(v, sizeof v, tr("%d min"), m);
+        set(N_("Screensaver"),
+            m > 0 ? N_("The WiiFin logo drifts on a dark screen after a while untouched (paused too)")
+                  : N_("The screen stays as it is, however long it's left"),
+            m > 0 ? "" : N_("Off"), m > 0 ? p.accent : OFF);
+        if (m > 0) r.value = v;
+        break;
+    }
+    case R_SPEAKER: {
+        const int m = RemoteSpeaker::mode();
+        set(N_("Wii Remote Speaker"),
+            m == RemoteSpeaker::RemoteOnly ? N_("Videos and music play on the Wii Remote's speaker only, not the TV")
+            : m == RemoteSpeaker::Both     ? N_("Videos and music play on the TV and the Wii Remote's speaker")
+                                           : N_("Sound from the TV only"),
+            m == RemoteSpeaker::RemoteOnly ? N_("Wii Remote") : m == RemoteSpeaker::Both ? N_("TV + Remote") : N_("Off"),
+            m ? p.accent : OFF);
+        break;
+    }
     case R_CLOCK:
         set(N_("Clock"),
             Ui::clock12h() ? N_("1:30 PM, the date as month/day") : N_("13:30, the date as day/month"),
@@ -348,6 +376,8 @@ void SettingsView::activate(int index) {
         case 13:   /* the Wii's, then each language in turn */
             Lang::choose(Lang::next(Lang::choice()));
             break;
+        case R_SAVER:   Screensaver::setMinutes(Screensaver::nextMinutes(Screensaver::minutes(), 1)); break;
+        case R_SPEAKER: RemoteSpeaker::setMode((RemoteSpeaker::mode() + 1) % RemoteSpeaker::MODE_COUNT); break;
         case R_EXIT:   /* the channel has no loader to go back to */
             if (appFromLoader()) g_app_exitToLoader = !g_app_exitToLoader;
             break;
@@ -376,7 +406,17 @@ void SettingsView::updateCalibration()
 {
     if (Input::isBackPressed()) { calibrating = false; return; }
     if (Input::isAJustPressed()) calCorner ^= 1;
-    if (Input::isLPressed()) Ui::setSafeArea(0, 0, 0, 0);   /* [-] reset */
+    /* -/+: the snaps (the picture's shapes, margins), from the one it is on */
+    if (Input::isLPressed() || Input::isRPressed()) {
+        int n;
+        const Ui::ScreenPreset* ps = Ui::screenPresets(n);
+        int at = Ui::screenPreset();
+        if (at < 0) at = Input::isRPressed() ? -1 : 0;
+        at = (at + (Input::isRPressed() ? 1 : n - 1)) % n;
+        Ui::setSafeArea(ps[at].l, ps[at].t, ps[at].r, ps[at].b);
+        SoundFX::play(SoundFX::FX::Move);
+        return;
+    }
 
     /* Single press = 1 px; holding repeats after 350 ms, faster after 1 s */
     u32 held = Input::held();
@@ -414,16 +454,20 @@ void SettingsView::renderCalibration()
 
     Ui::background(false);
 
-    Ui::card(110, 150, 420, 150, 18, 0.0f);
-    Ui::textCentered(320, 166, tr("Screen Area"), 22, p.text);
-    Ui::textCentered(320, 200, tr("Move each arrow until its tip sits right in"), 15, p.textDim);
-    Ui::textCentered(320, 220, tr("the corner of your TV screen."), 15, p.textDim);
+    Ui::card(110, 140, 420, 180, 18, 0.0f);
+    Ui::textCentered(320, 156, tr("Screen Area"), 22, p.text);
+    Ui::textCentered(320, 190, tr("Move each arrow until its tip sits right in"), 15, p.textDim);
+    Ui::textCentered(320, 210, tr("the corner of your TV screen, or snap with -/+."), 15, p.textDim);
+    int np;
+    const Ui::ScreenPreset* ps = Ui::screenPresets(np);
+    const int snap = Ui::screenPreset();
+    Ui::textCentered(320, 244, snap >= 0 ? tr(ps[snap].name) : tr("Adjusted by hand"), 18, p.accentDark);
     char vals[96];
     snprintf(vals, sizeof(vals), tr("Left %d   \xc2\xb7   Top %d   \xc2\xb7   Right %d   \xc2\xb7   Bottom %d"), l, t, r, b);
-    Ui::textCentered(320, 258, vals, 14, p.accentDark);
+    Ui::textCentered(320, 278, vals, 14, p.textDim);
 
     /* bar first: the brackets must stay visible on top of it */
-    static const Ui::Hint left[]  = { { "UD", N_("Move") }, { "A", N_("Switch") }, { "-", N_("Reset") } };
+    static const Ui::Hint left[]  = { { "UD", N_("Move") }, { "A", N_("Switch") }, { "-/+", N_("Snap") } };
     static const Ui::Hint right[] = { { "B", N_("Done") } };
     Ui::bottomBar(left, 3, right, 1);
 

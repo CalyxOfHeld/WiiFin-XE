@@ -75,6 +75,8 @@ extern float g_wiifin_loading_start_pos;
 extern volatile float g_mplayer_time_pos;  /* current PTS (seconds, from stream start) */
 extern volatile float g_mplayer_duration;  /* stream duration (seconds)              */
 extern volatile int   g_mplayer_paused;    /* 1 while MPlayer is paused              */
+/* 1 while MPlayer plays (a video or a song), not paused */
+int wii_player_playing(void);
 
 /* MPlayer cache2.c: % of the cache holding data not yet read, -1 once the
  * whole stream has been received. */

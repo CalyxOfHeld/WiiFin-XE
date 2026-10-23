@@ -2,6 +2,7 @@
 #include "LibraryView.h"
 #include "LibraryDraw.h"
 #include "Ui.h"
+#include "Avatars.h"
 #include "../input/Input.h"
 #include "../core/SoundFX.h"
 #include "../core/Lang.h"
@@ -312,7 +313,7 @@ void LibraryView::renderHome(ir_t& ir) {
         bool iconHover = (ir.valid && fabsf(ir.x - 614.0f) < 24.0f && fabsf(ir.y - 26.0f) < 24.0f) ||
                          (avatarFocus && homePage == 0);
         Ui::avatar(614, Ui::headerBand() > 0 ? 22 : 26, iconHover ? 17.0f : 15.0f,
-                   userName.c_str(), iconHover ? 1.0f : 0.0f);
+                   userName.c_str(), iconHover ? 1.0f : 0.0f, Avatars::current());
     }
 
     if (homePage == 0) {
@@ -504,7 +505,7 @@ void LibraryView::renderProfileMenu(ir_t& ir) {
     Ui::roundRect(Ui::screenLeft(), 0, Ui::screenWidth(), 480, 0, 0x00000090);
     const int top = pmTop(), n = pmCount(), H = n * PM_STEP + 50 + 20;
     Ui::card(320 - PM_W / 2 - 24, top - 64, PM_W + 48, H, 18, 0.0f);
-    Ui::avatar(320 - PM_W / 2 + 4, top - 38, 15.0f, userName.c_str(), 0.0f);
+    Ui::avatar(320 - PM_W / 2 + 4, top - 38, 15.0f, userName.c_str(), 0.0f, Avatars::current());
     Ui::text(320 - PM_W / 2 + 28, top - 49, filterDejaVu(userName, 30).c_str(), 18, p.text);
     for (int i = 0; i < n; ++i) {
         profileMenuFocus[i] = Ui::approach(profileMenuFocus[i], i == profileMenuSel ? 1.0f : 0.0f);

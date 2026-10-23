@@ -28,6 +28,10 @@ struct SavedProfile {
      * profile screen; empty: the account's user name */
     std::string nickname;
     const std::string& shownName() const { return nickname.empty() ? username : nickname; }
+
+    /* its picture (Avatars): "" its first letter, "mii:<id>" a Mii of this
+     * Wii, "file:<name>" a picture in pictures/ */
+    std::string picture;
 };
 
 /* The look a profile has, or WiiFin's start-up one (the menus) */

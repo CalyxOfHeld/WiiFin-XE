@@ -13,6 +13,7 @@ enum class ProfileResult {
     AddNew,     /* user wants to connect a new account                   */
     Back,       /* user pressed B                                        */
     Rename,     /* selectedIdx is set — its nickname becomes newName     */
+    Picture,    /* selectedIdx is set — its picture becomes newPicture   */
 };
 
 class ProfileView {
@@ -26,6 +27,7 @@ public:
 
     int selectedIdx = 0; /* valid when result is Selected, DeleteOne or Rename */
     std::string newName; /* Rename: the nickname ("": the user name again) */
+    std::string newPicture; /* Picture: "", "mii:<id>" or "file:<name>" (Avatars) */
     void setFocus(int row) { if (row >= 0 && row <= (int)profiles.size()) focusedRow = row; }
 
 private:
@@ -40,6 +42,14 @@ private:
     bool renaming      = false;   /* 1: the keyboard, for its nickname */
     Keyboard    kb;
     std::string draft;
+
+    /* 2: its picture chosen from the letter, the Miis, pictures/ */
+    bool picking = false;
+    std::vector<std::string> choices;
+    int  pickSel = 0, pickTop = 0;    /* pickTop: the first row shown */
+    void openPicker();
+    ProfileResult updatePicker(ir_t& ir);
+    void renderPicker(ir_t& ir);
 
     static const int ROW_H   = 66;
     static const int ROW_Y0  = 74;

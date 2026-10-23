@@ -8,6 +8,8 @@
 #include "../player/VideoSurface.h"
 #include "../player/vo_wiifin.h"
 #include "../player/WiiPlayer.h"
+#include "../player/RemoteSpeaker.h"
+#include "Screensaver.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,6 +84,10 @@ void App::loadSettings() {
             Ui::setDimRows(atoi(val) != 0);
         } else if (strcmp(key, "classic_header") == 0) {
             Ui::setClassicHeader(atoi(val) != 0);
+        } else if (strcmp(key, "screensaver_min") == 0) {
+            Screensaver::setMinutes(atoi(val));
+        } else if (strcmp(key, "remote_speaker") == 0) {
+            RemoteSpeaker::setMode(atoi(val));
         } else if (strcmp(key, "clock_12h") == 0) {
             Ui::setClock12h(atoi(val) != 0);
         } else if (strcmp(key, "solid_colors") == 0) {
@@ -127,6 +133,7 @@ void App::loadSettings() {
             if (strcmp(field, "pass_hash")     == 0) profiles[idx].passHash     = val;
             if (strcmp(field, "hidden_libs")   == 0) profiles[idx].hiddenLibs   = val;
             if (strcmp(field, "nickname")      == 0) profiles[idx].nickname     = val;
+            if (strcmp(field, "picture")       == 0) profiles[idx].picture      = val;
         } else {
             /* Legacy single-profile keys — migrate on first load */
             if (strcmp(key, "server_url")   == 0) {
@@ -222,6 +229,8 @@ void App::saveSettings() {
     fprintf(f, "library_view=%d\n",     startView.libraryStyle);
     fprintf(f, "solid_colors=%d\n",     startView.solidColors);
     fprintf(f, "clock_12h=%d\n",        Ui::clock12h() ? 1 : 0);
+    fprintf(f, "screensaver_min=%d\n",  Screensaver::minutes());
+    fprintf(f, "remote_speaker=%d\n",   RemoteSpeaker::mode());
     fprintf(f, "dim_rows=%d\n",         Ui::dimRows() ? 1 : 0);
     fprintf(f, "classic_header=%d\n",   Ui::classicHeader() ? 1 : 0);
     fprintf(f, "language=%s\n",         Lang::choiceKey());
@@ -262,6 +271,8 @@ void App::saveSettings() {
             fprintf(f, "profile.%d.hidden_libs=%s\n", i, sanitizeConfigValue(p.hiddenLibs).c_str());
         if (!p.nickname.empty())
             fprintf(f, "profile.%d.nickname=%s\n", i, sanitizeConfigValue(p.nickname).c_str());
+        if (!p.picture.empty())
+            fprintf(f, "profile.%d.picture=%s\n", i, sanitizeConfigValue(p.picture).c_str());
     }
     fflush(f);
     fclose(f);

@@ -2,6 +2,7 @@
 #include "../core/Text.h"
 #include "../core/Lang.h"
 #include "../input/Input.h"
+#include "Avatars.h"
 
 #include <gccore.h>
 #include <math.h>
@@ -465,10 +466,23 @@ void textRight(float xr, float y, const char* s, int size, u32 c)
 static int   s_safeL = 0, s_safeT = 0, s_safeR = 0, s_safeB = 0;
 static float s_sx = 1.0f, s_sy = 1.0f;
 static float s_off = 0.0f;           /* extra drawing width on each side (16:9) */
+static bool  s_wideFrame = false;    /* the console's picture: 16:9 */
+static bool  s_screenUp  = false;    /* initScreen done: GX takes a projection */
 
-void initScreen(bool widescreen)
+/* the drawing space as wide as the screen area is on the TV: the frame's
+ * shape (4:3, 16:9) times the area's, so one unit stays square (a 4:3 box
+ * in a 16:9 picture is drawn as 4:3); 640 to 853 units across */
+static void applyAspect()
 {
-    s_off = widescreen ? (640.0f * 4.0f / 3.0f - 640.0f) * 0.5f : 0.0f;   /* 106.67 */
+    const float MAX_OFF = (640.0f * 4.0f / 3.0f - 640.0f) * 0.5f;   /* 106.67 */
+    const float shape = (s_wideFrame ? 16.0f / 9.0f : 4.0f / 3.0f) * s_sx / s_sy;
+    float off = (480.0f * shape - 640.0f) * 0.5f;
+    off = off < 0.0f ? 0.0f : off > MAX_OFF ? MAX_OFF : off;
+    if (off < 0.5f) off = 0.0f;
+    if (MAX_OFF - off < 0.5f) off = MAX_OFF;
+    if (s_screenUp && off == s_off) return;
+    s_off = off;
+    if (!s_screenUp) return;
     /* GRRLIB's projection maps 0..640 to the frame; widen it so one unit is
      * square on the TV.  Everything (GRRLIB, Text, Ui, video) uses it. */
     Mtx44 m;
@@ -476,6 +490,43 @@ void initScreen(bool widescreen)
     GX_LoadProjectionMtx(m, GX_ORTHOGRAPHIC);
     /* glyphs rasterised at frame resolution (see Text::setFrameMapping) */
     Text::setFrameMapping(-s_off, 640.0f / (640.0f + 2.0f * s_off));
+}
+
+void initScreen(bool widescreen)
+{
+    s_wideFrame = widescreen;
+    s_screenUp = false;
+    applyAspect();
+    s_screenUp = true;
+    applyAspect();
+}
+
+bool wideFrame() { return s_wideFrame; }
+
+/* the snaps, in the frame's pixels: the picture's shapes, then margins
+ * for TVs that crop the edges */
+static const ScreenPreset PRESETS_WIDE[] = {
+    { N_("Full 16:9"), 0, 0, 0, 0 },      { N_("16:10"), 32, 0, 32, 0 },
+    { N_("4:3"), 80, 0, 80, 0 },          { N_("Small margins"), 16, 12, 16, 12 },
+    { N_("Medium margins"), 32, 24, 32, 24 }, { N_("Large margins"), 48, 36, 48, 36 },
+};
+static const ScreenPreset PRESETS_43[] = {
+    { N_("Full 4:3"), 0, 0, 0, 0 },       { N_("16:10"), 0, 40, 0, 40 },
+    { N_("16:9"), 0, 60, 0, 60 },         { N_("Small margins"), 16, 12, 16, 12 },
+    { N_("Medium margins"), 32, 24, 32, 24 }, { N_("Large margins"), 48, 36, 48, 36 },
+};
+const ScreenPreset* screenPresets(int& n)
+{
+    n = 6;
+    return s_wideFrame ? PRESETS_WIDE : PRESETS_43;
+}
+int screenPreset()
+{
+    int n;
+    const ScreenPreset* ps = screenPresets(n);
+    for (int i = 0; i < n; ++i)
+        if (ps[i].l == s_safeL && ps[i].t == s_safeT && ps[i].r == s_safeR && ps[i].b == s_safeB) return i;
+    return -1;
 }
 
 float screenLeft()  { return -s_off; }
@@ -509,6 +560,7 @@ void setSafeArea(int l, int t, int r, int b)
     s_safeT = clampi(t, SAFE_MAX_Y); s_safeB = clampi(b, SAFE_MAX_Y);
     s_sx = (640.0f - s_safeL - s_safeR) / 640.0f;
     s_sy = (480.0f - s_safeT - s_safeB) / 480.0f;
+    applyAspect();
     /* GRRLIB's orthographic projection covers 640x480; the viewport decides
      * where that lands in the frame.  Everything outside stays black (the
      * frame is cleared on every copy to the TV). */
@@ -1092,7 +1144,7 @@ float pulse()
     return 0.8f + 0.2f * sinf(t * 2.0f * (float)M_PI);
 }
 
-void avatar(float cx, float cy, float r, const char* name, float focus)
+void avatar(float cx, float cy, float r, const char* name, float focus, const std::string& pic)
 {
     const Palette& p = pal();
     /* first character (whole UTF-8 sequence), ASCII upper-cased */
@@ -1106,6 +1158,11 @@ void avatar(float cx, float cy, float r, const char* name, float focus)
     }
     if (focus > 0.0f) shadow(cx - r - 2, cy - r - 2, r * 2 + 4, r * 2 + 4, r + 2, 8.0f, alpha(p.glow, focus));
     else              shadow(cx - r, cy - r + 2, r * 2, r * 2, r, 4.0f, p.shadow);
+    /* its picture: a Mii, a file (Avatars) */
+    if (!pic.empty() && Avatars::draw(pic, cx, cy, r)) {
+        roundBorder(cx - r, cy - r, r * 2, r * 2, r, 2.0f, 0xFFFFFFFF);
+        return;
+    }
     roundRect(cx - r, cy - r, r * 2, r * 2, r,
               mix(p.accent, 0xFFFFFFFF, 0.25f + 0.15f * focus), mix(p.accent, 0x000000FF, 0.15f));
     roundBorder(cx - r, cy - r, r * 2, r * 2, r, 2.0f, 0xFFFFFFFF);

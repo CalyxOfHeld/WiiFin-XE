@@ -251,6 +251,12 @@ void  pointerToScreen(ir_t& ir);
 static const int SAFE_MAX_X = 80, SAFE_MAX_Y = 60;
 void setSafeArea(int left, int top, int right, int bottom);
 void safeArea(int& left, int& top, int& right, int& bottom);
+/* the screen area's snaps (Settings > Screen Area, -/+): the picture's
+ * shapes (a 4:3 box in a 16:9 picture...) and margins for overscan */
+struct ScreenPreset { const char* name; int l, t, r, b; };
+const ScreenPreset* screenPresets(int& n);
+int  screenPreset();     /* the snap the area is on, -1: adjusted by hand */
+bool wideFrame();        /* the console's picture is 16:9 */
 /* Scissor rectangle given in drawing (640x480) coordinates. */
 void clip(float x, float y, float w, float h);
 void clipReset();
@@ -264,7 +270,8 @@ float pulse();
 
 /* Profile picture: the user's initial on an accent disc with a white ring
  * (readable on any background, including the Flix header band). */
-void avatar(float cx, float cy, float r, const char* name, float focus);
+/* pic: a Mii or a picture of its own (Avatars), drawn instead when found */
+void avatar(float cx, float cy, float r, const char* name, float focus, const std::string& pic = std::string());
 
 /* Rotating loading ring (ring.png) centred at cx, cy. */
 void spinner(GRRLIB_texImg* ring, float cx, float cy);

@@ -1,6 +1,7 @@
 #include "BrowseHome.h"
 #include "../core/ExitZone.h"
 #include "Ui.h"
+#include "Avatars.h"
 #include "../core/Text.h"
 #include "../core/Utils.h"
 #include "../core/Lang.h"
@@ -1058,7 +1059,7 @@ void BrowseHome::drawHeader()
     /* profile avatar (classic) */
     if (Ui::classicHeader()) {
         bool f = headerFocus == 2;
-        Ui::avatar(AVATAR_CX, AVATAR_CY, f ? AVATAR_R + 1 : AVATAR_R, userName.c_str(), f ? 1.0f : 0.0f);
+        Ui::avatar(AVATAR_CX, AVATAR_CY, f ? AVATAR_R + 1 : AVATAR_R, userName.c_str(), f ? 1.0f : 0.0f, Avatars::current());
     }
 }
 

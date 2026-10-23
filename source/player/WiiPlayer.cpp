@@ -21,6 +21,7 @@
 #include "WiiPlayer.h"
 #include "../input/Input.h"
 #include "../core/ExitZone.h"
+#include "RemoteSpeaker.h"
 
 #include <setjmp.h>
 #include <string.h>
@@ -87,6 +88,7 @@ extern "C" {
     {
         return s_in_mplayer && !g_wiifin_disc_light ? 0 : __real_CONF_GetIdleLedMode();
     }
+    int wii_player_playing(void) { return s_in_mplayer && !g_mplayer_paused; }
     volatile int   g_wiifin_direct = 0;
     char           g_wiifin_demuxer[16] = "";
     volatile int   g_wiifin_aid = -1;
@@ -207,9 +209,11 @@ static int runMplayer(int argc, const char** argv)
          * the next: from the third on, a log line per frame (SD writes) */
         verbose = 0;
         s_in_mplayer = 1;
+        RemoteSpeaker::start();
         mplayer_main(argc, const_cast<char**>(argv));
     }
     s_in_mplayer = 0;   /* also after MPlayer's longjmp */
+    RemoteSpeaker::stop();
     return rc;
 }
 

@@ -6,6 +6,7 @@
 #include <ogc/system.h>
 #include <wiikeyboard/keyboard.h>
 #include "UsbMouse.h"
+#include "../core/Screensaver.h"
 #include <math.h>
 #include <string.h>
 
@@ -95,6 +96,7 @@ static int   s_mouse   = 0;                   /* 0 not tried, 1 driver up, -1 no
 static bool  s_mouseOn = false;               /* the mouse has the pointer */
 static float s_mouseX  = 320, s_mouseY = 240; /* pointer space, 640 x 480 */
 static bool  s_mouseMoved = false;            /* this frame: readIR re-anchors the Wii Remote */
+static bool  s_pointerMoved = false;          /* readIR: the pointer came or moved (screensaver) */
 static const float MOUSE_SPEED = 1.25f;
 
 /* A USB keyboard (libwiikeyboard): fixed keys, as Wii Remote buttons; and
@@ -369,6 +371,12 @@ void Input::update() {
     rawDownBits = down;
     heldBits    = held;
     buttonsDown = down | (repeat & DIRS);
+
+    /* the screensaver: anything done keeps it away; the press that wakes
+     * the screen does nothing else */
+    const bool did = down || held || kbUsed || s_mouseMoved || s_pointerMoved;
+    s_pointerMoved = false;
+    if (Screensaver::input(did)) consume();
 }
 
 u32  Input::rawDown()        { return rawDownBits; }
@@ -448,6 +456,18 @@ void Input::readIR(ir_t& ir) {
         ir.x = s_mouseX;
         ir.y = s_mouseY;
         ir.angle = 0;
+    }
+    /* the pointer brought onto the screen or moved (not its jitter): the
+     * screensaver's activity */
+    {
+        static bool  was = false;
+        static float px = 0, py = 0;
+        if (ir.valid && (!was || fabsf(ir.x - px) + fabsf(ir.y - py) > 24.0f)) {
+            if (was) s_pointerMoved = true;
+            px = ir.x; py = ir.y;
+        }
+        if (ir.valid && !was) s_pointerMoved = true;
+        was = ir.valid;
     }
     Ui::pointerToScreen(ir);
 }
