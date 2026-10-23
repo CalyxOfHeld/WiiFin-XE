@@ -84,8 +84,12 @@ private:
     int   calCorner     = 0;      /* 0 top-left, 1 bottom-right */
     u64   calHeldSince  = 0;      /* d-pad auto-repeat */
     u64   calLastStep   = 0;
+    /* 1: the area saved under a name (a screen of one's own) */
+    bool        calNaming = false;
+    std::string calName;
+    Keyboard    calKb;
 
     void activate(int id);
-    void updateCalibration();
-    void renderCalibration();
+    void updateCalibration(ir_t& ir);
+    void renderCalibration(ir_t& ir);
 };

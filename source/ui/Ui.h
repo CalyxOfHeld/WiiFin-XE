@@ -256,6 +256,11 @@ void safeArea(int& left, int& top, int& right, int& bottom);
 struct ScreenPreset { const char* name; int l, t, r, b; };
 const ScreenPreset* screenPresets(int& n);
 int  screenPreset();     /* the snap the area is on, -1: adjusted by hand */
+/* screens of one's own: an area saved under a name (one per TV), in
+ * wiifin.cfg; -/+ go through them after the snaps */
+struct SavedScreen { std::string name; int l, t, r, b; };
+std::vector<SavedScreen>& savedScreens();
+int  savedScreen();      /* the saved one the area is on, -1: none */
 bool wideFrame();        /* the console's picture is 16:9 */
 /* Scissor rectangle given in drawing (640x480) coordinates. */
 void clip(float x, float y, float w, float h);

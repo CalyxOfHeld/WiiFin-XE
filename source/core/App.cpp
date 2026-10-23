@@ -51,6 +51,17 @@ volatile bool g_app_powerOff = false;
 volatile bool g_app_reset    = false;
 volatile bool g_restartApp = false;
 bool g_app_exitToLoader = true;
+int  g_app_powerAction = BTN_POWER_OFF;
+int  g_app_resetAction = BTN_HBC;
+const char* buttonActionName(int a)
+{
+    switch (a) {
+    case BTN_HBC:      return N_("Homebrew Channel");
+    case BTN_WIIMC:    return N_("WiiMC");
+    case BTN_WII_MENU: return N_("Wii Menu");
+    default:           return N_("Power Off");
+    }
+}
 std::string g_app_startProfile;
 /* Local Media: the WiiMC-SS XE DOL started at the end, in WiiFin's place */
 static std::string s_localMedia;
@@ -74,11 +85,25 @@ static u8 s_powerWatchStack[8192] ATTRIBUTE_ALIGN(32);
 static void* powerWatch(void*)
 {
     while (!g_app_powerOff) usleep(100 * 1000);
-    SYS_Report("[WiiFin] power button\n");
-    for (int i = 0; i < 50; i++) usleep(100 * 1000);
-    SYS_Report("[WiiFin] still on 5 s after the power button: off now\n");
+    SYS_Report("[WiiFin] power button: %s\n", buttonActionName(g_app_powerAction));
+    /* set to go elsewhere (the Homebrew Channel...): WiiFin is left as
+     * usual, starting what comes next can take longer; if it is stuck,
+     * the Wii is turned off all the same */
+    const int wait = g_app_powerAction == BTN_POWER_OFF ? 50 : 200;
+    for (int i = 0; i < wait; i++) usleep(100 * 1000);
+    SYS_Report("[WiiFin] still on %d s after the power button: off now\n", wait / 10);
     SYS_ResetSystem(SYS_POWEROFF, 0, 0);
     return nullptr;
+}
+
+/* WiiMC-SS XE's DOL, "" when it isn't there */
+static std::string findWiiMC()
+{
+    const char* const TRY[] = {"sd:/apps/wiimc/boot.dol", "usb:/apps/wiimc/boot.dol"};
+    struct stat st;
+    for (const char* p : TRY)
+        if (stat(p, &st) == 0 && st.st_size > 0) return p;
+    return "";
 }
 
 /* Full-screen error card: title, two lines of explanation.  With retry, A
@@ -461,15 +486,13 @@ void App::loop() {
     /* Local Media: WiiMC-SS XE, if it is there (else a notice); WiiFin
      * closes, then starts it (the end of loop()) */
     auto startLocalMedia = [&]() -> bool {
-        const char* const TRY[] = {"sd:/apps/wiimc/boot.dol", "usb:/apps/wiimc/boot.dol"};
-        struct stat st;
-        for (const char* p : TRY)
-            if (stat(p, &st) == 0 && st.st_size > 0) {
-                s_localMedia = p;
-                SYS_Report("[WiiFin] local media: %s\n", p);
-                running = false;
-                return true;
-            }
+        const std::string p = findWiiMC();
+        if (!p.empty()) {
+            s_localMedia = p;
+            SYS_Report("[WiiFin] local media: %s\n", p.c_str());
+            running = false;
+            return true;
+        }
         Ui::showNotice(tr("WiiMC-SS XE not found"),
                        tr("Put it in sd:/apps/wiimc/ to play your own videos and music."), 5000);
         return false;
@@ -904,8 +927,23 @@ void App::loop() {
     /* launched by a loader (the Homebrew Channel's stub, where exit() goes
      * back): not the WAD's channel */
     const bool loader = appFromLoader();
-    if (g_app_powerOff)        SYS_ResetSystem(SYS_POWEROFF,    0, 0);
-    else if (!s_localMedia.empty() && !g_app_reset) {
+    /* the Power or Reset button: where it was set to go */
+    int button = g_app_powerOff ? g_app_powerAction : g_app_reset ? g_app_resetAction : -1;
+    if (button >= 0) SYS_Report("[WiiFin] %s button: %s\n", g_app_powerOff ? "power" : "reset", buttonActionName(button));
+    if (button == BTN_WIIMC) {
+        s_localMedia = findWiiMC();
+        if (s_localMedia.empty()) button = BTN_HBC;      /* not there: the Homebrew Channel */
+    }
+    if (button == BTN_HBC && !loader) {
+        /* started as a channel: the Homebrew Channel's own (its current id,
+         * then the old one); not installed: the Wii Menu */
+        WII_Initialize();
+        for (u64 tid : { 0x00010001AF1BF516ULL, 0x000100014C554C5AULL })
+            WII_LaunchTitle(tid);   /* returns only when it is not there */
+        button = BTN_WII_MENU;
+    }
+    if (button == BTN_POWER_OFF) SYS_ResetSystem(SYS_POWEROFF, 0, 0);
+    else if (!s_localMedia.empty() && (button < 0 || button == BTN_WIIMC)) {
         /* Local Media: WiiMC-SS XE with its meta.xml's arguments (the
          * Homebrew Channel's would be) and wiifin=, where its Exit comes
          * back to; failing that, back to the loader */
@@ -915,7 +953,7 @@ void App::loop() {
         Reload::launch(s_localMedia.c_str(), args);   /* returns only if it could not read it */
         exit(0);
     }
-    else if (g_restartApp) {
+    else if (g_restartApp && button < 0) {
         /* the HOME menu's Reset: the channel (WAD) launched again by the
          * system, which exit() didn't do (it went to the Wii Menu); from a
          * loader, WiiFin's DOL started again (Reload); failing that, back
@@ -932,7 +970,7 @@ void App::loop() {
             if (p[0]) Reload::self(p);   /* returns only if it could not read it */
         exit(0);
     }
-    else if (g_app_exitToLoader && loader) {
+    else if (loader && (button == BTN_HBC || (button < 0 && g_app_exitToLoader))) {
         /* Exit To the loader: back to the one that launched WiiFin, its
          * stub at 0x80001800.  Not by exit(): libogc 3.2's jumps there with
          * the interrupts still on (3.1 stopped the threads first), and

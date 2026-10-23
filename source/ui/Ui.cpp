@@ -520,6 +520,17 @@ const ScreenPreset* screenPresets(int& n)
     n = 6;
     return s_wideFrame ? PRESETS_WIDE : PRESETS_43;
 }
+static std::vector<SavedScreen> s_savedScreens;
+std::vector<SavedScreen>& savedScreens() { return s_savedScreens; }
+int savedScreen()
+{
+    for (int i = 0; i < (int)s_savedScreens.size(); ++i) {
+        const SavedScreen& s = s_savedScreens[i];
+        if (s.l == s_safeL && s.t == s_safeT && s.r == s_safeR && s.b == s_safeB) return i;
+    }
+    return -1;
+}
+
 int screenPreset()
 {
     int n;

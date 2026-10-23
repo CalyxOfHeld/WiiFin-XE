@@ -28,6 +28,14 @@ extern bool g_app_startBrowse;
 /* g_app_exitToLoader, when it can be: where leaving goes */
 inline bool appExitsToLoader() { return g_app_exitToLoader && appFromLoader(); }
 
+/* What the console's Power and Reset buttons do (Settings > System; the
+ * Wii Remote's power button is the Power one): wiifin.cfg's power_button
+ * and reset_button */
+enum ButtonAction { BTN_POWER_OFF = 0, BTN_HBC = 1, BTN_WIIMC = 2, BTN_WII_MENU = 3, BTN_ACTION_COUNT };
+extern int g_app_powerAction;   /* BTN_POWER_OFF at first */
+extern int g_app_resetAction;   /* BTN_HBC at first */
+const char* buttonActionName(int a);
+
 /* Full-screen error card: title, two lines of explanation.  With retry, A
  * retries (returns true) and B goes back; without, A or B closes it. */
 bool showErrorScreen(const char* title, const std::string& line1,

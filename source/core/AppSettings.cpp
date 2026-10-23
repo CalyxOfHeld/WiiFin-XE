@@ -84,6 +84,19 @@ void App::loadSettings() {
             Ui::setDimRows(atoi(val) != 0);
         } else if (strcmp(key, "classic_header") == 0) {
             Ui::setClassicHeader(atoi(val) != 0);
+        } else if (strcmp(key, "screen_saved") == 0) {
+            Ui::SavedScreen s;
+            int used = 0;
+            if (sscanf(val, "%d,%d,%d,%d,%n", &s.l, &s.t, &s.r, &s.b, &used) == 4 && used > 0 && val[used]) {
+                s.name = val + used;
+                bool known = false;   /* read twice: once */
+                for (Ui::SavedScreen& o : Ui::savedScreens()) if (o.name == s.name) { o = s; known = true; }
+                if (!known) Ui::savedScreens().push_back(s);
+            }
+        } else if (strcmp(key, "power_button") == 0) {
+            g_app_powerAction = atoi(val);
+        } else if (strcmp(key, "reset_button") == 0) {
+            g_app_resetAction = atoi(val);
         } else if (strcmp(key, "screensaver_min") == 0) {
             Screensaver::setMinutes(atoi(val));
         } else if (strcmp(key, "screensaver_logo") == 0) {
@@ -247,7 +260,12 @@ void App::saveSettings() {
         int l, t, r, b;
         Ui::safeArea(l, t, r, b);
         fprintf(f, "safe_area=%d,%d,%d,%d\n", l, t, r, b);
+        /* the screens saved (one per TV): its area, then its name */
+        for (const Ui::SavedScreen& s : Ui::savedScreens())
+            fprintf(f, "screen_saved=%d,%d,%d,%d,%s\n", s.l, s.t, s.r, s.b, sanitizeConfigValue(s.name).c_str());
     }
+    fprintf(f, "power_button=%d\n",     g_app_powerAction);
+    fprintf(f, "reset_button=%d\n",     g_app_resetAction);
     fprintf(f, "screen_area_asked=%d\n", screenAreaAsked ? 1 : 0);
     fprintf(f, "profile_count=%d\n",   (int)profiles.size());
     for (int i = 0; i < (int)profiles.size(); i++) {

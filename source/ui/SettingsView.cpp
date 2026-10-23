@@ -20,7 +20,7 @@
 /* The rows, by what they set (describe and activate take these) */
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
            R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS, R_CUSTOMIZE,
-           R_SAVER, R_SPEAKER, R_SAVER_LOGO };
+           R_SAVER, R_SPEAKER, R_SAVER_LOGO, R_POWER_BTN, R_RESET_BTN };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -48,6 +48,7 @@ SettingsView::SettingsView(GRRLIB_texImg* btn, GRRLIB_ttfFont* f, JellyfinClient
     if (profile) sections.push_back(S_SIGNIN);
     signInWant = profile ? profile->signIn : -1;
     kb.setEnterLabel(N_("Done"));
+    calKb.setEnterLabel(N_("Save"));
     openSection(S_VIEW);
 }
 
@@ -59,7 +60,7 @@ std::vector<int> SettingsView::sectionRows(int s) const
         return profile ? std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER, R_AREA }
                        : std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA };
     case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT, R_SPEAKER };
-    case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_SAVER, R_SAVER_LOGO, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT };
+    case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_SAVER, R_SAVER_LOGO, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT, R_POWER_BTN, R_RESET_BTN };
     case S_SIGNIN:   return profile ? std::vector<int>{ R_SIGNIN, R_STARTUP } : std::vector<int>{};
     default:         return {};
     }
@@ -234,9 +235,10 @@ SettingsView::RowInfo SettingsView::describe(int id)
         const bool full = !(l | t | rr | b);
         int np;
         const Ui::ScreenPreset* ps = Ui::screenPresets(np);
-        const int snap = Ui::screenPreset();
-        set(N_("Screen Area"), N_("Shrink the interface if your TV crops the edges (overscan)"),
+        const int snap = Ui::screenPreset(), mine = Ui::savedScreen();
+        set(N_("Screen Area"), N_("Shrink the interface if your TV crops the edges (overscan); save one per TV"),
             full ? N_("Full") : snap >= 0 ? ps[snap].name : N_("Adjusted"), full ? OFF : p.accent);
+        if (mine >= 0) r.value = Ui::savedScreens()[mine].name;
         break;
     }
     case R_BACKGROUNDS:
@@ -255,6 +257,18 @@ SettingsView::RowInfo SettingsView::describe(int id)
                   : N_("The screen stays as it is, however long it's left"),
             m > 0 ? "" : N_("Off"), m > 0 ? p.accent : OFF);
         if (m > 0) r.value = v;
+        break;
+    }
+    case R_POWER_BTN:
+    case R_RESET_BTN: {
+        const bool power = id == R_POWER_BTN;
+        const int a = power ? g_app_powerAction : g_app_resetAction;
+        set(power ? N_("Power Button") : N_("Reset Button"),
+            a == BTN_POWER_OFF ? N_("Turns the Wii off (or to standby, as the Wii Settings say)")
+            : a == BTN_HBC     ? N_("Goes back to the Homebrew Channel")
+            : a == BTN_WIIMC   ? N_("Opens WiiMC-SS XE (the Homebrew Channel if it isn't there)")
+                               : N_("Goes back to the Wii Menu"),
+            buttonActionName(a), a == (power ? BTN_POWER_OFF : BTN_HBC) ? OFF : p.accent);
         break;
     }
     case R_SAVER_LOGO: {
@@ -389,6 +403,8 @@ void SettingsView::activate(int index) {
             Lang::choose(Lang::next(Lang::choice()));
             break;
         case R_SAVER:   Screensaver::setMinutes(Screensaver::nextMinutes(Screensaver::minutes(), 1)); break;
+        case R_POWER_BTN: g_app_powerAction = (g_app_powerAction + 1) % BTN_ACTION_COUNT; break;
+        case R_RESET_BTN: g_app_resetAction = (g_app_resetAction + 1) % BTN_ACTION_COUNT; break;
         case R_SAVER_LOGO: Screensaver::setLogo((Screensaver::logo() + 1) % Screensaver::LOGO_COUNT); break;
         case R_SPEAKER: RemoteSpeaker::setMode((RemoteSpeaker::mode() + 1) % RemoteSpeaker::MODE_COUNT); break;
         case R_EXIT:   /* the channel has no loader to go back to */
@@ -415,19 +431,68 @@ void SettingsView::activate(int index) {
  * Screen area calibration: two corner brackets, moved with the d-pad until
  * they sit in the corners of the visible picture.  The GUI follows live.
  * --------------------------------------------------------------- */
-void SettingsView::updateCalibration()
+void SettingsView::updateCalibration(ir_t& ir)
 {
+    std::vector<Ui::SavedScreen>& saved = Ui::savedScreens();
+    if (calNaming) {   /* its name typed: Done saves it (one of the same name replaced) */
+        calKb.setOrigin((640 - calKb.width()) * 0.5f, 214);
+        const Keyboard::Result res = calKb.update(ir, calName, 24);
+        if (res == Keyboard::Result::Cancel) { calNaming = false; SoundFX::play(SoundFX::FX::Back); }
+        if (res == Keyboard::Result::Enter) {
+            calNaming = false;
+            size_t a = calName.find_first_not_of(' '), z = calName.find_last_not_of(' ');
+            const std::string name = a == std::string::npos ? "" : calName.substr(a, z - a + 1);
+            if (name.empty()) { SoundFX::play(SoundFX::FX::Back); return; }
+            int l, t, r, b;
+            Ui::safeArea(l, t, r, b);
+            Ui::SavedScreen s { name, l, t, r, b };
+            bool replaced = false;
+            for (Ui::SavedScreen& o : saved) if (o.name == name) { o = s; replaced = true; }
+            if (!replaced) saved.push_back(s);
+            SYS_Report("[Settings] screen \"%s\" saved: %d,%d,%d,%d\n", name.c_str(), l, t, r, b);
+            Ui::showNotice(tr("Screen saved"), name, 2500);
+            SoundFX::play(SoundFX::FX::Open);
+        }
+        return;
+    }
     if (Input::isBackPressed()) { calibrating = false; return; }
     if (Input::isAJustPressed()) calCorner ^= 1;
-    /* -/+: the snaps (the picture's shapes, margins), from the one it is on */
+    /* -/+: the snaps (the picture's shapes, margins), then the screens
+     * saved, from the one it is on */
     if (Input::isLPressed() || Input::isRPressed()) {
         int n;
         const Ui::ScreenPreset* ps = Ui::screenPresets(n);
-        int at = Ui::screenPreset();
+        const int total = n + (int)saved.size();
+        int at = Ui::savedScreen() >= 0 ? n + Ui::savedScreen() : Ui::screenPreset();
         if (at < 0) at = Input::isRPressed() ? -1 : 0;
-        at = (at + (Input::isRPressed() ? 1 : n - 1)) % n;
-        Ui::setSafeArea(ps[at].l, ps[at].t, ps[at].r, ps[at].b);
+        at = (at + (Input::isRPressed() ? 1 : total - 1)) % total;
+        if (at < n) Ui::setSafeArea(ps[at].l, ps[at].t, ps[at].r, ps[at].b);
+        else {
+            const Ui::SavedScreen& s = saved[at - n];
+            Ui::setSafeArea(s.l, s.t, s.r, s.b);
+        }
         SoundFX::play(SoundFX::FX::Move);
+        return;
+    }
+    /* 1: saved under a name; 2: the saved one it is on forgotten */
+    if (Input::is1Pressed()) {
+        const int on = Ui::savedScreen();
+        if (on >= 0) calName = saved[on].name;
+        else {
+            char def[24];
+            snprintf(def, sizeof def, tr("TV %d"), (int)saved.size() + 1);
+            calName = def;
+        }
+        calKb.reset();
+        calNaming = true;
+        SoundFX::play(SoundFX::FX::Select);
+        return;
+    }
+    if (Input::is2Pressed() && Ui::savedScreen() >= 0) {
+        const int on = Ui::savedScreen();
+        Ui::showNotice(tr("Screen forgotten"), saved[on].name, 2500);
+        saved.erase(saved.begin() + on);
+        SoundFX::play(SoundFX::FX::Back);
         return;
     }
 
@@ -459,7 +524,7 @@ void SettingsView::updateCalibration()
     Ui::setSafeArea(l, t, r, b);
 }
 
-void SettingsView::renderCalibration()
+void SettingsView::renderCalibration(ir_t& ir)
 {
     const Ui::Palette& p = Ui::pal();
     int l, t, r, b;
@@ -467,32 +532,51 @@ void SettingsView::renderCalibration()
 
     Ui::background(false);
 
-    Ui::card(110, 140, 420, 180, 18, 0.0f);
-    Ui::textCentered(320, 156, tr("Screen Area"), 22, p.text);
-    Ui::textCentered(320, 190, tr("Move each arrow until its tip sits right in"), 15, p.textDim);
-    Ui::textCentered(320, 210, tr("the corner of your TV screen, or snap with -/+."), 15, p.textDim);
+    Ui::card(100, 120, 440, 214, 18, 0.0f);
+    Ui::textCentered(320, 136, tr("Screen Area"), 22, p.text);
+    Ui::textCentered(320, 168, tr("Bring the arrows in until the white edge"), 15, p.textDim);
+    Ui::textCentered(320, 188, tr("shows all the way round, or snap with -/+."), 15, p.textDim);
     int np;
     const Ui::ScreenPreset* ps = Ui::screenPresets(np);
-    const int snap = Ui::screenPreset();
-    Ui::textCentered(320, 244, snap >= 0 ? tr(ps[snap].name) : tr("Adjusted by hand"), 18, p.accentDark);
+    const int snap = Ui::screenPreset(), mine = Ui::savedScreen();
+    const std::string shown = mine >= 0 ? Ui::savedScreens()[mine].name
+                            : snap >= 0 ? std::string(tr(ps[snap].name)) : std::string(tr("Adjusted by hand"));
+    Ui::textCentered(320, 222, shown.c_str(), 18, p.accentDark);
     char vals[96];
     snprintf(vals, sizeof(vals), tr("Left %d   \xc2\xb7   Top %d   \xc2\xb7   Right %d   \xc2\xb7   Bottom %d"), l, t, r, b);
-    Ui::textCentered(320, 278, vals, 14, p.textDim);
+    Ui::textCentered(320, 254, vals, 14, p.textDim);
+    char nSaved[64];
+    snprintf(nSaved, sizeof nSaved, Ui::savedScreens().size() == 1 ? tr("%d screen saved") : tr("%d screens saved"),
+             (int)Ui::savedScreens().size());
+    Ui::textCentered(320, 278, tr("1 saves this area for the TV you use now;"), 13, p.textDim);
+    Ui::textCentered(320, 296, (std::string(tr("-/+ bring it back later.")) + "  (" + nSaved + ")").c_str(), 13, p.textDim);
 
     /* bar first: the brackets must stay visible on top of it */
-    static const Ui::Hint left[]  = { { "UD", N_("Move") }, { "A", N_("Switch") }, { "-/+", N_("Snap") } };
+    const Ui::Hint left[]  = { { "UD", N_("Move") }, { "A", N_("Switch") }, { "-/+", N_("Snap") },
+                               { "1", N_("Save") }, { "2", N_("Forget") } };
     static const Ui::Hint right[] = { { "B", N_("Done") } };
-    Ui::bottomBar(left, 3, right, 1);
+    Ui::bottomBar(left, mine >= 0 ? 5 : 4, right, 1);
 
-    /* Corner brackets on the very edges of the picture: the whole picture
-     * moves with the setting, so they show where the TV cuts it. */
-    const float ARM = 46, TH = 5;
+    /* The picture's very edge, in stripes: white, red, white, red, 4 units
+     * each.  The outer white one seen on all four sides: nothing is cut.
+     * Fewer stripes seen on a side: that side is cropped by about 4 each. */
     const float SL = Ui::screenLeft(), SR = Ui::screenRight();
-    Ui::roundBorder(SL, 0, SR - SL, 480, 2, 1.5f, Ui::alpha(p.textDim, 0.6f));
+    for (int k = 0; k < 4; ++k) {
+        const float in = k * 4.0f, T = 4.0f;
+        const u32 c = k % 2 ? 0xE03A3AFF : 0xFFFFFFFF;
+        Ui::roundRect(SL + in, in, SR - SL - 2 * in, T, 0, c);              /* top */
+        Ui::roundRect(SL + in, 480 - in - T, SR - SL - 2 * in, T, 0, c);    /* bottom */
+        Ui::roundRect(SL + in, in, T, 480 - 2 * in, 0, c);                  /* left */
+        Ui::roundRect(SR - in - T, in, T, 480 - 2 * in, 0, c);              /* right */
+    }
+
+    /* Corner brackets inside the stripes: the whole picture moves with the
+     * setting, so they show where the TV cuts it. */
+    const float ARM = 46, TH = 5;
     for (int c = 0; c < 2; ++c) {
         bool on = (c == calCorner);
         u32 col = on ? Ui::mix(p.accent, 0xFFFFFFFF, 1.0f - Ui::pulse()) : p.textDim;
-        float cx = c == 0 ? SL : SR, cy = c == 0 ? 0.0f : 480.0f;
+        float cx = c == 0 ? SL + 16 : SR - 16, cy = c == 0 ? 16.0f : 464.0f;
         float sx = c == 0 ? 1.0f : -1.0f, sy = c == 0 ? 1.0f : -1.0f;
         /* L-shaped bracket hugging the corner */
         Ui::roundRect(sx > 0 ? cx : cx - ARM, sy > 0 ? cy : cy - TH, ARM, TH, 1, col);
@@ -502,6 +586,19 @@ void SettingsView::renderCalibration()
         Ui::triangle(cx + sx * 9, cy + sy * 9, ax + sx * 6, ay - sy * 8, ax - sx * 8, ay + sy * 6, col);
         Ui::roundRect(ax - 3 + sx * 2, ay - 3 + sy * 2, 6, 6, 3, col);
     }
+
+    /* the name to save it under */
+    if (calNaming) {
+        GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, p.dim, 1);
+        Ui::card((640 - calKb.width()) * 0.5f - 10, 104, calKb.width() + 20, calKb.height() + 120, 16, 0.0f);
+        Ui::text((640 - calKb.width()) * 0.5f + 4, 116, tr("Save this screen as"), 18, p.text);
+        Ui::textRight((640 + calKb.width()) * 0.5f - 4, 120, tr("The same name replaces it"), 13, p.textDim);
+        const std::string typed = calName + "_";
+        Ui::field((640 - calKb.width()) * 0.5f, 150, calKb.width(), 40, typed.c_str(), 18, true);
+        calKb.render(ir);
+        static const Ui::Hint kl[] = { { "A", N_("Type") }, { "B", N_("Delete") }, { "+", N_("Done") } };
+        Ui::bottomBar(kl, 3);
+    }
 }
 
 // ---------------------------------------------------------------
@@ -510,7 +607,7 @@ bool SettingsView::update(ir_t& ir) {
         if (editor.update(ir)) { editing = false; lastHoverRow = lastHoverSide = -1; }
         return false;
     }
-    if (calibrating) { updateCalibration(); return false; }
+    if (calibrating) { updateCalibration(ir); return false; }
     if (pinStep) {
         const int r = pin.update(ir);
         if (r < 0) { pinStep = 0; signInWant = profile->signIn; wantsLibraries = false; return false; }   /* the settings, as they were */
@@ -657,7 +754,7 @@ static void wrap2(const std::string& s, float w, std::string& l1, std::string& l
 
 void SettingsView::render(ir_t& ir) {
     if (editing) { editor.render(ir); return; }
-    if (calibrating) { renderCalibration(); return; }
+    if (calibrating) { renderCalibration(ir); return; }
     if (pinStep) { Ui::background(); pin.render(ir); return; }
     const Ui::Palette& p = Ui::pal();
     const int n = (int)rows.size(), vis = visibleRows();
