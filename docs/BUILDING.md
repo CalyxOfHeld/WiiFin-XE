@@ -44,6 +44,14 @@ WiiFin-XE is built on Windows with devkitPro's own installer and its MSYS2 shell
 - New strings come in empty, and changed ones are marked fuzzy. WiiFin shows the English for both until someone translates them.
 - `tools/lang_check.py` checks that every translated character is in one of WiiFin's fonts.
 
+### The website
+
+`tools/make_site.py` builds the WiiFin-XE site, a small wiki, into `build/site/` from the Markdown docs. It needs `pip install markdown-it-py mdit-py-plugins`.
+
+- The pages are listed in `PAGES` at the top of the script. The template, styles, script, home page and pictures are in `docs/site/`.
+- Every page holds its own styles and script, plus a search over every section of every page. Only the `img/` folder sits beside them.
+- A link to a section that doesn't exist fails the run, so a renamed heading can't silently break a link.
+
 ### Memory layout
 
 `tools/wii_wiifin.ld` keeps WiiFin's code and data below `0x80804000`, where the stub that returns to the loader lives.

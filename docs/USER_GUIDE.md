@@ -22,14 +22,16 @@ WiiFin-XE uses the same folder as WiiFin and replaces it. It keeps its settings,
 
 ## ✅ What WiiFin does
 
-**Connecting**
+### Connecting
+
 - Sign in with a username and password, or with **Quick Connect** (approved from another device)
 - **Server discovery** on the local network, or the address typed in (HTTP or **HTTPS**, self-signed certificates accepted)
 - **Saved profiles**: several accounts and servers, only an access token kept (no password); each its own look (theme, backgrounds, home screen, library view) and its own sign-in: at once, a **four-digit passcode**, or the password (or Quick Connect) each time with nothing kept on the Wii
 - A new profile asks how it signs in, then its home screen and library view, on small pictures of each
 - The **profile menu** (the avatar, top right): back to the libraries, switch profile, Settings without signing out, WiiFin's menu
 
-**Browsing**
+### Browsing
+
 - A home screen of **rows** (Continue Watching, Next Up, latest, top rated, favourites, genres) or a **grid** of libraries
 - Film, series and music libraries as posters or lists (with the cover of the selected title), their **tabs** in every view (−/+, or the pointer on one); **A-Z** jumps with left / right
 - A title too long for its place **scrolls** when it is selected
@@ -43,26 +45,32 @@ WiiFin-XE uses the same folder as WiiFin and replaces it. It keeps its settings,
 - **Photos**: a photo library's pictures on the whole screen, left / right through the folder, a **slideshow** with A
 - **Japanese, Chinese and Korean** titles and subtitles: Japanese built in, Chinese and Korean with the font of `apps/WiiFin/fonts/` (in the Homebrew Channel package)
 
-**Video**
+### Video
+
 - Played by the integrated MPlayer CE engine: **direct play** of what the Wii decodes in real time (SD DivX/Xvid, MPEG-1/2, H.264 up to 480p, VP8; AVI, MKV, MP4, MPEG-TS/PS; seeks in the file itself), server-side transcoding for the rest, and back to transcoding when a file does not play smoothly (see [DIRECT_PLAY.md](../DIRECT_PLAY.md))
 - **Player**: seek bar with the server's trickplay thumbnails (Jellyfin 10.9+), left / right held to seek on, |◀ ▶| from chapter to chapter, volume, audio and subtitle tracks (text subtitles drawn by WiiFin, so the video can still play as it is), zoom (fit / fill)
 - **Skip intro / recap / credits** buttons from the server's media segments (Jellyfin 10.10+ with a plugin such as Intro Skipper), and **Next episode** during the credits
 - **Resume** where you left off; progress, pauses and the play method (direct or transcoded) reported to the server, each console a device of its own
 - A slow connection lowers the quality by itself; a picture that gets stuck is retried another way, with a message that says what happens
 
-**Music**
+### Music
+
 - Libraries in tabs as on Jellyfin: **Albums, Suggestions, Artists, Playlists, Songs** (a library of loose files opens on its songs)
 - A **Now Playing** screen with the cover, the sound live in five visualizers (bars, ring, bubbles, wave, blocks: up twice, then A), an Up Next queue, shuffle, repeat, favourites, and similar tracks once the queue runs out
 - **Shuffle** (button 2): an album, a playlist, or songs drawn from the whole library
 - **Lyrics** (Jellyfin 10.9+: an `.lrc` beside the song, or embedded): the player's last visualizer, the line sung lit as it comes, on the whole screen once the controls fade away, to sing along
 - The music **goes on while browsing**: B while a song plays; the footers say what plays, and **Now Playing** in the profile menu opens the player again (a video stops the music)
 
-**Remote control** from the Jellyfin dashboard or apps
+### Remote control
+
+From the Jellyfin dashboard or apps:
+
 - **Play on... Nintendo Wii** (films, episodes, music; Play next and Add to queue for music)
 - Play / pause, stop, seek, next / previous, volume and mute (the dashboard's slider follows), audio and subtitle tracks
 - **Messages** sent from the dashboard show over any screen
 
-**And also**
+### And also
+
 - The interface in the **Wii's ten languages**: English, French, German, Spanish, Italian, Dutch, Japanese, Korean, Simplified and Traditional Chinese, the Wii's own by default (French reviewed, the others waiting for native speakers: see [lang/README.md](../lang/README.md))
 - **Wii Remote** pointer, **Classic Controller**, **Wii U GamePad** (Virtual Console injects) and **GameCube controller**: everything works with the D-pad, no sensor bar needed (see [Controls](#-controls))
 - **Interface sounds** and **background music**, both replaceable with your own files (see [Custom sounds](#-custom-sounds))

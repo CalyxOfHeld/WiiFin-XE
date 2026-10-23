@@ -29,7 +29,7 @@ text           = 240, 240, 240
 - Colours: `#RRGGBB`, `#RRGGBBAA`, `RRGGBB`, `r, g, b` or `rgb(r, g, b)`.
 - Lines starting with `#` are comments.
 
-The main colours, each with the shades that go with it:
+The eleven main colours, each with the shades that go with it:
 
 | Key | What it colours |
 |---|---|
@@ -38,10 +38,17 @@ The main colours, each with the shades that go with it:
 | `border` | outlines of cards, bars and text fields |
 | `text` | titles and labels |
 | `text_dim` | details, descriptions, hints |
-| `accent` | the ring around what is selected, setting values (and the focus glow) |
+| `accent` | the filled things: switches, tabs, sliders, setting values, progress and scroll bars |
+| `selection` | the ring and glow around what is selected (without it: the accent) |
 | `highlight` | the label of what is selected |
 | `text_on_accent` | words drawn on the accent colour |
 | `bar` | the bar along the bottom |
 | `field` | where you type |
 
 To set one exact shade instead, use the palette's own names: `bg_top`, `bg_bottom`, `stripe`, `card_top`, `card_bottom`, `card_border`, `accent_dark`, `glow`, `shadow`, `bar_top`, `bar_bottom`, `bar_border`, `field_border`, `danger`, `ok`, `dim`. They apply after the main colours.
+
+If a theme has no `selection` and its accent is hard to see against its cards, the ring is drawn in the text colour instead, so you can always tell what is selected.
+
+## Removing one
+
+In Customize Theme, **Remove** (beside Reset, for a theme you saved) asks first, with Keep highlighted. The file moves to `themes/removed/`, numbered if one of that name is already there, so a PC can put it back. A profile that used it goes back to the theme's base.
