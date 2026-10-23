@@ -2,9 +2,9 @@
  * when a loader such as the Homebrew Channel launched it: no channel to
  * launch again, and exit() only goes back to the loader).
  *
- * The DOL is read whole into the heap (above the program's sections, which
- * the new one, the same file, takes again), then a small routine copied
- * there too, out of the way, puts each section where it goes, clears the
+ * The DOL is read whole into the heap, then (the system shut down) moved
+ * to MEM2, out of the way of the new program's sections, and a small
+ * routine copied there too puts each section where it goes, clears the
  * BSS, flushes the caches, hands the DOL its path (libogc's "_arg" block
  * by its entry: argv[0], for its folder) and jumps to its entry.  It
  * works in registers only: the stack is in the BSS it clears. */
@@ -116,6 +116,9 @@ char* const ARG_AREA = (char*)0x93300000;
 u8*   const STAGE_AREA = (u8*)0x92000000;
 const long  STAGE_MAX  = 0x1200000;               /* 18 MB: up to 0x93200000 */
 u8*   const CODE_AREA  = (u8*)0x93280000;
+/* the command line, kept in the BSS (MEM1): the heap may lie where the DOL
+ * goes */
+char s_line[4096];
 }
 
 bool Reload::launch(const char* path, const std::vector<std::string>& args)
@@ -140,25 +143,28 @@ bool Reload::launch(const char* path, const std::vector<std::string>& args)
     std::string line(path);
     line += '\0';
     for (const std::string& a : args) { line += a; line += '\0'; }
-    if (line.size() > 0x10000) { free(dol); return false; }
-    memcpy(ARG_AREA + 64, line.data(), line.size());
-    u32* arg = (u32*)ARG_AREA;
-    arg[0] = 0x5f617267;
-    arg[1] = (u32)(ARG_AREA + 64);
-    arg[2] = (u32)line.size();
-    arg[3] = 0;
-    arg[4] = 0;
-    arg[5] = 0;
-    DCFlushRange(ARG_AREA, 64 + line.size());
+    if (line.size() > sizeof(s_line)) { free(dol); return false; }
+    const size_t lineLen = line.size();
+    memcpy(s_line, line.data(), lineLen);
 
     const size_t len = (size_t)(reloadTrampolineEnd - (char*)reloadTrampoline);
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
     u32 level;
     _CPU_ISR_Disable(level);
     (void)level;
-    /* nothing runs any more but this: the DOL and the routine to MEM2 */
+    /* nothing runs any more but this: the DOL to MEM2 first (it may lie
+     * where the block and the routine go), then those */
     memmove(STAGE_AREA, dol, size);
     DCFlushRange(STAGE_AREA, (size + 31) & ~31);
+    memcpy(ARG_AREA + 64, s_line, lineLen);
+    u32* arg = (u32*)ARG_AREA;
+    arg[0] = 0x5f617267;
+    arg[1] = (u32)(ARG_AREA + 64);
+    arg[2] = (u32)lineLen;
+    arg[3] = 0;
+    arg[4] = 0;
+    arg[5] = 0;
+    DCFlushRange(ARG_AREA, 64 + lineLen);
     memcpy(CODE_AREA, (const void*)reloadTrampoline, len);
     DCFlushRange(CODE_AREA, (len + 31) & ~31);
     ICInvalidateRange(CODE_AREA, (len + 31) & ~31);
