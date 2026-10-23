@@ -36,6 +36,7 @@ struct Palette {
     u32 field, fieldBorder;               /* text inputs, list rows           */
     u32 danger, ok;
     u32 dim;                              /* modal backdrop                   */
+    u32 focus;                            /* the ring around what is selected (glow: its halo) */
 };
 
 void        setTheme(Theme t);
@@ -52,12 +53,12 @@ const Palette& pal();
  *   base = Dark            (a built-in theme: every colour left out)
  *   background = #101820   (#RRGGBB, #RRGGBBAA, or r,g,b)
  *
- * The ten main colours (THEME_COLORS) each set the shades that go with
+ * The eleven main colours (THEME_COLORS) each set the shades that go with
  * them; the palette's own names (bg_bottom, glow...) set one exactly.
  * A theme of one's own keeps its base's layout (Flix: the red band, in
  * the theme's accent). */
 struct ThemeColor { const char* key; const char* label; const char* desc; };
-static const int THEME_COLOR_COUNT = 10;
+static const int THEME_COLOR_COUNT = 11;
 extern const ThemeColor THEME_COLORS[THEME_COLOR_COUNT];
 struct CustomTheme {
     std::string name;

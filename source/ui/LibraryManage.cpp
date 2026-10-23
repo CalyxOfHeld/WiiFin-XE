@@ -145,7 +145,7 @@ void LibraryView::renderLibManager(ir_t& ir)
         const JellyfinLibrary& l = allLibraries[i];
         const float y = LM_Y + k * LM_ROW;
         const bool sel = i == libManagerSel, off = isHidden(l.id);
-        if (sel) Ui::roundRect(lmLeft(), y, LM_W, LM_ROW - 4, 10, Ui::alpha(p.accent, 0.35f * Ui::pulse()));
+        if (sel) Ui::roundRect(lmLeft(), y, LM_W, LM_ROW - 4, 10, Ui::alpha(p.focus, 0.35f * Ui::pulse()));
         /* the box: ticked, on the home */
         const float bx = lmLeft() + 12, by = y + 7;
         Ui::roundRect(bx, by, 18, 18, 4, off ? p.field : p.accent);

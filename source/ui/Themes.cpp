@@ -22,7 +22,8 @@ const ThemeColor THEME_COLORS[THEME_COLOR_COUNT] = {
     { "border",         N_("Borders"),          N_("The outlines of cards, bars and text fields") },
     { "text",           N_("Text"),             N_("Titles and labels") },
     { "text_dim",       N_("Dim Text"),         N_("Details, descriptions and hints") },
-    { "accent",         N_("Accent"),           N_("The ring around what is selected, and setting values") },
+    { "accent",         N_("Accent"),           N_("Setting values, switches, slides, tabs and keys") },
+    { "selection",      N_("Selection"),        N_("The ring around what is selected, and its glow") },
     { "highlight",      N_("Highlighted Text"), N_("The label of what is selected") },
     { "text_on_accent", N_("Text on Accent"),   N_("Words drawn on the accent colour") },
     { "bar",            N_("Bars"),             N_("The bar along the bottom of the screen") },
@@ -68,18 +69,20 @@ static void applyMain(Palette& p, int i, u32 c)
     case 2: p.cardBorder = p.barBorder = p.fieldBorder = c; break;
     case 3: p.text = c; break;
     case 4: p.textDim = c; break;
-    case 5: p.accent = c; p.glow = (c & 0xFFFFFF00) | 0x80; break;
-    case 6: p.accentDark = c; break;
-    case 7: p.textOnAccent = c; break;
-    case 8: p.barTop = c;  p.barBottom = darker(c, light(c) ? 0.15f : 0.38f); break;
-    case 9: p.field = c; break;
+    /* the accent rings what is selected too, unless Selection says (after it) */
+    case 5: p.accent = p.focus = c; p.glow = (c & 0xFFFFFF00) | 0x80; break;
+    case 6: p.focus = c; p.glow = (c & 0xFFFFFF00) | 0x80; break;
+    case 7: p.accentDark = c; break;
+    case 8: p.textOnAccent = c; break;
+    case 9: p.barTop = c;  p.barBottom = darker(c, light(c) ? 0.15f : 0.38f); break;
+    case 10: p.field = c; break;
     }
 }
 
 u32 themeColor(const Palette& p, int i)
 {
     const u32 v[THEME_COLOR_COUNT] = { p.bgTop, p.cardTop, p.cardBorder, p.text, p.textDim,
-                                       p.accent, p.accentDark, p.textOnAccent, p.barTop, p.field };
+                                       p.accent, p.focus, p.accentDark, p.textOnAccent, p.barTop, p.field };
     return i >= 0 && i < THEME_COLOR_COUNT ? v[i] : 0;
 }
 

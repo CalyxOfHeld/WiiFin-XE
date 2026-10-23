@@ -104,7 +104,7 @@ void drawThumb(GRRLIB_texImg* tex, float x, float y, float w, float h,
         }
     }
     Ui::roundBorder(x, y, vw, h, r, 1.5f + focus * 1.5f,
-                    Ui::mix(Ui::alpha(p.cardBorder, 0.8f), p.accent, focus));
+                    Ui::mix(Ui::alpha(p.cardBorder, 0.8f), p.focus, focus));
     if (prog >= 0.0f) Ui::progress(x + 8, y + h - 12, vw - 16, 5, prog);
 }
 

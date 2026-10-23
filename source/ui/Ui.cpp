@@ -30,6 +30,7 @@ static const Palette LIGHT = {
     /* field, fieldBorder */             0xFFFFFFFF, 0xC3C8CEFF,
     /* danger, ok */                     0xE0524DFF, 0x3DAF5AFF,
     /* dim */                            0x000000A0,
+    /* focus */                          0x34BEEDFF,
 };
 
 static const Palette DARK = {
@@ -42,6 +43,7 @@ static const Palette DARK = {
     /* field, fieldBorder */             0x18202BFF, 0x3B485CFF,
     /* danger, ok */                     0xF0605AFF, 0x4CC46AFF,
     /* dim */                            0x000000B0,
+    /* focus */                          0x34BEEDFF,
 };
 
 static const Palette FLIX = {
@@ -54,6 +56,7 @@ static const Palette FLIX = {
     /* field, fieldBorder */             0x1C1C1CFF, 0x555555FF,
     /* danger, ok */                     0xFF5A52FF, 0x46C35FFF,
     /* dim */                            0x000000B8,
+    /* focus */                          0xD81F26FF,
 };
 
 static const Palette LUHU = {
@@ -66,6 +69,7 @@ static const Palette LUHU = {
     /* field, fieldBorder */             0x101010FF, 0x6E7379FF,
     /* danger, ok */                     0xF0605AFF, 0x7DC242FF,
     /* dim */                            0x000000C0,
+    /* focus */                          0x7DC242FF,
 };
 
 static const Palette SUSHI = {
@@ -78,6 +82,7 @@ static const Palette SUSHI = {
     /* field, fieldBorder */             0x1E1E1EFF, 0x585858FF,
     /* danger, ok */                     0xF0605AFF, 0x4CC46AFF,
     /* dim */                            0x000000B8,
+    /* focus */                          0xF47521FF,
 };
 
 static Theme           s_theme = Theme::Dark;
@@ -646,7 +651,7 @@ void card(float x, float y, float w, float h, float r, float focus)
     shadow(x + 1, y + 3, w - 2, h - 2, r, 6.0f, p.shadow);
     if (focus > 0.0f) shadow(x - 2, y - 2, w + 4, h + 4, r + 2, 9.0f, alpha(p.glow, focus));
     roundRect(x, y, w, h, r, p.cardTop, p.cardBottom);
-    roundBorder(x, y, w, h, r, focus > 0.0f ? 2.0f + focus : 2.0f, mix(p.cardBorder, p.accent, focus));
+    roundBorder(x, y, w, h, r, focus > 0.0f ? 2.0f + focus : 2.0f, mix(p.cardBorder, p.focus, focus));
 }
 
 void button(float x, float y, float w, float h, const char* label, int size, float focus)
@@ -1067,7 +1072,7 @@ static void roundArrow(float cx, float cy, float r0, int dir, bool enabled, bool
     if (hot) shadow(cx - rad - 2, cy - rad - 2, rad * 2 + 4, rad * 2 + 4, rad + 2, 8.0f, p.glow);
     roundRect(cx - rad, cy - rad, rad * 2, rad * 2, rad, alpha(p.cardTop, k), alpha(p.cardBottom, k));
     roundBorder(cx - rad, cy - rad, rad * 2, rad * 2, rad, hot ? 2.5f : 1.5f,
-                alpha(hot ? p.accent : p.cardBorder, k));
+                alpha(hot ? p.focus : p.cardBorder, k));
     u32 c = enabled ? p.accent : alpha(p.textDim, 0.5f);
     float a = r0 * 0.47f, w = r0 * 0.37f;     /* triangle half-length / half-width */
     switch (dir) {
@@ -1123,7 +1128,7 @@ void key(float x, float y, float w, float h, const char* label,
     } else {
         u32 top = special ? mix(p.cardBottom, p.cardBorder, 0.35f) : p.cardTop;
         roundRect(x, y, w, h, 7, top, p.cardBottom);
-        roundBorder(x, y, w, h, 7, hover ? 2.0f : 1.0f, hover ? p.accent : alpha(p.cardBorder, 0.8f));
+        roundBorder(x, y, w, h, 7, hover ? 2.0f : 1.0f, hover ? p.focus : alpha(p.cardBorder, 0.8f));
     }
     /* short ASCII words (SYM, ABC) get a smaller size than single glyphs */
     int sz = 15;
@@ -1139,7 +1144,7 @@ void field(float x, float y, float w, float h, const char* value, int size, bool
     if (focused) shadow(x - 2, y - 2, w + 4, h + 4, h * 0.5f + 2, 8.0f, p.glow);
     else         shadow(x, y + 1, w, h, h * 0.5f, 4.0f, p.shadow);
     roundRect(x, y, w, h, h * 0.5f, p.field);
-    roundBorder(x, y, w, h, h * 0.5f, focused ? 2.5f : 1.5f, focused ? p.accent : p.fieldBorder);
+    roundBorder(x, y, w, h, h * 0.5f, focused ? 2.5f : 1.5f, focused ? p.focus : p.fieldBorder);
     if (value) text(x + h * 0.5f, y + (h - size) * 0.5f - 1, value, size, p.text);
 }
 

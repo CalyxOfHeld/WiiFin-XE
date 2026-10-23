@@ -170,7 +170,7 @@ void ProfileView::render(ir_t& ir) {
         Ui::card(x, y, w, h, 16, f);
         float cx = x + 34, cy = y + h * 0.5f;
         if (isAdd) {
-            Ui::circle(cx, cy, 20, Ui::mix(pal.cardBorder, pal.accent, f));
+            Ui::circle(cx, cy, 20, Ui::mix(pal.cardBorder, pal.focus, f));
             Ui::circle(cx, cy, 17, pal.cardTop);
             Ui::textCentered(cx, cy - 15, "+", 26, Ui::mix(pal.textDim, pal.accentDark, f));
             Ui::text(x + 68, cy - 10, tr("Add New Profile"), 19, Ui::mix(pal.textDim, pal.accentDark, f));

@@ -92,7 +92,7 @@ void PinPad::render(ir_t& ir) {
     for (int i = 0; i < 4; ++i) {
         float x = 320 - 2 * 46 + i * 46 + 4 + dx;
         Ui::roundRect(x, CY + 72, 38, 44, 10, p.field);
-        Ui::roundBorder(x, CY + 72, 38, 44, 10, 1.5f, i == (int)digits.size() ? p.accent : p.fieldBorder);
+        Ui::roundBorder(x, CY + 72, 38, 44, 10, 1.5f, i == (int)digits.size() ? p.focus : p.fieldBorder);
         if (i < (int)digits.size()) Ui::circle(x + 19, CY + 94, 7, p.text);
     }
     for (int k = 0; k < 11; ++k) {

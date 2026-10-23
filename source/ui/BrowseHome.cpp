@@ -114,7 +114,7 @@ static Look look()
     l.phTopDim    = Ui::mix(p.cardTop, p.bgBottom, 0.5f);
     l.phBottomDim = Ui::mix(p.cardBottom, p.bgBottom, 0.5f);
     l.phText      = p.textDim;     l.phTextDim   = Ui::alpha(p.textDim, 0.6f);
-    l.selBorder   = p.accent;      l.tileBorder  = Ui::alpha(p.cardBorder, 0.7f);
+    l.selBorder   = p.focus;       l.tileBorder  = Ui::alpha(p.cardBorder, 0.7f);
     l.selShadow   = p.glow;        l.tileShadow  = p.shadow;
     l.arrow       = p.accent;
     l.panelTop    = p.cardTop;     l.panelBottom = p.cardBottom;  l.panelBorder = p.cardBorder;
@@ -122,7 +122,7 @@ static Look look()
     l.starOn      = 0xF2B01EFF;    l.starOff     = light ? 0xC5C9CEFF : 0x4A5668FF;
     l.word        = p.text;        l.wordShadow  = 0x00000000;
     l.pillTop     = p.cardTop;     l.pillBottom  = p.cardBottom;  l.pillBorder  = p.cardBorder;
-    l.pillFocus   = p.accent;      l.pillText    = p.text;        l.pillGlow    = p.glow;
+    l.pillFocus   = p.focus;       l.pillText    = p.text;        l.pillGlow    = p.glow;
     l.floor       = p.bgBottom;
     return l;
 }
@@ -1048,8 +1048,8 @@ void BrowseHome::drawHeader()
         static const Ui::Icon ICONS[4] = { Ui::Icon::Search, Ui::Icon::Home, Ui::Icon::Browse, Ui::Icon::Menu };
         const bool shown = (b == HB_HOME && !catalog) || (b == HB_BROWSE && catalog);
         if (b <= HB_MENU) {
-            Ui::icon(ICONS[b], x + 17, PILL_Y + 13, shown ? L.pillFocus : L.pillText,
-                     shown ? Ui::alpha(L.pillFocus, 0.4f) : 0);
+            Ui::icon(ICONS[b], x + 17, PILL_Y + 13, shown ? L.arrow : L.pillText,
+                     shown ? Ui::alpha(L.arrow, 0.4f) : 0);
             tx += 7;
         }
         Ui::textCentered(tx, PILL_Y + 4, pillLabel(i, catalog), 15, L.pillText);

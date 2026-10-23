@@ -728,7 +728,7 @@ void drawControl(int i, bool focused, bool playing)
     float cx = CTL_X[i], cy = CTL_Y, r = CTL_R[i];
     bool primary = i == C_PLAY;
     bool on = (i == C_SHUFFLE && s.shuffle) || (i == C_REPEAT && s.repeat) || (i == C_QUEUE && s.panel);
-    if (focused) Ui::roundBorder(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, r + 4, 2.0f, p.accent);
+    if (focused) Ui::roundBorder(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, r + 4, 2.0f, p.focus);
     if (primary || focused) {
         Ui::circle(cx, cy, r, focused ? Ui::mix(p.accent, 0xFFFFFFFF, 0.15f) : p.accent);
     } else {
@@ -759,7 +759,7 @@ void drawSeekBar(float pos, float dur, bool focused)
     if (frac > 0)
         Ui::roundRect(BAR_X, y, fmaxf(BAR_W * frac, h), h, h / 2, Ui::mix(p.accent, 0xFFFFFFFF, 0.25f), p.accent);
     float kx = BAR_X + BAR_W * frac, kr = (s.hoverBar || focused) ? 9 : 7;
-    if (focused) Ui::roundBorder(kx - kr - 4, BAR_Y - kr - 4, 2 * kr + 8, 2 * kr + 8, kr + 4, 2.0f, p.accent);
+    if (focused) Ui::roundBorder(kx - kr - 4, BAR_Y - kr - 4, 2 * kr + 8, 2 * kr + 8, kr + 4, 2.0f, p.focus);
     Ui::shadow(kx - kr, BAR_Y - kr + 1, 2 * kr, 2 * kr, kr, 4.0f, p.shadow);
     Ui::circle(kx, BAR_Y, kr, 0xFFFFFFFF);
     Ui::circle(kx, BAR_Y, kr - 3, p.accent);
@@ -871,7 +871,7 @@ void drawScreen(bool live, bool loading)
             /* the visualizer focused: A or Left/Right picks another; dots tell which */
             bool vizF = live && !s.panel && (s.pointer ? s.hoverViz : s.focusViz);
             if (vizF) {
-                Ui::roundBorder(COL_X - 8, VIZ_TOP, COL_W + 16, VIZ_BOT - VIZ_TOP, 12, 2.0f, p.accent);
+                Ui::roundBorder(COL_X - 8, VIZ_TOP, COL_W + 16, VIZ_BOT - VIZ_TOP, 12, 2.0f, p.focus);
                 float dw = V_COUNT * 10 + 8, dx = COL_X + COL_W / 2 - dw / 2;
                 Ui::roundRect(dx, VIZ_BOT - 6, dw, 12, 6, p.accent, p.accentDark);
                 for (int i = 0; i < V_COUNT; ++i)

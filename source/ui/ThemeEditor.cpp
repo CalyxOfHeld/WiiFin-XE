@@ -9,7 +9,7 @@
 /* Layout: the colours on the left, the picker on the right (to the
  * screen's edge in 16:9) */
 #define LX (Ui::screenLeft() + 28.0f)
-static const float LW = 210, LY = 66, RSTEP = 29, RH = 26;
+static const float LW = 210, LY = 62, RSTEP = 27, RH = 24;
 #define PX (LX + LW + 16.0f)
 #define PW (Ui::screenRight() - 28.0f - PX)
 static const float PY = 66, PH = 348;
@@ -381,7 +381,7 @@ static void slide(float y, const char* label, const char* value, u32 from, u32 t
     Ui::roundRect(kx - 3, y, 6, 20, 3, 0xFFFFFFFF);
     Ui::roundBorder(kx - 3, y, 6, 20, 3, 1.5f, 0x000000C0);
     Ui::textRight(PX + PW - 14, y + 1, value, 14, p.textDim);
-    if (focus) Ui::roundBorder(PX + 8, y - 3, PW - 16, 26, 8, 2.0f, Ui::alpha(p.accent, Ui::pulse()));
+    if (focus) Ui::roundBorder(PX + 8, y - 3, PW - 16, 26, 8, 2.0f, Ui::alpha(p.focus, Ui::pulse()));
 }
 
 void ThemeEditor::render(ir_t& ir)
@@ -404,10 +404,10 @@ void ThemeEditor::render(ir_t& ir)
         }
         Ui::card(LX, y, LW, RH, 9, rowAnim[i]);
         const u32 c = Ui::themeColor(pal, i);
-        Ui::roundRect(LX + 7, y + 5, 16, 16, 4, c);
-        Ui::roundBorder(LX + 7, y + 5, 16, 16, 4, 1.0f, Ui::mix(p.text, p.cardTop, 0.5f));
-        Ui::text(LX + 30, y + 5, tr(Ui::THEME_COLORS[i].label), 14, Ui::mix(p.text, p.accentDark, rowAnim[i]));
-        Ui::textRight(LX + LW - 8, y + 7, Ui::colorHex(c).c_str(), 11, p.textDim);
+        Ui::roundRect(LX + 7, y + 4, 16, 16, 4, c);
+        Ui::roundBorder(LX + 7, y + 4, 16, 16, 4, 1.0f, Ui::mix(p.text, p.cardTop, 0.5f));
+        Ui::text(LX + 30, y + 4, tr(Ui::THEME_COLORS[i].label), 14, Ui::mix(p.text, p.accentDark, rowAnim[i]));
+        Ui::textRight(LX + LW - 8, y + 6, Ui::colorHex(c).c_str(), 11, p.textDim);
     }
 
     /* the picker, for the highlighted colour */
@@ -427,7 +427,7 @@ void ThemeEditor::render(ir_t& ir)
         Ui::roundBorder(rx - 5, ry - 5, 10, 10, 5, 2.0f, 0xFFFFFFFF);
         if (inPicker && part == P_SQUARE)
             Ui::roundBorder(SQX - 5, SQY - 5, SQ + 10, SQ + 10, 6, grabbed ? 3.0f : 2.0f,
-                            grabbed ? p.accent : Ui::alpha(p.accent, Ui::pulse()));
+                            grabbed ? p.focus : Ui::alpha(p.focus, Ui::pulse()));
 
         /* before and now */
         const float sx = SQX + SQ + 16, sw = PX + PW - 14 - sx;
@@ -455,7 +455,7 @@ void ThemeEditor::render(ir_t& ir)
             Ui::roundBorder(kx - 3, y, 6, 20, 3, 1.5f, 0x000000C0);
             snprintf(val, sizeof(val), "%d\xc2\xb0", (int)h);
             Ui::textRight(PX + PW - 14, y + 1, val, 14, p.textDim);
-            if (f && part == P_HUE) Ui::roundBorder(PX + 8, y - 3, PW - 16, 26, 8, 2.0f, Ui::alpha(p.accent, Ui::pulse()));
+            if (f && part == P_HUE) Ui::roundBorder(PX + 8, y - 3, PW - 16, 26, 8, 2.0f, Ui::alpha(p.focus, Ui::pulse()));
         }
         snprintf(val, sizeof(val), "%d", r);
         slide(SLY + SLSTEP, tr("Red"), val, rgb(0, g, b), rgb(255, g, b), r / 255.0f, f && part == P_RED);
