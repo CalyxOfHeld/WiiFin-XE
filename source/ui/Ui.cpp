@@ -698,6 +698,17 @@ const char* buttonName(const char* b)
      * GameCube controller (its R, the page turner, is a trigger) */
     if (strcmp(b, "+!") == 0)
         return s_buttonStyle == ButtonStyle::GameCube ? "Z" : s_buttonStyle == ButtonStyle::Keyboard ? "PgDn" : "+";
+    /* the on-screen keyboard's shortcuts (Keyboard.h): the GameCube
+     * controller's are its own */
+    static const struct { const char* id; const char* wii; const char* classic; const char* gc; const char* key; } KB[] = {
+        { "kbdel",   "-", "-", "X", "Bksp" },
+        { "kbspace", "1", "y", "Y", "Space" },
+        { "kbsym",   "2", "x", "R", "F2" },
+    };
+    for (const auto& k : KB)
+        if (strcmp(b, k.id) == 0)
+            return s_buttonStyle == ButtonStyle::WiiRemote ? k.wii : s_buttonStyle == ButtonStyle::Classic ? k.classic
+                 : s_buttonStyle == ButtonStyle::GameCube ? k.gc : k.key;
     if (s_buttonStyle == ButtonStyle::WiiRemote) return b;
     /* the Classic Controller's face buttons are written in lower case; a
      * USB keyboard's keys (Input.h) are shown as key caps */
@@ -1100,7 +1111,7 @@ void scrollbar(float x, float y, float h, int first, int visible, int total)
 }
 
 void key(float x, float y, float w, float h, const char* label,
-         bool sel, bool hover, bool special, bool latched)
+         bool sel, bool hover, bool special, bool latched, float scale)
 {
     const Palette& p = pal();
     label = tr(label);
@@ -1116,7 +1127,8 @@ void key(float x, float y, float w, float h, const char* label,
     }
     /* short ASCII words (SYM, ABC) get a smaller size than single glyphs */
     int sz = 15;
-    if (strlen(label) > 1 && (unsigned char)label[0] < 0x80) sz = w > 60 ? 13 : 11;
+    if (strlen(label) > 1 && (unsigned char)label[0] < 0x80) sz = w > 60 * scale ? 13 : 11;
+    sz = (int)(sz * scale + 0.5f);
     u32 tc = (sel || latched) ? p.textOnAccent : (special ? p.textDim : p.text);
     textCentered(x + w * 0.5f, y + (h - sz) * 0.5f - 1, label, sz, tc);
 }

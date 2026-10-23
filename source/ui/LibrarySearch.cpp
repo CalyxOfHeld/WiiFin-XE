@@ -191,9 +191,9 @@ void LibraryView::renderSearchInput(ir_t& ir) {
              searchKb.width() + 20, searchKb.height() + 20, 16, 0.0f);
     searchKb.render(ir);
 
-    const Ui::Hint l[] = { { "A", N_("Type") }, { "B", searchQuery.empty() ? N_("Back") : N_("Delete") } };
-    const Ui::Hint r[] = { { "-", N_("Shift") }, { "+!", N_("Search") } };
-    Ui::footer(l, 2, r, 2);
+    const Ui::Hint l[] = { { "A", N_("Type") }, { "kbdel", N_("Delete") }, { "kbspace", N_("Space") } };
+    const Ui::Hint r[] = { { "kbsym", N_("Symbols") }, { "+!", N_("Search") }, { "B", N_("Back") } };
+    Ui::footer(l, 3, r, searchQuery.empty() ? 3 : 2);
 }
 
 // ---------------------------------------------------------------

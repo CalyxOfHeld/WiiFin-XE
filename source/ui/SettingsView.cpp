@@ -21,7 +21,7 @@
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
            R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS, R_CUSTOMIZE,
            R_SAVER, R_SPEAKER, R_SAVER_LOGO, R_POWER_BTN, R_RESET_BTN,
-           R_SAVER_SPEED, R_SAVER_EFFECT };
+           R_SAVER_SPEED, R_SAVER_EFFECT, R_KB_SIZE };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -58,8 +58,8 @@ std::vector<int> SettingsView::sectionRows(int s) const
     switch (s) {
     case S_VIEW:
         /* the home and the libraries' look: a profile's (WiiFin's menu has neither) */
-        return profile ? std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER, R_AREA }
-                       : std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA };
+        return profile ? std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER, R_AREA, R_KB_SIZE }
+                       : std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA, R_KB_SIZE };
     case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT, R_SPEAKER };
     case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_SAVER, R_SAVER_LOGO, R_SAVER_SPEED, R_SAVER_EFFECT, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT, R_POWER_BTN, R_RESET_BTN };
     case S_SIGNIN:   return profile ? std::vector<int>{ R_SIGNIN, R_STARTUP } : std::vector<int>{};
@@ -291,6 +291,16 @@ SettingsView::RowInfo SettingsView::describe(int id)
         if (l == Screensaver::LogoOwn && !Screensaver::picture().empty()) r.value = Screensaver::pictureLabel();
         break;
     }
+    case R_KB_SIZE: {
+        const int k = Keyboard::size();
+        set(N_("Keyboard Size"),
+            k == Keyboard::SizeLarger ? N_("The on-screen keyboard at its biggest, keys and letters")
+            : k == Keyboard::SizeLarge ? N_("The on-screen keyboard a little bigger, keys and letters")
+                                       : N_("The on-screen keyboard as it comes"),
+            k == Keyboard::SizeLarger ? N_("Larger") : k == Keyboard::SizeLarge ? N_("Large") : N_("Normal"),
+            k ? p.accent : OFF);
+        break;
+    }
     case R_SAVER_SPEED: {
         const int sp = Screensaver::speed();
         set(N_("Screensaver Speed"),
@@ -434,6 +444,7 @@ void SettingsView::activate(int index) {
         case R_POWER_BTN: g_app_powerAction = (g_app_powerAction + 1) % BTN_ACTION_COUNT; break;
         case R_RESET_BTN: g_app_resetAction = (g_app_resetAction + 1) % BTN_ACTION_COUNT; break;
         case R_SAVER_LOGO: Screensaver::nextLogo(); break;
+        case R_KB_SIZE: Keyboard::setSize((Keyboard::size() + 1) % Keyboard::SIZE_COUNT); break;
         case R_SAVER_SPEED: Screensaver::setSpeed((Screensaver::speed() + 1) % Screensaver::SPEED_COUNT); break;
         case R_SAVER_EFFECT: Screensaver::setEffect((Screensaver::effect() + 1) % Screensaver::EFFECT_COUNT); break;
         case R_SPEAKER: RemoteSpeaker::setMode((RemoteSpeaker::mode() + 1) % RemoteSpeaker::MODE_COUNT); break;
@@ -465,7 +476,7 @@ void SettingsView::updateCalibration(ir_t& ir)
 {
     std::vector<Ui::SavedScreen>& saved = Ui::savedScreens();
     if (calNaming) {   /* its name typed: Done saves it (one of the same name replaced) */
-        calKb.setOrigin((640 - calKb.width()) * 0.5f, 214);
+        calKb.setOrigin((640 - calKb.width()) * 0.5f, 214 - calKb.lift());
         const Keyboard::Result res = calKb.update(ir, calName, 24);
         if (res == Keyboard::Result::Cancel) { calNaming = false; SoundFX::play(SoundFX::FX::Back); }
         if (res == Keyboard::Result::Enter) {
@@ -620,14 +631,14 @@ void SettingsView::renderCalibration(ir_t& ir)
     /* the name to save it under */
     if (calNaming) {
         GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, p.dim, 1);
-        Ui::card((640 - calKb.width()) * 0.5f - 10, 104, calKb.width() + 20, calKb.height() + 120, 16, 0.0f);
-        Ui::text((640 - calKb.width()) * 0.5f + 4, 116, tr("Save this screen as"), 18, p.text);
-        Ui::textRight((640 + calKb.width()) * 0.5f - 4, 120, tr("The same name replaces it"), 13, p.textDim);
+        Ui::card((640 - calKb.width()) * 0.5f - 10, 104 - calKb.lift(), calKb.width() + 20, calKb.height() + 120, 16, 0.0f);
+        Ui::text((640 - calKb.width()) * 0.5f + 4, 116 - calKb.lift(), tr("Save this screen as"), 18, p.text);
+        Ui::textRight((640 + calKb.width()) * 0.5f - 4, 120 - calKb.lift(), tr("The same name replaces it"), 13, p.textDim);
         const std::string typed = calName + "_";
-        Ui::field((640 - calKb.width()) * 0.5f, 150, calKb.width(), 40, typed.c_str(), 18, true);
+        Ui::field((640 - calKb.width()) * 0.5f, 150 - calKb.lift(), calKb.width(), 40, typed.c_str(), 18, true);
         calKb.render(ir);
-        static const Ui::Hint kl[] = { { "A", N_("Type") }, { "B", N_("Delete") }, { "+", N_("Done") } };
-        Ui::bottomBar(kl, 3);
+        static const Ui::Hint kl[] = { { "A", N_("Type") }, { "kbdel", N_("Delete") }, { "kbspace", N_("Space") }, { "kbsym", N_("Symbols") }, { "+!", N_("Done") } };
+        Ui::bottomBar(kl, 5);
     }
 }
 
@@ -664,7 +675,7 @@ bool SettingsView::update(ir_t& ir) {
 
     /* typing the search: the matches follow each letter */
     if (typing) {
-        kb.setOrigin((640 - kb.width()) * 0.5f, 214);
+        kb.setOrigin((640 - kb.width()) * 0.5f, 214 - kb.lift());
         const std::string was = query;
         const Keyboard::Result r = kb.update(ir, query, 32);
         if (query != was) { selectedIndex = top = 0; runSearch(); }
@@ -845,7 +856,7 @@ void SettingsView::render(ir_t& ir) {
     }
 
     if (typing) {
-        Ui::card((640 - kb.width()) * 0.5f - 10, 204, kb.width() + 20, kb.height() + 20, 16, 0.0f);
+        Ui::card((640 - kb.width()) * 0.5f - 10, 204 - kb.lift(), kb.width() + 20, kb.height() + 20, 16, 0.0f);
         kb.render(ir);
         return;   /* the keyboard says its own buttons */
     }

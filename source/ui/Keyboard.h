@@ -14,8 +14,14 @@
  *
  * Pointer: the highlight follows it and A types the key under it (A over
  * empty space does nothing).  D-pad: moves the highlight, A types it.
- * B deletes a character (leaves when the text is empty), - is Shift (press
- * twice for caps lock), + presses the action key.
+ * B deletes a character (leaves when the text is empty); - deletes too, 1
+ * types a space, 2 turns to the symbols, + presses the action key.  On a
+ * GameCube controller: X deletes, Y a space, R the symbols, L is Shift
+ * (twice: caps lock), Z the action key.  Hints for these: "kbdel",
+ * "kbspace", "kbsym" (Ui::buttonName names them per controller).
+ *
+ * Its size (Settings > Keyboard Size) is one for all: the screens around it
+ * move up by lift() so a bigger one still fits above the bottom bar.
  * ----------------------------------------------------------------------- */
 class Keyboard {
 public:
@@ -31,9 +37,16 @@ public:
     void   render(const ir_t& ir) const;
 
     static const int COLS = 11, ROWS = 5;
-    static const int CELL_W = 46, CELL_H = 40;
-    float width()  const { return COLS * CELL_W; }
-    float height() const { return ROWS * CELL_H; }
+    /* Normal (46 x 40 a key), Large, Larger */
+    enum Size { SizeNormal = 0, SizeLarge = 1, SizeLarger = 2, SIZE_COUNT };
+    static void setSize(int s);
+    static int  size();
+    static float cellW();
+    static float cellH();
+    float width()  const { return COLS * cellW(); }
+    float height() const { return ROWS * cellH(); }
+    /* how much taller than Normal: what the screen around it moves up */
+    float lift()   const { return height() - ROWS * 40.0f; }
 
 private:
     enum Special { K_NONE = 0, K_SHIFT, K_SYM, K_SPACE, K_DEL, K_ENTER };

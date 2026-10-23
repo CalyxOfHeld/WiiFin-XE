@@ -225,7 +225,7 @@ void scrollbar(float x, float y, float h, int first, int visible, int total);
 /* Virtual keyboard key.  special = function key (shift, symbols, delete),
  * latched = highlighted toggle (shift on). */
 void key(float x, float y, float w, float h, const char* label,
-         bool sel, bool hover, bool special, bool latched);
+         bool sel, bool hover, bool special, bool latched, float scale = 1.0f);
 /* Text field (rounded, focus ring); value is drawn as given. */
 void field(float x, float y, float w, float h, const char* value, int size, bool focused);
 /* ---- Screen shape (4:3 / 16:9) ----------------------------------------

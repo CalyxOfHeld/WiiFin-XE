@@ -258,7 +258,7 @@ static const int   EPP_ROWS = 5;
 bool LibraryView::updateEpisodePanel(ir_t& ir)
 {
     if (epTyping) {   /* the search: the list follows each letter */
-        epKb.setOrigin((640 - epKb.width()) * 0.5f, 214);
+        epKb.setOrigin((640 - epKb.width()) * 0.5f, 214 - epKb.lift());
         const Keyboard::Result r = epKb.update(ir, epDraft, 40);
         if (epDraft != episodeQuery) { episodeQuery = epDraft; buildEpisodeView(); }
         if (r == Keyboard::Result::Enter)  { epTyping = false; epPanel = false; SoundFX::play(SoundFX::FX::Open); }
@@ -318,16 +318,16 @@ void LibraryView::renderEpisodePanel(ir_t& ir)
     const Ui::Palette& p = Ui::pal();
     if (epTyping) {
         GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, p.dim, 1);
-        Ui::card((640 - epKb.width()) * 0.5f - 10, 104, epKb.width() + 20, epKb.height() + 120, 16, 0.0f);
-        Ui::text((640 - epKb.width()) * 0.5f + 4, 116, tr("Search this season"), 18, p.text);
+        Ui::card((640 - epKb.width()) * 0.5f - 10, 104 - epKb.lift(), epKb.width() + 20, epKb.height() + 120, 16, 0.0f);
+        Ui::text((640 - epKb.width()) * 0.5f + 4, 116 - epKb.lift(), tr("Search this season"), 18, p.text);
         char found[48];
         snprintf(found, sizeof(found), tr("%d of %d"), (int)episodeView.size(), (int)episodes.size());
-        Ui::textRight((640 + epKb.width()) * 0.5f - 4, 120, found, 13, p.textDim);
+        Ui::textRight((640 + epKb.width()) * 0.5f - 4, 120 - epKb.lift(), found, 13, p.textDim);
         const std::string shown = epDraft + "_";
-        Ui::field((640 - epKb.width()) * 0.5f, 150, epKb.width(), 40, shown.c_str(), 18, true);
+        Ui::field((640 - epKb.width()) * 0.5f, 150 - epKb.lift(), epKb.width(), 40, shown.c_str(), 18, true);
         epKb.render(ir);
-        const Ui::Hint l[] = { { "A", N_("Type") }, { "B", N_("Delete") }, { "+", N_("Done") } };
-        Ui::bottomBar(l, 3);
+        const Ui::Hint l[] = { { "A", N_("Type") }, { "kbdel", N_("Delete") }, { "kbspace", N_("Space") }, { "kbsym", N_("Symbols") }, { "+!", N_("Done") } };
+        Ui::bottomBar(l, 5);
         return;
     }
     const float H = 50 + EPP_ROWS * EPP_STEP + 34;

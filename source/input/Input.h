@@ -71,4 +71,7 @@ public:
     static bool isActionPressed();
     static bool is1Pressed();
     static bool is2Pressed();
+    /* GameCube controller buttons pressed this frame (PAD_*, any port;
+     * 0: none): for the few places its own layout counts (the keyboard) */
+    static u16  gcRawDown();
 };

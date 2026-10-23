@@ -5,6 +5,7 @@
 #include "../core/Lang.h"
 
 #include <string.h>
+#include <ogc/pad.h>
 #include <ogc/lwp_watchdog.h>
 
 static const char* const LETTERS[4] = {
@@ -27,6 +28,16 @@ static const struct { int col, span; int sp; } BOTTOM[5] = {
 };
 
 static unsigned long long nowMs() { return ticks_to_millisecs(gettime()); }
+
+/* the keys' size: Normal, Large, Larger (the widest 616 across: inside the
+ * 4:3 picture's 640) */
+static int s_size = Keyboard::SizeNormal;
+static const float CELL_WS[Keyboard::SIZE_COUNT] = { 46, 52, 56 };
+static const float CELL_HS[Keyboard::SIZE_COUNT] = { 40, 45, 49 };
+void  Keyboard::setSize(int s) { s_size = s >= 0 && s < SIZE_COUNT ? s : SizeNormal; }
+int   Keyboard::size()  { return s_size; }
+float Keyboard::cellW() { return CELL_WS[s_size]; }
+float Keyboard::cellH() { return CELL_HS[s_size]; }
 
 void Keyboard::reset()
 {
@@ -54,7 +65,7 @@ Keyboard::Key Keyboard::keyAt(int row, int col) const
 bool Keyboard::keyUnder(const ir_t& ir, int& row, int& col) const
 {
     if (!ir.valid) return false;
-    float fx = (ir.x - x0) / CELL_W, fy = (ir.y - y0) / CELL_H;
+    float fx = (ir.x - x0) / cellW(), fy = (ir.y - y0) / cellH();
     if (fx < 0 || fy < 0 || fx >= COLS || fy >= ROWS) return false;
     row = (int)fy; col = (int)fx;
     /* the gaps between keys count as nothing */
@@ -139,7 +150,17 @@ Keyboard::Result Keyboard::update(const ir_t& ir, std::string& text, size_t maxL
             return press(keyAt(selRow, selCol), text, maxLen);
         }
     }
-    if (Input::isLPressed()) press(Key{ 4, 0, 2, 0, K_SHIFT }, text, maxLen);   /* - */
+    /* the shortcuts: - deletes, 1 a space, 2 the symbols; a GameCube
+     * controller's own: X, Y, R, and L Shift (its X and R would otherwise
+     * be the Wii Remote's 2 and +) */
+    const u16 gc = Input::gcRawDown();
+    const bool del   = gc ? (gc & PAD_BUTTON_X) != 0  : Input::isLPressed();
+    const bool space = gc ? (gc & PAD_BUTTON_Y) != 0  : Input::is1Pressed();
+    const bool sym   = gc ? (gc & PAD_TRIGGER_R) != 0 : Input::is2Pressed();
+    if (gc & PAD_TRIGGER_L) press(Key{ 4, 0, 2, 0, K_SHIFT }, text, maxLen);
+    if (del)   press(Key{ 4, 7, 2, 0, K_DEL }, text, maxLen);
+    if (space) press(Key{ 4, 4, 3, 0, K_SPACE }, text, maxLen);
+    if (sym)   press(Key{ 4, 2, 2, 0, K_SYM }, text, maxLen);
     if (Input::isActionPressed()) return Result::Enter;                       /* + (GameCube Z) */
     if (Input::isBackPressed()) {
         if (text.empty()) return Result::Cancel;
@@ -173,13 +194,15 @@ void Keyboard::render(const ir_t& ir) const
     Key hk = hover ? keyAt(hr, hc) : Key{ -1, -1, 0, 0, K_NONE };
     Key sk = keyAt(selRow, selCol);
     unsigned long long t = nowMs();
+    const float scale = cellH() / 40.0f;   /* the labels grow with the keys */
+    const int   esz = (int)(15 * scale + 0.5f);
 
     for (int row = 0; row < ROWS; ++row) {
         for (int col = 0; col < COLS; ) {
             Key k = keyAt(row, col);
             col = k.col + k.span;
-            float x = x0 + k.col * CELL_W + 2, y = y0 + row * CELL_H + 2;
-            float w = k.span * CELL_W - 4, h = CELL_H - 4;
+            float x = x0 + k.col * cellW() + 2, y = y0 + row * cellH() + 2;
+            float w = k.span * cellW() - 4, h = cellH() - 4;
             bool sel = (k.row == sk.row && k.col == sk.col);
             bool hov = hover && k.row == hk.row && k.col == hk.col;
             /* typed: the key dips for a moment */
@@ -195,11 +218,11 @@ void Keyboard::render(const ir_t& ir) const
                 if (sel) Ui::shadow(x - 2, y - 2, w + 4, h + 4, 9, 8.0f, p.glow);
                 Ui::roundRect(x, y, w, h, 7, Ui::mix(p.accent, 0xFFFFFFFF, sel ? 0.35f : 0.15f), p.accentDark);
                 if (sel) Ui::roundBorder(x, y, w, h, 7, 2.0f, 0xFFFFFFC0);
-                Ui::textCentered(x + w * 0.5f, y + (h - 15) * 0.5f - 1, tr(lab), 15, p.textOnAccent);
+                Ui::textCentered(x + w * 0.5f, y + (h - esz) * 0.5f - 1, tr(lab), esz, p.textOnAccent);
                 continue;
             }
             bool latched = (k.sp == K_SHIFT && shift) || (k.sp == K_SYM && page == 1);
-            Ui::key(x, y, w, h, lab, sel, hov && !sel, special, latched);
+            Ui::key(x, y, w, h, lab, sel, hov && !sel, special, latched, scale);
         }
     }
 }

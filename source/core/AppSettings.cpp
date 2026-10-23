@@ -10,6 +10,7 @@
 #include "../player/WiiPlayer.h"
 #include "../player/RemoteSpeaker.h"
 #include "Screensaver.h"
+#include "../ui/Keyboard.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -109,6 +110,8 @@ void App::loadSettings() {
             Screensaver::setEffect(atoi(val));
         } else if (strcmp(key, "remote_speaker") == 0) {
             RemoteSpeaker::setMode(atoi(val));
+        } else if (strcmp(key, "keyboard_size") == 0) {
+            Keyboard::setSize(atoi(val));
         } else if (strcmp(key, "clock_12h") == 0) {
             Ui::setClock12h(atoi(val) != 0);
         } else if (strcmp(key, "solid_colors") == 0) {
@@ -250,6 +253,7 @@ void App::saveSettings() {
     fprintf(f, "library_view=%d\n",     startView.libraryStyle);
     fprintf(f, "solid_colors=%d\n",     startView.solidColors);
     fprintf(f, "clock_12h=%d\n",        Ui::clock12h() ? 1 : 0);
+    fprintf(f, "keyboard_size=%d\n",    Keyboard::size());
     fprintf(f, "screensaver_min=%d\n",  Screensaver::minutes());
     fprintf(f, "screensaver_logo=%d\n", Screensaver::logo());
     fprintf(f, "screensaver_picture=%s\n", Screensaver::picture().c_str());

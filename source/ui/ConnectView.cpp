@@ -447,7 +447,7 @@ ConnectResult ConnectView::update(ir_t& ir) {
 void ConnectView::handleVKBInput(ir_t& ir) {
     int fi = (int)focusedField;
     if (fi > 2) { kbActive = false; return; }
-    kb.setOrigin((640 - kb.width()) * 0.5f, 238);
+    kb.setOrigin((640 - kb.width()) * 0.5f, 238 - kb.lift());
     kb.setEnterLabel(fi < 2 ? N_("Next") : N_("Done"));
     switch (kb.update(ir, fields[fi], 255)) {
     case Keyboard::Result::Enter:
@@ -562,8 +562,8 @@ void ConnectView::renderCredentials(ir_t& ir) {
 
     if (kbActive) {
         renderVKB(ir);
-        const Ui::Hint l[] = { { "A", N_("Type") }, { "B", N_("Delete") } };
-        const Ui::Hint r[] = { { "-", N_("Shift") }, { "+!", focusedField == Field::Password ? N_("Done") : N_("Next") } };
+        const Ui::Hint l[] = { { "A", N_("Type") }, { "kbdel", N_("Delete") }, { "kbspace", N_("Space") } };
+        const Ui::Hint r[] = { { "kbsym", N_("Symbols") }, { "+!", focusedField == Field::Password ? N_("Done") : N_("Next") } };
         Ui::footer(l, 2, r, 2);
     } else {
         const Ui::Hint l[] = { { "A", N_("Select") }, { "UD", N_("Move") } };
@@ -575,9 +575,9 @@ void ConnectView::renderCredentials(ir_t& ir) {
 void ConnectView::renderVKB(ir_t& ir) {
     // Keyboard panel (covers the lower fields while typing; the edited
     // field is shown in the panel's title row)
-    kb.setOrigin((640 - kb.width()) * 0.5f, 238);
+    kb.setOrigin((640 - kb.width()) * 0.5f, 238 - kb.lift());
     const int PX = (int)((640 - kb.width()) * 0.5f) - 12, PW = (int)kb.width() + 24;
-    const int PY = 238 - 50, PH = (int)kb.height() + 62;
+    const int PY = (int)(238 - kb.lift()) - 50, PH = (int)kb.height() + 62;
     GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, Ui::alpha(Ui::pal().dim, 0.5f), 1);
     Ui::card(PX, PY, PW, PH, 16, 0.0f);
     {

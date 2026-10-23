@@ -29,7 +29,7 @@ ProfileResult ProfileView::update(ir_t& ir) {
 
     /* its nickname typed: Done keeps it (nothing: the user name again) */
     if (renaming) {
-        kb.setOrigin((640 - kb.width()) * 0.5f, 214);
+        kb.setOrigin((640 - kb.width()) * 0.5f, 214 - kb.lift());
         const Keyboard::Result r = kb.update(ir, draft, 32);
         if (r == Keyboard::Result::Cancel) { renaming = false; SoundFX::play(SoundFX::FX::Back); }
         if (r == Keyboard::Result::Enter) {
@@ -207,19 +207,19 @@ void ProfileView::render(ir_t& ir) {
     /* Nickname: the name being typed over the list, the keyboard below */
     if (renaming) {
         GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, pal.dim, 1);
-        Ui::card((640 - kb.width()) * 0.5f - 10, 104, kb.width() + 20, kb.height() + 120, 16, 0.0f);
-        Ui::text((640 - kb.width()) * 0.5f + 4, 116, tr("Nickname"), 18, pal.text);
-        Ui::textRight((640 + kb.width()) * 0.5f - 4, 120, tr("Leave it empty for the user name"), 13, pal.textDim);
+        Ui::card((640 - kb.width()) * 0.5f - 10, 104 - kb.lift(), kb.width() + 20, kb.height() + 120, 16, 0.0f);
+        Ui::text((640 - kb.width()) * 0.5f + 4, 116 - kb.lift(), tr("Nickname"), 18, pal.text);
+        Ui::textRight((640 + kb.width()) * 0.5f - 4, 120 - kb.lift(), tr("Leave it empty for the user name"), 13, pal.textDim);
         std::string shown = draft + "_";
-        Ui::field((640 - kb.width()) * 0.5f, 150, kb.width(), 40, shown.c_str(), 18, true);
+        Ui::field((640 - kb.width()) * 0.5f, 150 - kb.lift(), kb.width(), 40, shown.c_str(), 18, true);
         kb.render(ir);
     }
 
     if (picking) {
         renderPicker(ir);
     } else if (renaming) {
-        static const Ui::Hint left[] = { { "A", N_("Type") }, { "B", N_("Delete") }, { "+", N_("Done") } };
-        Ui::bottomBar(left, 3);
+        static const Ui::Hint left[] = { { "A", N_("Type") }, { "kbdel", N_("Delete") }, { "kbspace", N_("Space") }, { "kbsym", N_("Symbols") }, { "+!", N_("Done") } };
+        Ui::bottomBar(left, 5);
     } else if (confirmDelete) {
         static const Ui::Hint left[] = { { "A", N_("Select") }, { "B", N_("Cancel") } };
         Ui::bottomBar(left, 2);
@@ -244,8 +244,8 @@ void ProfileView::render(ir_t& ir) {
  * letter and the jellyfish; each group under its name, starting a row
  * ----------------------------------------------------------------------- */
 static const int   PK_COLS = 5;
-static const float PK_X = 70, PK_Y = 104, PK_CW = 100, PK_CH = 92, PK_HEAD = 26, PK_R = 30;
-static const float PK_VIEW = 288;                     /* the rows' height on the card */
+static const float PK_X = 70, PK_Y = 100, PK_CW = 100, PK_CH = 92, PK_HEAD = 26, PK_R = 30;
+static const float PK_VIEW = 278;                     /* the rows' height on the card: three of pictures */
 
 static float pickRowH(const char* header) { return header ? PK_HEAD : PK_CH; }
 
@@ -346,11 +346,8 @@ void ProfileView::renderPicker(ir_t& ir)
     const Ui::Palette& pal = Ui::pal();
     const SavedProfile& p = profiles[focusedRow];
     GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, pal.dim, 1);
-    Ui::card(50, 52, 540, 390, 18, 0.0f);
-    char title[96];
-    /* TRANSLATORS: %s is the profile's name */
-    snprintf(title, sizeof title, tr("A picture for %s"), p.shownName().c_str());
-    Ui::textCentered(320, 66, title, 20, pal.text);
+    Ui::card(50, 52, 540, 364, 18, 0.0f);   /* above the bottom bar (424) */
+    Ui::textCentered(320, 66, tr("Profile Picture"), 20, pal.text);
     float y = PK_Y, above = 0, all = 0;
     for (int r = 0; r < (int)pickRows.size(); ++r) {
         if (r < pickTop) above += pickRowH(pickRows[r].header);
@@ -378,9 +375,9 @@ void ProfileView::renderPicker(ir_t& ir)
         }
     }
     if (all > PK_VIEW) Ui::scrollbar(574, PK_Y, PK_VIEW - 8, (int)above, (int)PK_VIEW, (int)all);
-    Ui::textCentered(320, 396, Avatars::miis().empty() ? tr("No Miis found on this Wii.") : tr("The Miis are this Wii's, from the Mii Channel."),
+    Ui::textCentered(320, 380, Avatars::miis().empty() ? tr("No Miis found on this Wii.") : tr("Miis are local to this Wii's Mii Channel."),
                      13, pal.textDim);
-    Ui::textCentered(320, 414, tr("Pictures of your own: PNG or JPEG files in apps/WiiFin/pictures/"), 13, pal.textDim);
+    Ui::textCentered(320, 397, tr("Pictures of your own: PNG or JPEG files in apps/WiiFin/pictures/"), 13, pal.textDim);
     static const Ui::Hint left[]  = { { "A", N_("Choose") } };
     static const Ui::Hint right[] = { { "B", N_("Cancel") } };
     Ui::bottomBar(left, 1, right, 1);

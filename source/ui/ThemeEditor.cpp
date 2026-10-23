@@ -198,7 +198,7 @@ bool ThemeEditor::updatePicker(ir_t& ir)
 bool ThemeEditor::update(ir_t& ir)
 {
     if (typing != Typing::None) {
-        kb.setOrigin((640 - kb.width()) * 0.5f, 214);
+        kb.setOrigin((640 - kb.width()) * 0.5f, 214 - kb.lift());
         const Keyboard::Result r = kb.update(ir, draft, typing == Typing::Name ? 32 : 24);
         if (r == Keyboard::Result::Cancel) {
             typing = Typing::None;
@@ -431,15 +431,15 @@ void ThemeEditor::render(ir_t& ir)
     /* the name to save under, or a colour typed */
     if (typing != Typing::None) {
         GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, p.dim, 1);
-        Ui::card((640 - kb.width()) * 0.5f - 10, 104, kb.width() + 20, kb.height() + 120, 16, 0.0f);
-        Ui::text((640 - kb.width()) * 0.5f + 4, 116, typing == Typing::Name ? tr("Theme name") : tr("Colour"), 18, p.text);
+        Ui::card((640 - kb.width()) * 0.5f - 10, 104 - kb.lift(), kb.width() + 20, kb.height() + 120, 16, 0.0f);
+        Ui::text((640 - kb.width()) * 0.5f + 4, 116 - kb.lift(), typing == Typing::Name ? tr("Theme name") : tr("Colour"), 18, p.text);
         if (typing == Typing::Color)
-            Ui::textRight((640 + kb.width()) * 0.5f - 4, 120, tr("#AA5CC3, or 170, 92, 195"), 13, p.textDim);
+            Ui::textRight((640 + kb.width()) * 0.5f - 4, 120 - kb.lift(), tr("#AA5CC3, or 170, 92, 195"), 13, p.textDim);
         const std::string shown = draft + "_";
-        Ui::field((640 - kb.width()) * 0.5f, 150, kb.width(), 40, shown.c_str(), 18, true);
+        Ui::field((640 - kb.width()) * 0.5f, 150 - kb.lift(), kb.width(), 40, shown.c_str(), 18, true);
         kb.render(ir);
-        const Ui::Hint l[] = { { "A", N_("Type") }, { "B", N_("Delete") }, { "+", N_("Done") } };
-        Ui::bottomBar(l, 3);
+        const Ui::Hint l[] = { { "A", N_("Type") }, { "kbdel", N_("Delete") }, { "kbspace", N_("Space") }, { "kbsym", N_("Symbols") }, { "+!", N_("Done") } };
+        Ui::bottomBar(l, 5);
         return;
     }
 

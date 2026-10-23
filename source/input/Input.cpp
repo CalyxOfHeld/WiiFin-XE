@@ -14,6 +14,7 @@ static u32 rawDownBits = 0;   /* pressed this frame, no repeat */
 static u32 heldBits    = 0;
 static u32 buttonsDown = 0;   /* rawDownBits + repeated directions */
 static bool actionDown = false;   /* isActionPressed */
+static u16  s_gcRawDown = 0;      /* gcRawDown */
 
 static const u32 DIRS = WPAD_BUTTON_UP | WPAD_BUTTON_DOWN | WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT;
 
@@ -198,6 +199,7 @@ void Input::update() {
     static u32 dropouts = 0;
     static bool padSeen[PORTS] = {};
     u32 gcDown = 0, gcHeld = 0;
+    s_gcRawDown = 0;
     int gcPort = -1;                              /* the port pressed this frame */
     for (int port = 0; port < PORTS; ++port) {
         const bool up = (padsUp >> port) & 1;
@@ -211,6 +213,7 @@ void Input::update() {
         u16 d = h & ~s_padHeld[port];
         s_padHeld[port] = h;
         gcDown |= fromGameCube(d);
+        s_gcRawDown |= d;
         gcHeld |= fromGameCube(h);
         if (d && gcPort < 0) gcPort = port;
     }
@@ -387,7 +390,7 @@ bool Input::isDownPressed()  { return buttonsDown & WPAD_BUTTON_DOWN; }
 bool Input::isLeftPressed()  { return buttonsDown & WPAD_BUTTON_LEFT; }
 bool Input::isRightPressed() { return buttonsDown & WPAD_BUTTON_RIGHT; }
 bool Input::isAJustPressed() { return buttonsDown & WPAD_BUTTON_A; }
-void Input::consume() { rawDownBits = buttonsDown = 0; actionDown = false; }
+void Input::consume() { rawDownBits = buttonsDown = 0; actionDown = false; s_gcRawDown = 0; }
 bool Input::isBPressed()     { return buttonsDown & WPAD_BUTTON_B; }
 bool Input::isBackPressed()  { return buttonsDown & WPAD_BUTTON_B; }
 bool Input::isLPressed()     { return buttonsDown & WPAD_BUTTON_MINUS; }
@@ -395,6 +398,7 @@ bool Input::isRPressed()     { return buttonsDown & WPAD_BUTTON_PLUS; }
 bool Input::isActionPressed() { return actionDown; }
 bool Input::is1Pressed()     { return buttonsDown & WPAD_BUTTON_1; }
 bool Input::is2Pressed()     { return buttonsDown & WPAD_BUTTON_2; }
+u16  Input::gcRawDown()      { return s_gcRawDown; }
 
 int Input::pointerChan() { return s_pointerChan; }
 bool Input::pointerIsMouse() { return s_mouseOn; }
