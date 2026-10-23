@@ -11,6 +11,16 @@ extern volatile bool g_app_powerOff;   // power button
 extern volatile bool g_app_reset;      // reset button
 extern volatile bool g_restartApp;     // "Reset" chosen in the HOME menu
 
+/* Where leaving WiiFin goes (the main menu's Exit, the HOME menu): back to
+ * the loader that launched it (the Homebrew Channel) when true, else the
+ * Wii Menu.  The setting Exit To, wiifin.cfg's exit_to_loader */
+extern bool g_app_exitToLoader;
+/* launched by a loader (its stub at 0x80001800), not as the WAD's channel,
+ * which always goes back to the Wii Menu */
+bool appFromLoader();
+/* g_app_exitToLoader, when it can be: where leaving goes */
+inline bool appExitsToLoader() { return g_app_exitToLoader && appFromLoader(); }
+
 /* Full-screen error card: title, two lines of explanation.  With retry, A
  * retries (returns true) and B goes back; without, A or B closes it. */
 bool showErrorScreen(const char* title, const std::string& line1,

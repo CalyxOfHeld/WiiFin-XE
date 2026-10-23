@@ -48,8 +48,14 @@ extern unsigned int  data_ring_png_len;
 volatile bool g_app_powerOff = false;
 volatile bool g_app_reset    = false;
 volatile bool g_restartApp = false;
-/* the main menu's Exit: back where WiiFin was launched from (a loader) */
-static bool s_exitToLoader = false;
+bool g_app_exitToLoader = true;
+/* the loader's mark, read at start-up (main menu) before anything could
+ * write over low memory */
+bool appFromLoader()
+{
+    static const bool loader = memcmp((const void*)0x80001804, "STUBHAXX", 8) == 0;
+    return loader;
+}
 static std::string s_argv0;
 static void onPower() { g_app_powerOff = true; }
 static void onReset(u32, void*) { g_app_reset = true; }
@@ -429,6 +435,7 @@ void App::offerScreenCalibration(ir_t& ir) {
 }
 
 void App::loop() {
+    (void)appFromLoader();   /* its mark read now */
     ir_t ir;
     int  selectedIndex = 0;
     bool irMode        = false;
@@ -733,7 +740,7 @@ void App::loop() {
                 case 1:
                     runSettings(nullptr);   /* WiiFin's own look, and the system */
                     break;
-                case 2: running = false; s_exitToLoader = true; break;
+                case 2: running = false; break;   /* where: Exit To */
             }
         }
 
@@ -799,7 +806,7 @@ void App::loop() {
     WPAD_Shutdown();
     /* launched by a loader (the Homebrew Channel's stub, where exit() goes
      * back): not the WAD's channel */
-    const bool loader = memcmp((const void*)0x80001804, "STUBHAXX", 8) == 0;
+    const bool loader = appFromLoader();
     if (g_app_powerOff)        SYS_ResetSystem(SYS_POWEROFF,    0, 0);
     else if (g_restartApp) {
         /* the HOME menu's Reset: the channel (WAD) launched again by the
@@ -818,8 +825,8 @@ void App::loop() {
             if (p[0]) Reload::self(p);   /* returns only if it could not read it */
         exit(0);
     }
-    else if (s_exitToLoader && loader) {
-        /* the main menu's Exit: back to the loader that launched WiiFin, its
+    else if (g_app_exitToLoader && loader) {
+        /* Exit To the loader: back to the one that launched WiiFin, its
          * stub at 0x80001800.  Not by exit(): libogc 3.2's jumps there with
          * the interrupts still on (3.1 stopped the threads first), and
          * WiiFin's own (video, sound, IPC) broke into the loader: a black

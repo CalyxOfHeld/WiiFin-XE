@@ -186,13 +186,15 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
         }
         Ui::popOffset();
 
-        /* Wii Menu / Reset buttons */
+        /* Wii Menu (or Homebrew Channel, as Exit To says) / Reset buttons */
+        const bool toLoader = appExitsToLoader();
         for (int i = 0; i < 2; i++) {
             float sc = hoverSc[i];
             float dw = BTN_W * sc, dh = BTN_H * sc;
             bool  sel = (hmSel == i);
             Ui::button(bcx[i] - dw * 0.5f, bcy - dh * 0.5f, dw, dh,
-                       i == 0 ? N_("Wii Menu") : N_("Reset"), (int)(22 * sc),
+                       i == 1 ? N_("Reset") : toLoader ? N_("Homebrew Channel") : N_("Wii Menu"),
+                       (int)(22 * sc),
                        sel ? Ui::pulse() : 0.0f);
         }
 
@@ -206,9 +208,9 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
             float adx = 320 - adw * 0.5f, ady = 240 - adh * 0.5f;
             Ui::card(adx, ady, adw, adh, 20 * psc, 0.0f);
 
-            const char* line1 = (confirmFor == 0)
-                ? tr("Return to the Wii Menu?")
-                : tr("Reset the application?");
+            const char* line1 = (confirmFor == 1) ? tr("Reset the application?")
+                              : toLoader ? tr("Return to the Homebrew Channel?")
+                                         : tr("Return to the Wii Menu?");
             Ui::textCentered(320, ady + 32 * psc, line1, (int)(20 * psc), P.text);
             Ui::textCentered(320, ady + 62 * psc, tr("(Anything not saved will be lost.)"),
                              (int)(14 * psc), P.textDim);

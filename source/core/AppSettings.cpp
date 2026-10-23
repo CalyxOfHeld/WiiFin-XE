@@ -1,5 +1,6 @@
 /* App settings and saved profiles: sd:/apps/WiiFin/wiifin.cfg */
 #include "App.h"
+#include "AppInternal.h"
 #include "../ui/Ui.h"
 #include "Utils.h"
 #include "Lang.h"
@@ -65,6 +66,8 @@ void App::loadSettings() {
             if (v >= 0 && v < Ui::LIBRARY_STYLE_COUNT) Ui::setLibraryStyle((Ui::LibraryStyle)v);
         } else if (strcmp(key, "home_layout") == 0) {
             Ui::setHomeLayout(atoi(val) == 1 ? Ui::HomeLayout::Rows : Ui::HomeLayout::Grid);
+        } else if (strcmp(key, "exit_to_loader") == 0) {
+            g_app_exitToLoader = atoi(val) != 0;
         } else if (strcmp(key, "language") == 0) {
             Lang::chooseKey(val);
         } else if (strcmp(key, "clock_12h") == 0) {
@@ -203,6 +206,7 @@ void App::saveSettings() {
     fprintf(f, "smooth_motion=%d\n",    g_wiifin_smooth_motion ? 1 : 0);
     fprintf(f, "disc_light=%d\n",     g_wiifin_disc_light ? 1 : 0);
     fprintf(f, "video_zoom=%d\n",       (int)VideoSurface::zoom());
+    fprintf(f, "exit_to_loader=%d\n",   g_app_exitToLoader ? 1 : 0);
     {
         int l, t, r, b;
         Ui::safeArea(l, t, r, b);
