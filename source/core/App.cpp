@@ -296,6 +296,7 @@ void App::init(const char* argv0) {
     if (!settingsPath.empty()) {
         Log::open(settingsPath.substr(0, settingsPath.rfind('/') + 1));
         loadSdFonts(settingsPath.substr(0, settingsPath.rfind('/') + 1));
+        Ui::loadThemes(settingsPath.substr(0, settingsPath.rfind('/') + 1) + "themes");
     }
     SYS_Report("[WiiFin] v%s, IOS%d v%d, %s, MEM1 %u KB / MEM2 %u KB free, settings %s\n",
                WIIFIN_VERSION, (int)IOS_GetVersion(), (int)IOS_GetRevision(),
@@ -523,7 +524,7 @@ void App::loop() {
                 /* a view changed where it shows (1 on a library: Posters,
                  * List...): the profile's from now on */
                 const ViewPrefs was = app.viewOf(p), now = app.currentView();
-                const bool changed = was.theme != now.theme || was.homeLayout != now.homeLayout ||
+                const bool changed = was.theme != now.theme || was.themeFile != now.themeFile || was.homeLayout != now.homeLayout ||
                                      was.libraryStyle != now.libraryStyle || was.solidColors != now.solidColors;
                 if (changed) app.keepView(p);
                 if (p.signIn == SavedProfile::Password) p.accessToken.clear();

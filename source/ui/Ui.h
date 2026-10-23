@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include <vector>
+#include <utility>
 #include <grrlib.h>
 #include <wiiuse/wpad.h>
 
@@ -41,6 +43,51 @@ Theme       nextTheme(Theme t);
 Theme       theme();
 const char* themeName(Theme t);
 const Palette& pal();
+
+/* ---- Your own themes ----------------------------------------------------
+ * Text files in themes/ next to wiifin.cfg (sd:/apps/WiiFin/themes/), one
+ * theme each, easy to edit and share on a PC:
+ *
+ *   name = Midnight
+ *   base = Dark            (a built-in theme: every colour left out)
+ *   background = #101820   (#RRGGBB, #RRGGBBAA, or r,g,b)
+ *
+ * The ten main colours (THEME_COLORS) each set the shades that go with
+ * them; the palette's own names (bg_bottom, glow...) set one exactly.
+ * A theme of one's own keeps its base's layout (Flix: the red band, in
+ * the theme's accent). */
+struct ThemeColor { const char* key; const char* label; const char* desc; };
+static const int THEME_COLOR_COUNT = 10;
+extern const ThemeColor THEME_COLORS[THEME_COLOR_COUNT];
+struct CustomTheme {
+    std::string name;
+    std::string file;                                 /* in themes/; "" not saved yet */
+    Theme base = Theme::Dark;
+    std::vector<std::pair<std::string, u32> > colors; /* key, RRGGBBAA, as in the file */
+};
+void loadThemes(const std::string& dir);          /* dir: themes/, read now */
+const std::vector<CustomTheme>& customThemes();
+int  customTheme();                               /* the one in use, -1 a built-in */
+void setCustomTheme(int i);                       /* -1: back to the built-in theme() */
+int  findCustomTheme(const std::string& file);    /* -1 none */
+Palette buildPalette(const CustomTheme& t);
+Palette builtInPalette(Theme t);
+u32  themeColor(const Palette& p, int i);         /* main colour i, as p has it */
+void setThemeColor(CustomTheme& t, const std::string& key, u32 c);
+bool parseColor(const std::string& s, u32& c);    /* #RRGGBB(AA), RRGGBB, r,g,b(,a), rgb(r,g,b) */
+std::string colorHex(u32 c);                      /* #RRGGBB, alpha too if not opaque */
+/* written to themes/ (file from its name), the list read again; its
+ * index there, -1 failed */
+int  saveTheme(CustomTheme& t);
+/* the colour editor's palette, drawn by everything while it's set */
+void setPreviewPalette(const Palette* p);
+bool customColors();                              /* a theme of one's own, or the editor's */
+bool lightPalette();                              /* a light background */
+/* the Theme setting's choices: the built-in ones, then the files */
+int  themeSlot();
+int  themeSlotCount();
+void setThemeSlot(int slot);
+std::string themeSlotName(int slot);
 /* Solid colours instead of gradients (no banding on 480i TVs) */
 void setSolidColors(bool on);
 bool solidColors();
@@ -96,6 +143,9 @@ void texRound(GRRLIB_texImg* tex, float x, float y, float w, float h, float r,
  * the slot's displayed width / height (pass the unsquished width / h). */
 void texCover(GRRLIB_texImg* tex, float x, float y, float w, float h, float r,
               float aspect, u32 tint = 0xFFFFFFFF);
+/* Rectangle with a colour at each corner (top-left, top-right,
+ * bottom-right, bottom-left): the colour picker's square and slides. */
+void quad(float x, float y, float w, float h, u32 tl, u32 tr, u32 br, u32 bl);
 /* Solid triangle (arrows, play glyphs). */
 void triangle(float x0, float y0, float x1, float y1, float x2, float y2, u32 color);
 /* Small line icons (about 14 px, 2 px strokes) centred on cx, cy: the

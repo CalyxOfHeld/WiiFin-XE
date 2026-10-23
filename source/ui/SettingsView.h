@@ -6,6 +6,7 @@
 #include "../jellyfin/JellyfinClient.h"
 #include "Keyboard.h"
 #include "PinPad.h"
+#include "ThemeEditor.h"
 
 struct SavedProfile;
 
@@ -73,6 +74,10 @@ private:
     PinPad pin;
     int    pinStep = 0;           /* 0 none, 1 first time, 2 again */
     std::string pinFirst;
+
+    /* Customize Theme: the colours, over the settings */
+    ThemeEditor editor;
+    bool        editing = false;
 
     /* Screen-area (overscan) calibration */
     bool  calibrating   = false;

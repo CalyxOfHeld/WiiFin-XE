@@ -88,7 +88,13 @@ LibraryStyle libraryStyle()                  { return s_libStyle; }
 HomeLayout homeLayout()                { return s_layout; }
 static GRRLIB_ttfFont* s_font  = nullptr;
 
-void        setTheme(Theme t)   { s_theme = t; }
+/* the palette changed (theme, file, editor, solid colours): the flat
+ * copy made again */
+static int  s_palGen = 0;
+static int  s_custom = -1;                 /* customThemes() index in use */
+static Palette s_customPal;
+static const Palette* s_preview = nullptr; /* the colour editor's */
+void        setTheme(Theme t)   { s_theme = t; s_custom = -1; ++s_palGen; }
 Theme       theme()             { return s_theme; }
 Theme       nextTheme(Theme t)  { return (Theme)(((int)t + 1) % THEME_COUNT); }
 const char* themeName(Theme t)
@@ -101,9 +107,9 @@ const char* themeName(Theme t)
     default:          return N_("Light");
     }
 }
-static const Palette& themePal()
+static const Palette& builtInPal(Theme t)
 {
-    switch (s_theme) {
+    switch (t) {
     case Theme::Dark: return DARK;
     case Theme::Flix: return FLIX;
     case Theme::Luhu: return LUHU;
@@ -111,10 +117,17 @@ static const Palette& themePal()
     default:          return LIGHT;
     }
 }
+static const Palette& themePal()
+{
+    if (s_preview)    return *s_preview;
+    if (s_custom >= 0) return s_customPal;
+    return builtInPal(s_theme);
+}
+Palette builtInPalette(Theme t) { return builtInPal(t); }
 /* Solid colours: each gradient becomes its middle colour, without the
  * pinstripes (the bands a gradient shows on a 480i TV, issue 22) */
 static bool s_solid = false;
-void setSolidColors(bool on) { s_solid = on; }
+void setSolidColors(bool on) { s_solid = on; ++s_palGen; }
 static bool s_clock12 = false;
 void setClock12h(bool on) { s_clock12 = on; }
 bool clock12h()           { return s_clock12; }
@@ -130,16 +143,50 @@ const Palette& pal()
     if (!s_solid) return themePal();
     static Palette flat;
     static int     flatFor = -1;
-    if (flatFor != (int)s_theme) {
+    if (flatFor != s_palGen) {
         flat = themePal();
         flat.bgTop  = flat.bgBottom   = mix(flat.bgTop,   flat.bgBottom,   0.5f);
         flat.cardTop = flat.cardBottom = mix(flat.cardTop, flat.cardBottom, 0.5f);
         flat.barTop = flat.barBottom  = mix(flat.barTop,  flat.barBottom,  0.5f);
         flat.stripe = 0;
-        flatFor = (int)s_theme;
+        flatFor = s_palGen;
     }
     return flat;
 }
+
+/* themes of one's own (the list and the files: Themes.cpp) */
+int  customTheme() { return s_custom; }
+void setCustomTheme(int i)
+{
+    const std::vector<CustomTheme>& list = customThemes();
+    s_custom = i >= 0 && i < (int)list.size() ? i : -1;
+    if (s_custom >= 0) {
+        s_theme = list[s_custom].base;
+        s_customPal = buildPalette(list[s_custom]);
+    }
+    ++s_palGen;
+}
+void setPreviewPalette(const Palette* p) { s_preview = p; ++s_palGen; }
+bool customColors() { return s_preview || s_custom >= 0; }
+bool lightPalette()
+{
+    const u32 c = pal().bgTop;
+    return ((c >> 24) * 299 + ((c >> 16) & 0xFF) * 587 + ((c >> 8) & 0xFF) * 114) / 1000 > 140;
+}
+int  themeSlot()      { return s_custom >= 0 ? THEME_COUNT + s_custom : (int)s_theme; }
+int  themeSlotCount() { return THEME_COUNT + (int)customThemes().size(); }
+void setThemeSlot(int slot)
+{
+    if (slot >= THEME_COUNT) setCustomTheme(slot - THEME_COUNT);
+    else                     setTheme((Theme)slot);
+}
+std::string themeSlotName(int slot)
+{
+    if (slot >= THEME_COUNT && slot - THEME_COUNT < (int)customThemes().size())
+        return customThemes()[slot - THEME_COUNT].name;
+    return tr(themeName((Theme)slot));
+}
+
 void setFont(GRRLIB_ttfFont* f) { s_font = f; }
 GRRLIB_ttfFont* font()          { return s_font; }
 
@@ -335,6 +382,14 @@ void triangle(float x0, float y0, float x1, float y1, float x2, float y2, u32 c)
     GX_End();
 }
 
+void quad(float x, float y, float w, float h, u32 tl, u32 tr, u32 br, u32 bl)
+{
+    beginShapes();
+    GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
+    vtx(x, y, tl); vtx(x + w, y, tr); vtx(x + w, y + h, br); vtx(x, y + h, bl);
+    GX_End();
+}
+
 void icon(Icon i, float cx, float cy, u32 c, u32 fill)
 {
     switch (i) {
@@ -502,13 +557,20 @@ void drawHeaderBand()
 {
     const float h = headerBand();
     if (h <= 0) return;
-    /* glossy red title band of the old video channels */
+    /* glossy red title band of the old video channels (a theme of one's
+     * own: in its accent) */
     const float L = screenLeft(), R = screenRight();
+    u32 c0 = 0xD3242AFF, c1 = 0xB8141AFF, c2 = 0xA80F15FF, c3 = 0x86090DFF, c4 = 0x4A0306FF;
+    if (customColors()) {
+        const u32 a = pal().accent | 0xFF, k = 0x000000FF;
+        c0 = mix(a, 0xFFFFFFFF, 0.08f); c1 = mix(a, k, 0.12f); c2 = mix(a, k, 0.2f);
+        c3 = mix(a, k, 0.38f);          c4 = mix(a, k, 0.7f);
+    }
     beginShapes();
     GX_Begin(GX_QUADS, GX_VTXFMT0, 12);
-    vtx(L, 0, 0xD3242AFF); vtx(R, 0, 0xD3242AFF); vtx(R, h * 0.5f, 0xB8141AFF); vtx(L, h * 0.5f, 0xB8141AFF);
-    vtx(L, h * 0.5f, 0xA80F15FF); vtx(R, h * 0.5f, 0xA80F15FF); vtx(R, h, 0x86090DFF); vtx(L, h, 0x86090DFF);
-    vtx(L, h, 0x4A0306FF); vtx(R, h, 0x4A0306FF); vtx(R, h + 2, 0x4A030600); vtx(L, h + 2, 0x4A030600);
+    vtx(L, 0, c0); vtx(R, 0, c0); vtx(R, h * 0.5f, c1); vtx(L, h * 0.5f, c1);
+    vtx(L, h * 0.5f, c2); vtx(R, h * 0.5f, c2); vtx(R, h, c3); vtx(L, h, c3);
+    vtx(L, h, c4); vtx(R, h, c4); vtx(R, h + 2, c4 & ~0xFFu); vtx(L, h + 2, c4 & ~0xFFu);
     GX_End();
     GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
     vtx(L, 0, 0xFFFFFF40); vtx(R, 0, 0xFFFFFF40); vtx(R, 1, 0xFFFFFF40); vtx(L, 1, 0xFFFFFF40);
@@ -531,7 +593,7 @@ void button(float x, float y, float w, float h, const char* label, int size, flo
     card(x, y, w, h, h * 0.5f, focus);
     /* glossy top highlight */
     roundRect(x + h * 0.3f, y + 3, w - h * 0.6f, h * 0.36f, h * 0.18f,
-              alpha(0xFFFFFFFF, theme() == Theme::Light ? 0.55f : 0.06f),
+              alpha(0xFFFFFFFF, lightPalette() ? 0.55f : 0.06f),
               alpha(0xFFFFFFFF, 0.0f));
     textCentered(x + w * 0.5f, y + (h - size) * 0.5f - 1, label, size,
                  mix(p.text, p.accentDark, focus));
@@ -1127,7 +1189,8 @@ void spinner(GRRLIB_texImg* ring, float cx, float cy)
     s_spinNow = true;
     float angle = (float)(ticks_to_millisecs(gettime()) % 1500) * (360.0f / 1500.0f);
     GRRLIB_SetMidHandle(ring, true);
-    const u32 tint = theme() == Theme::Light ? 0x34BEEDFF : theme() == Theme::Flix ? 0xE52A30FF
+    const u32 tint = customColors() ? pal().accent | 0xFF
+                   : theme() == Theme::Light ? 0x34BEEDFF : theme() == Theme::Flix ? 0xE52A30FF
                    : theme() == Theme::Dark ? 0xFFFFFFFF : pal().accent;
     GRRLIB_DrawImg(cx, cy, ring, angle, 1.0f, 1.0f, tint);
     GRRLIB_SetMidHandle(ring, false);

@@ -89,7 +89,7 @@ static Look look()
 {
     const Ui::Palette& p = Ui::pal();
     Look l;
-    if (Ui::theme() == Ui::Theme::Flix) {
+    if (Ui::theme() == Ui::Theme::Flix && !Ui::customColors()) {
         l = Look{ true,
             0x6A6A6AFF, 0x474747FF, 0xFFFFFF30,
             0xFFFFFFFF, 0xA0A0A0FF, 0x6A6A6AFF,
@@ -102,8 +102,8 @@ static Look look()
             0x111111FF };
         return l;
     }
-    const bool light = Ui::theme() == Ui::Theme::Light;
-    l.band        = false;
+    const bool light = Ui::lightPalette();
+    l.band        = Ui::headerBand() > 0;   /* a theme of one's own on Flix */
     l.bandTop     = Ui::alpha(p.cardTop, 0.80f);
     l.bandBottom  = Ui::alpha(p.cardBottom, 0.80f);
     l.bandEdge    = Ui::alpha(p.cardBorder, 0.70f);

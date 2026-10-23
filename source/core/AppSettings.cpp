@@ -55,6 +55,10 @@ void App::loadSettings() {
                  * (home_layout, written after ui_theme, overrides this) */
                 if (Ui::theme() == Ui::Theme::Flix) Ui::setHomeLayout(Ui::HomeLayout::Rows);
             }
+        } else if (strcmp(key, "ui_theme_file") == 0) {
+            /* written after ui_theme: the file, if it's still there */
+            const int t = Ui::findCustomTheme(val);
+            if (t >= 0) Ui::setCustomTheme(t);
         } else if (strcmp(key, "smooth_motion") == 0) {
             g_wiifin_smooth_motion = atoi(val) != 0;
         } else if (strcmp(key, "disc_light") == 0) {
@@ -114,6 +118,7 @@ void App::loadSettings() {
             if (strcmp(field, "user_id")       == 0) profiles[idx].userId      = val;
             if (strcmp(field, "access_token")  == 0) profiles[idx].accessToken = val;
             if (strcmp(field, "theme")         == 0) profiles[idx].theme        = atoi(val);
+            if (strcmp(field, "theme_file")    == 0) profiles[idx].themeFile    = val;
             if (strcmp(field, "home_layout")   == 0) profiles[idx].homeLayout   = atoi(val);
             if (strcmp(field, "library_view")  == 0) profiles[idx].libraryStyle = atoi(val);
             if (strcmp(field, "solid_colors")  == 0) profiles[idx].solidColors  = atoi(val);
@@ -148,6 +153,7 @@ void App::loadSettings() {
 ViewPrefs App::currentView() const {
     ViewPrefs v;
     v.theme        = (int)Ui::theme();
+    v.themeFile    = Ui::customTheme() >= 0 ? Ui::customThemes()[Ui::customTheme()].file : std::string();
     v.homeLayout   = (int)Ui::homeLayout();
     v.libraryStyle = (int)Ui::libraryStyle();
     v.solidColors  = Ui::solidColors() ? 1 : 0;
@@ -156,6 +162,8 @@ ViewPrefs App::currentView() const {
 
 void App::applyView(const ViewPrefs& v) {
     Ui::setTheme(v.theme >= 0 && v.theme < Ui::THEME_COUNT ? (Ui::Theme)v.theme : Ui::Theme::Dark);
+    const int custom = v.themeFile.empty() ? -1 : Ui::findCustomTheme(v.themeFile);
+    if (custom >= 0) Ui::setCustomTheme(custom);
     Ui::setHomeLayout(v.homeLayout == 1 ? Ui::HomeLayout::Rows : Ui::HomeLayout::Grid);
     Ui::setLibraryStyle(v.libraryStyle >= 0 && v.libraryStyle < Ui::LIBRARY_STYLE_COUNT
                         ? (Ui::LibraryStyle)v.libraryStyle : Ui::LibraryStyle::Posters);
@@ -164,7 +172,7 @@ void App::applyView(const ViewPrefs& v) {
 
 ViewPrefs App::viewOf(const SavedProfile& p) const {
     ViewPrefs v = startView;
-    if (p.theme >= 0)        v.theme        = p.theme;
+    if (p.theme >= 0)        { v.theme = p.theme; v.themeFile = p.themeFile; }
     if (p.homeLayout >= 0)   v.homeLayout   = p.homeLayout;
     if (p.libraryStyle >= 0) v.libraryStyle = p.libraryStyle;
     if (p.solidColors >= 0)  v.solidColors  = p.solidColors;
@@ -173,7 +181,7 @@ ViewPrefs App::viewOf(const SavedProfile& p) const {
 
 void App::keepView(SavedProfile& p) {
     const ViewPrefs v = currentView();
-    p.theme = v.theme; p.homeLayout = v.homeLayout; p.libraryStyle = v.libraryStyle; p.solidColors = v.solidColors;
+    p.theme = v.theme; p.themeFile = v.themeFile; p.homeLayout = v.homeLayout; p.libraryStyle = v.libraryStyle; p.solidColors = v.solidColors;
 }
 
 static std::string sanitizeConfigValue(const std::string& s) {
@@ -208,6 +216,8 @@ void App::saveSettings() {
     fprintf(f, "direct_play=%d\n",      jellyfinClient.directPlay ? 1 : 0);
     /* WiiFin's own look: not the one of the profile open */
     fprintf(f, "ui_theme=%d\n",         startView.theme);
+    if (!startView.themeFile.empty())
+        fprintf(f, "ui_theme_file=%s\n", sanitizeConfigValue(startView.themeFile).c_str());
     fprintf(f, "home_layout=%d\n",      startView.homeLayout);
     fprintf(f, "library_view=%d\n",     startView.libraryStyle);
     fprintf(f, "solid_colors=%d\n",     startView.solidColors);
@@ -238,6 +248,8 @@ void App::saveSettings() {
         fprintf(f, "profile.%d.access_token=%s\n", i,
                 p.signIn == SavedProfile::Password ? "" : sanitizeConfigValue(p.accessToken).c_str());
         if (p.theme >= 0)        fprintf(f, "profile.%d.theme=%d\n",        i, p.theme);
+        if (p.theme >= 0 && !p.themeFile.empty())
+            fprintf(f, "profile.%d.theme_file=%s\n", i, sanitizeConfigValue(p.themeFile).c_str());
         if (p.homeLayout >= 0)   fprintf(f, "profile.%d.home_layout=%d\n",  i, p.homeLayout);
         if (p.libraryStyle >= 0) fprintf(f, "profile.%d.library_view=%d\n", i, p.libraryStyle);
         if (p.solidColors >= 0)  fprintf(f, "profile.%d.solid_colors=%d\n", i, p.solidColors);

@@ -12,6 +12,7 @@ struct SavedProfile {
 
     /* its own look (View Settings), -1: WiiFin's (the start-up one) */
     int theme = -1, homeLayout = -1, libraryStyle = -1, solidColors = -1;
+    std::string themeFile;   /* with theme: a theme of its own (themes/), "" a built-in */
 
     /* how it is opened: at once (its token kept), after a passcode, or
      * with the password (or Quick Connect) each time: no token kept */
@@ -30,4 +31,7 @@ struct SavedProfile {
 };
 
 /* The look a profile has, or WiiFin's start-up one (the menus) */
-struct ViewPrefs { int theme = 1, homeLayout = 0, libraryStyle = 0, solidColors = 0; };
+struct ViewPrefs {
+    int theme = 1, homeLayout = 0, libraryStyle = 0, solidColors = 0;
+    std::string themeFile;   /* a theme of one's own (themes/), "" theme is the built-in one */
+};

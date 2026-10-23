@@ -17,7 +17,7 @@
 
 /* The rows, by what they set (describe and activate take these) */
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
-           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS };
+           R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS, R_CUSTOMIZE };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -53,8 +53,8 @@ std::vector<int> SettingsView::sectionRows(int s) const
     switch (s) {
     case S_VIEW:
         /* the home and the libraries' look: a profile's (WiiFin's menu has neither) */
-        return profile ? std::vector<int>{ R_THEME, R_BACKGROUNDS, R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER, R_AREA }
-                       : std::vector<int>{ R_THEME, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA };
+        return profile ? std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER, R_AREA }
+                       : std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA };
     case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT };
     case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT };
     case S_SIGNIN:   return profile ? std::vector<int>{ R_SIGNIN, R_STARTUP } : std::vector<int>{};
@@ -185,10 +185,22 @@ SettingsView::RowInfo SettingsView::describe(int id)
             N_("Dark grey and orange"),
         };
         static const u32 themeCol[Ui::THEME_COUNT] = { 0x34A8DDFF, 0x45546BFF, 0xD81F26FF, 0x7DC242FF, 0xF47521FF };
+        if (Ui::customTheme() >= 0) {   /* one of the files in themes/ */
+            char d[96];
+            snprintf(d, sizeof(d), tr("Your own, from themes/%s"), Ui::customThemes()[Ui::customTheme()].file.c_str());
+            r.label = tr("Theme"); r.desc = d;
+            r.value = Ui::customThemes()[Ui::customTheme()].name;
+            r.col   = Ui::pal().accent | 0xFF;
+            break;
+        }
         const int t = (int)Ui::theme();
         set(N_("Theme"), themeDesc[t], Ui::themeName(Ui::theme()), themeCol[t]);
         break;
     }
+    case R_CUSTOMIZE:
+        set(N_("Customize Theme"), N_("Change any colour, text included, and save it as a theme of your own"),
+            N_("Edit"), p.accent);
+        break;
     case R_HOME: {
         const bool rowsHome = Ui::homeLayout() == Ui::HomeLayout::Rows;
         set(N_("Home Screen"), rowsHome ? N_("Rows of posters to browse, like the old video channels")
@@ -316,11 +328,12 @@ void SettingsView::activate(int index) {
         case 3: client.videoQuality = (client.videoQuality + 1) % JellyfinClient::VIDEO_QUALITY_COUNT; break;
         case 4: client.directPlay = !client.directPlay; break;
         case 5: g_wiifin_smooth_motion = !g_wiifin_smooth_motion; break;
-        case 6:
-            Ui::setTheme(Ui::nextTheme(Ui::theme()));
+        case 6:   /* the built-in ones, then the files in themes/ */
+            Ui::setThemeSlot((Ui::themeSlot() + 1) % Ui::themeSlotCount());
             /* the Flix look is made for the rows of carousels */
-            if (Ui::theme() == Ui::Theme::Flix) Ui::setHomeLayout(Ui::HomeLayout::Rows);
+            if (Ui::theme() == Ui::Theme::Flix && Ui::customTheme() < 0) Ui::setHomeLayout(Ui::HomeLayout::Rows);
             break;
+        case R_CUSTOMIZE: editor.open(); editing = true; break;
         case 7:
             Ui::setHomeLayout(Ui::homeLayout() == Ui::HomeLayout::Rows ? Ui::HomeLayout::Grid
                                                                        : Ui::HomeLayout::Rows);
@@ -436,6 +449,10 @@ void SettingsView::renderCalibration()
 
 // ---------------------------------------------------------------
 bool SettingsView::update(ir_t& ir) {
+    if (editing) {
+        if (editor.update(ir)) { editing = false; lastHoverRow = lastHoverSide = -1; }
+        return false;
+    }
     if (calibrating) { updateCalibration(); return false; }
     if (pinStep) {
         const int r = pin.update(ir);
@@ -582,6 +599,7 @@ static void wrap2(const std::string& s, float w, std::string& l1, std::string& l
 }
 
 void SettingsView::render(ir_t& ir) {
+    if (editing) { editor.render(ir); return; }
     if (calibrating) { renderCalibration(); return; }
     if (pinStep) { Ui::background(); pin.render(ir); return; }
     const Ui::Palette& p = Ui::pal();
