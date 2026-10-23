@@ -23,9 +23,9 @@ on:
   schedule:
     - cron: '0 5 * * 1'
   push:
-    paths-ignore: ['**.md', 'README/**', 'assets/preview*']
+    paths-ignore: ['**.md', 'README/**', 'assets/preview*', 'docs/**']
   pull_request:
-    paths-ignore: ['**.md', 'README/**', 'assets/preview*']
+    paths-ignore: ['**.md', 'README/**', 'assets/preview*', 'docs/**']
   workflow_dispatch:
     inputs:
       version:

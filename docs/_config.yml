@@ -1,0 +1,26 @@
+# GitHub Pages: Settings > Pages > Deploy from a branch, folder /docs.
+# The .md pages here render inside _layouts/default.html; index.html is
+# the landing page.  To try it locally: bundle exec jekyll serve -s docs
+title: WiiFin-XE
+description: A Jellyfin client for the Nintendo Wii
+lang: en
+markdown: kramdown
+kramdown:
+  input: GFM
+  auto_ids: true
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-titles-from-headings
+relative_links:
+  enabled: true
+defaults:
+  - scope: { path: "" }
+    values: { layout: default }
+# the pages' order in the menu
+nav:
+  - { title: Home,        url: / }
+  - { title: What's new,  url: /XE_FEATURES.html }
+  - { title: User guide,  url: /USER_GUIDE.html }
+  - { title: Themes,      url: /THEMES.html }
+  - { title: Building,    url: /BUILDING.html }
