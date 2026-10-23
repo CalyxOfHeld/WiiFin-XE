@@ -4,6 +4,8 @@
  * and the WiiFin logo drifts across it, changing colour at each edge.  Any
  * button, key, the mouse or the pointer moving brings the screen back; that
  * press does nothing else. */
+#include <string>
+
 namespace Screensaver {
 
 /* minutes before it starts, 0: never (Settings > Screensaver) */
@@ -11,6 +13,17 @@ void setMinutes(int m);
 int  minutes();
 /* the next and previous choice: Off, 1, 3, 5, 10, 15, 30 */
 int  nextMinutes(int m, int dir);
+
+/* what drifts: the WiiFin logo, a DVD-player-style one, or one's own
+ * picture (screensaver.png or .jpg in WiiFin's folder; none: WiiFin's).
+ * It moves in whole steps, so now and then it lands right in a corner
+ * (every few minutes) and flashes */
+enum Logo { LogoWiiFin = 0, LogoDvd = 1, LogoOwn = 2, LOGO_COUNT };
+void setLogo(int l);
+int  logo();
+bool ownLogoFound();
+/* WiiFin's folder (with its '/') */
+void setDir(const std::string& appDir);
 
 /* each Input::update: something done or not.  True when that woke the
  * screen: the press is eaten */

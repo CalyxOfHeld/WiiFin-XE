@@ -6,6 +6,7 @@
 #include "Lang.h"
 #include "../ui/Ui.h"
 #include "../ui/Avatars.h"
+#include "Screensaver.h"
 #include "Utils.h"
 #include "Input.h"
 #include "MusicBGM.h"
@@ -299,6 +300,7 @@ void App::init(const char* argv0) {
         loadSdFonts(settingsPath.substr(0, settingsPath.rfind('/') + 1));
         Ui::loadThemes(settingsPath.substr(0, settingsPath.rfind('/') + 1) + "themes");
         Avatars::setDir(settingsPath.substr(0, settingsPath.rfind('/') + 1));
+        Screensaver::setDir(settingsPath.substr(0, settingsPath.rfind('/') + 1));
     }
     SYS_Report("[WiiFin] v%s, IOS%d v%d, %s, MEM1 %u KB / MEM2 %u KB free, settings %s\n",
                WIIFIN_VERSION, (int)IOS_GetVersion(), (int)IOS_GetRevision(),

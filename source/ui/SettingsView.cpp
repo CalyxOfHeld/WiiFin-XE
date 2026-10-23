@@ -20,7 +20,7 @@
 /* The rows, by what they set (describe and activate take these) */
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
            R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS, R_CUSTOMIZE,
-           R_SAVER, R_SPEAKER };
+           R_SAVER, R_SPEAKER, R_SAVER_LOGO };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -59,7 +59,7 @@ std::vector<int> SettingsView::sectionRows(int s) const
         return profile ? std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER, R_AREA }
                        : std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA };
     case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT, R_SPEAKER };
-    case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_SAVER, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT };
+    case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_SAVER, R_SAVER_LOGO, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT };
     case S_SIGNIN:   return profile ? std::vector<int>{ R_SIGNIN, R_STARTUP } : std::vector<int>{};
     default:         return {};
     }
@@ -257,6 +257,18 @@ SettingsView::RowInfo SettingsView::describe(int id)
         if (m > 0) r.value = v;
         break;
     }
+    case R_SAVER_LOGO: {
+        const int l = Screensaver::logo();
+        set(N_("Screensaver Logo"),
+            l == Screensaver::LogoDvd ? N_("A DVD-player-style logo, a new colour at each edge")
+            : l == Screensaver::LogoOwn ? (Screensaver::ownLogoFound()
+                                             ? N_("Your picture: screensaver.png in apps/WiiFin/")
+                                             : N_("Put screensaver.png (or .jpg) in apps/WiiFin/; until then, the WiiFin logo"))
+                                        : N_("The WiiFin logo"),
+            l == Screensaver::LogoDvd ? N_("DVD") : l == Screensaver::LogoOwn ? N_("Your Own") : N_("WiiFin"),
+            l ? p.accent : OFF);
+        break;
+    }
     case R_SPEAKER: {
         const int m = RemoteSpeaker::mode();
         set(N_("Wii Remote Speaker"),
@@ -377,6 +389,7 @@ void SettingsView::activate(int index) {
             Lang::choose(Lang::next(Lang::choice()));
             break;
         case R_SAVER:   Screensaver::setMinutes(Screensaver::nextMinutes(Screensaver::minutes(), 1)); break;
+        case R_SAVER_LOGO: Screensaver::setLogo((Screensaver::logo() + 1) % Screensaver::LOGO_COUNT); break;
         case R_SPEAKER: RemoteSpeaker::setMode((RemoteSpeaker::mode() + 1) % RemoteSpeaker::MODE_COUNT); break;
         case R_EXIT:   /* the channel has no loader to go back to */
             if (appFromLoader()) g_app_exitToLoader = !g_app_exitToLoader;
