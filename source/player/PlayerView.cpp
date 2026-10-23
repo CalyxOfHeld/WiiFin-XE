@@ -573,9 +573,10 @@ void PlayerView::render(const ir_t& ir)
         Ui::roundRect(Ui::screenLeft() - 20, -30, Ui::screenWidth() + 40, TOP_H + 30, 22, p.barTop, p.barBottom);
         Ui::roundBorder(Ui::screenLeft() - 20, -30, Ui::screenWidth() + 40, TOP_H + 30, 22, 1.5f, p.barBorder);
         {
-            /* zoom has a button on the Classic (ZR) and GameCube (Z) only */
+            /* zoom has a button on the Classic (ZR), GameCube (Z) and a
+             * keyboard (F3) only */
             const Ui::ButtonStyle bs = Ui::buttonStyle();
-            const Ui::Hint all[] = { { bs == Ui::ButtonStyle::GameCube ? "Z" : "ZR", N_("Zoom") },
+            const Ui::Hint all[] = { { "ZR", N_("Zoom") },
                                      { "1", N_("Audio") }, { "2", N_("Subtitles") }, { "B", N_("Back") } };
             const Ui::Hint* hints = bs == Ui::ButtonStyle::WiiRemote ? all + 1 : all;
             const int nHints = bs == Ui::ButtonStyle::WiiRemote ? 3 : 4;
@@ -738,5 +739,5 @@ void PlayerView::render(const ir_t& ir)
 
     /* ---- Pointer ---- */
     if (ir.valid && cursorTex && (k > 0.5f || panel != Panel::None || introVisible()))
-        GRRLIB_DrawImg((int)ir.x - 20, (int)ir.y - 4, cursorTex, ir.angle, 1.0f, 1.0f, 0xFFFFFFFF);
+        if (!Ui::mouseCursor(ir.x, ir.y)) GRRLIB_DrawImg((int)ir.x - 20, (int)ir.y - 4, cursorTex, ir.angle, 1.0f, 1.0f, 0xFFFFFFFF);
 }

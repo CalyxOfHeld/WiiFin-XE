@@ -130,7 +130,7 @@ void drawNotice();
 struct Hint { const char* button; const char* label; };
 /* Hints name Wii Remote buttons ("A", "1", "-/+", "HOME", ...); they are
  * shown as the buttons of the controller used last (Input sets it). */
-enum class ButtonStyle { WiiRemote, Classic, GameCube };
+enum class ButtonStyle { WiiRemote, Classic, GameCube, Keyboard };
 void        setButtonStyle(ButtonStyle s);
 ButtonStyle buttonStyle();
 const char* buttonName(const char* wiiRemoteButton);
@@ -204,5 +204,8 @@ void avatar(float cx, float cy, float r, const char* name, float focus);
 
 /* Rotating loading ring (ring.png) centred at cx, cy. */
 void spinner(GRRLIB_texImg* ring, float cx, float cy);
+/* While a USB mouse has the pointer: its arrow drawn at x, y, true (the
+ * screen then draws no Wii Remote cursor). */
+bool mouseCursor(float x, float y);
 
 } // namespace Ui

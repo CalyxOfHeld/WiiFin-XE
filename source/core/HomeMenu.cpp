@@ -234,7 +234,7 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
 
         /* IR cursor — always on top */
         if (ir.valid && cursorPointerTex)
-            GRRLIB_DrawImg((int)irX - 10, (int)irY - 4,
+            if (!Ui::mouseCursor(irX, irY)) GRRLIB_DrawImg((int)irX - 10, (int)irY - 4,
                            cursorPointerTex, Input::pointerRoll(), 1, 1, 0xFFFFFFFF);
 
         GRRLIB_Render();

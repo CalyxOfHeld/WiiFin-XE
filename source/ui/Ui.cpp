@@ -1,6 +1,7 @@
 #include "Ui.h"
 #include "../core/Text.h"
 #include "../core/Lang.h"
+#include "../input/Input.h"
 
 #include <gccore.h>
 #include <math.h>
@@ -501,22 +502,26 @@ const char* buttonName(const char* b)
 {
     /* "+!": + as an action of its own (Input::isActionPressed), Z on a
      * GameCube controller (its R, the page turner, is a trigger) */
-    if (strcmp(b, "+!") == 0) return s_buttonStyle == ButtonStyle::GameCube ? "Z" : "+";
+    if (strcmp(b, "+!") == 0)
+        return s_buttonStyle == ButtonStyle::GameCube ? "Z" : s_buttonStyle == ButtonStyle::Keyboard ? "PgDn" : "+";
     if (s_buttonStyle == ButtonStyle::WiiRemote) return b;
-    /* the Classic Controller's face buttons are written in lower case */
-    static const struct { const char* wii; const char* classic; const char* gc; } MAP[] = {
-        { "A",    "a",    "A" },
-        { "B",    "b",    "B" },
-        { "1",    "y",    "Y" },
-        { "2",    "x",    "X" },
-        { "-",    "-",    "L" },
-        { "+",    "+",    "R" },
-        { "-/+",  "-/+",  "L/R" },
-        { "HOME", "HOME", "START" },
+    /* the Classic Controller's face buttons are written in lower case; a
+     * USB keyboard's keys (Input.h) are shown as key caps */
+    static const struct { const char* wii; const char* classic; const char* gc; const char* key; } MAP[] = {
+        { "A",    "a",    "A",     "Enter" },
+        { "B",    "b",    "B",     "Esc" },
+        { "1",    "y",    "Y",     "F1" },
+        { "2",    "x",    "X",     "F2" },
+        { "-",    "-",    "L",     "PgUp" },
+        { "+",    "+",    "R",     "PgDn" },
+        { "-/+",  "-/+",  "L/R",   "PgUp/Dn" },
+        { "HOME", "HOME", "START", "Home" },
+        { "ZR",   "ZR",   "Z",     "F3" },
     };
     for (const auto& m : MAP)
         if (strcmp(b, m.wii) == 0)
-            return s_buttonStyle == ButtonStyle::Classic ? m.classic : m.gc;
+            return s_buttonStyle == ButtonStyle::Classic ? m.classic
+                 : s_buttonStyle == ButtonStyle::GameCube ? m.gc : m.key;
     return b;
 }
 
@@ -969,6 +974,18 @@ void avatar(float cx, float cy, float r, const char* name, float focus)
     roundBorder(cx - r, cy - r, r * 2, r * 2, r, 2.0f, 0xFFFFFFFF);
     int size = (int)(r * 1.1f);
     textCentered(cx, cy - size * 0.55f, initial, size, 0xFFFFFFFF);
+}
+
+/* The USB mouse's pointer: a desktop arrow (tools/mouse_cursor.py), its
+ * tip on x, y */
+extern "C" unsigned char data_mouse_arrow_png[];   /* outside Ui:: */
+bool mouseCursor(float x, float y)
+{
+    if (!Input::pointerIsMouse()) return false;
+    static GRRLIB_texImg* tex = nullptr;
+    if (!tex) tex = GRRLIB_LoadTexture(data_mouse_arrow_png);
+    if (tex) GRRLIB_DrawImg((int)x - 2, (int)y - 2, tex, 0, 1, 1, 0xFFFFFFFF);
+    return true;
 }
 
 void spinner(GRRLIB_texImg* ring, float cx, float cy)

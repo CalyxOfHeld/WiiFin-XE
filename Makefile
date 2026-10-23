@@ -47,6 +47,7 @@ ASSET_OFILES := \
 	$(BUILD)/cursor_hand_closed_png.o \
 	$(BUILD)/ring_png.o \
 	$(BUILD)/gc_buttons_png.o \
+	$(BUILD)/mouse_arrow_png.o \
 	$(BUILD)/cacert_pem.o \
 	$(BUILD)/music_mp3.o \
 	$(BUILD)/fx_start_mp3.o \
@@ -171,6 +172,10 @@ $(BUILD)/ring_png.o: data/images/ring.png
 $(BUILD)/gc_buttons_png.o: data/images/gc_buttons.png
 	xxd -i -n data_gc_buttons_png $< > $(BUILD)/gc_buttons_png.h
 	$(CC) -x c -c -o $@ $(BUILD)/gc_buttons_png.h
+
+$(BUILD)/mouse_arrow_png.o: data/cursors/mouse_arrow.png
+	xxd -i -n data_mouse_arrow_png $< > $(BUILD)/mouse_arrow_png.h
+	$(CC) -x c -c -o $@ $(BUILD)/mouse_arrow_png.h
 
 $(BUILD)/cacert_pem.o: data/certs/cacert.pem
 	(cat $<; printf '\0') > $(BUILD)/cacert_pem_null.pem

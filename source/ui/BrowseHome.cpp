@@ -1030,14 +1030,17 @@ void BrowseHome::render(const ir_t& ir)
     float settle = 1.0f - fabsf(rowAnim - rowSel) * 4.0f;
     if (headerFocus < 0) drawInfoPanel(settle < 0 ? 0 : settle);
 
-    /* Fade the peeking row into the floor */
+    /* Shade everything under the band (from its bottom edge, which follows
+     * the rows as they slide), the peeking row fading into the floor */
     {
         const u32 c = L.floor;
-        GRRLIB_Rectangle(Ui::screenLeft(), 470, Ui::screenWidth(), 10, c, 1);
-        for (int i = 0; i < 16; ++i) {
-            float y = 386 + i * 5.25f;
-            GRRLIB_Rectangle(Ui::screenLeft(), y, Ui::screenWidth(), 5.25f, Ui::alpha(c, (i + 1) / 17.0f), 1);
-        }
+        const float top = BAND_Y + bandHeight(), bottom = 470;
+        const int   N = 24;
+        const float h = (bottom - top) / N;
+        GRRLIB_Rectangle(Ui::screenLeft(), bottom, Ui::screenWidth(), 480 - bottom, c, 1);
+        for (int i = 0; i < N; ++i)
+            GRRLIB_Rectangle(Ui::screenLeft(), top + i * h, Ui::screenWidth(), h,
+                             Ui::alpha(c, 0.3f + 0.7f * (i + 1) / (N + 1.0f)), 1);
     }
 
     /* Button hints along the bottom */

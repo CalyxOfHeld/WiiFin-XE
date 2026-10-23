@@ -383,7 +383,7 @@ void App::offerScreenCalibration(ir_t& ir) {
     auto drawPointer = [&]() {
         if (ir.valid && cursorPointerTex) {
             orient_t orient; WPAD_Orientation(Input::pointerChan(), &orient);
-            GRRLIB_DrawImg((int)ir.x - 20, (int)ir.y - 4, cursorPointerTex, Input::pointerRoll(), 1, 1, 0xFFFFFFFF);
+            if (!Ui::mouseCursor(ir.x, ir.y)) GRRLIB_DrawImg((int)ir.x - 20, (int)ir.y - 4, cursorPointerTex, Input::pointerRoll(), 1, 1, 0xFFFFFFFF);
         }
     };
     const int BY = 256, BW2 = 140, BH2 = 40;
@@ -808,7 +808,7 @@ void App::loop() {
         if (ir.valid && cursorPointerTex) {
             orient_t orient;
             WPAD_Orientation(Input::pointerChan(), &orient);
-            GRRLIB_DrawImg(
+            if (!Ui::mouseCursor(ir.x, ir.y)) GRRLIB_DrawImg(
                 (int)ir.x - 20,
                 (int)ir.y - 4,
                 cursorPointerTex, Input::pointerRoll(), 1, 1, 0xFFFFFFFF);
@@ -837,8 +837,7 @@ void App::loop() {
     for (GRRLIB_ttfFont* f : sdFonts) GRRLIB_FreeTTF(f);
     for (void* d : sdFontData) free(d);
     GRRLIB_Exit();
-    ConnectView::shutdownUsbKeyboard();
-    Input::shutdown();   /* the USB mouse's thread */
+    Input::shutdown();   /* the USB keyboard and mouse */
     WPAD_Shutdown();
     /* launched by a loader (the Homebrew Channel's stub, where exit() goes
      * back): not the WAD's channel */
