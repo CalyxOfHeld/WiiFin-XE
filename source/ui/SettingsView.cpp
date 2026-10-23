@@ -936,7 +936,8 @@ void SettingsView::render(ir_t& ir) {
         Ui::roundRect(px, py, pw, 24, 12, Ui::mix(r.col, 0xFFFFFFFF, 0.15f), r.col);
         Ui::textCentered(px + pw * 0.5f, py + 3, r.value.c_str(), 14, p.textOnAccent);
     }
-    if (n > vis) Ui::scrollbar(PANE_X + PANE_W + 8, y0, DESC_Y - 6 - y0, top, vis, n);
+    /* left of the settings, in the gap after the sections */
+    if (n > vis) Ui::scrollbar(PANE_X - 11, y0, DESC_Y - 6 - y0, top, vis, n);
     if (n == 0 && section == S_SEARCH && !query.empty())
         Ui::textCentered(PANE_X + PANE_W / 2, y0 + 20, tr("No setting matches"), 15, p.textDim);
 
