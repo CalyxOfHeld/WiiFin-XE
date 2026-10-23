@@ -28,6 +28,7 @@ struct JellyfinItem {
     std::string extraType;                 // a special feature's: "Trailer", "Featurette"...
     std::string artist;                    // an album's or a song's: AlbumArtist
     bool        played = false;            // UserData.Played (a series: all its episodes)
+    std::string dateCreated;               // when it was added to the server (ISO 8601)
 };
 
 struct JellyfinSeason {

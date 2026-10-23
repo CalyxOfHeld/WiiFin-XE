@@ -19,7 +19,7 @@ static GRRLIB_texImg* s_logo = nullptr;
 static int            s_logoUsers = 0;
 
 /* Defined in LibraryView.cpp: decodes a JPEG into an RGBA8 texture. */
-GRRLIB_texImg* loadJPEGTexture(const u8* data, u32 size);
+#include "JpegTexture.h"
 
 /* ---- Layout (640x480; rows, band and header span the whole screen, which
  * is wider in 16:9 — see Ui::screenLeft/Right) ----------------------------- */
@@ -1294,6 +1294,23 @@ void BrowseHome::fetchExpanded()
     expFollow();
 }
 
+/* "Added 3 Oct 2026" (Oct 3, 2026 on the 12-hour clock) from Jellyfin's
+ * "2026-10-03T..."; "" when there is no date */
+static std::string addedOn(const std::string& iso)
+{
+    int y = 0, m = 0, d = 0;
+    if (sscanf(iso.c_str(), "%d-%d-%d", &y, &m, &d) != 3 || y < 1900 || m < 1 || m > 12 || d < 1) return "";
+    /* TRANSLATORS: months, abbreviated (when a title was added) */
+    static const char* const MONTHS[12] = { N_("Jan"), N_("Feb"), N_("Mar"), N_("Apr"), N_("May"), N_("Jun"),
+                                            N_("Jul"), N_("Aug"), N_("Sep"), N_("Oct"), N_("Nov"), N_("Dec") };
+    char date[32], out[64];
+    if (Ui::clock12h()) snprintf(date, sizeof(date), "%s %d, %d", tr(MONTHS[m - 1]), d, y);
+    else                snprintf(date, sizeof(date), "%d %s %d", d, tr(MONTHS[m - 1]), y);
+    /* TRANSLATORS: under a New Addition's running time and year */
+    snprintf(out, sizeof(out), tr("Added %s"), date);
+    return out;
+}
+
 static const char* const SORT_NAMES[] = {
     /* TRANSLATORS: orders of an expanded home row (New Additions, Top Rated) */
     N_("Date Added: Newest"), N_("Date Added: Oldest"), N_("Release Date"), N_("Title A-Z"), N_("Rating")
@@ -1572,6 +1589,9 @@ void BrowseHome::renderExpanded(const ir_t& ir)
                 snprintf(meta + l, sizeof(meta) - l, "%s%d", l ? "  \xc2\xb7  " : "", it.year);
             }
             if (meta[0]) Ui::text(PX, PY + PH + 30, meta, 13, p.textDim);
+            /* New Additions: when it came to the server */
+            const std::string added = exp.sort == SORT_ADDED_NEW ? addedOn(it.dateCreated) : std::string();
+            if (!added.empty()) Ui::text(PX, PY + PH + 48, fit(added, 13, (int)PW).c_str(), 13, p.textDim);
         }
     }
 

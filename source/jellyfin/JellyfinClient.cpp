@@ -3716,7 +3716,7 @@ bool JellyfinClient::getItemsByQuery(const std::string& serverUrl,
                                      int* totalCount) {
     std::string url = serverUrl + pathAndQuery +
         (pathAndQuery.find('?') == std::string::npos ? "?" : "&") +
-        "Fields=ProductionYear,UserData,RunTimeTicks,SeriesId,ChildCount,RecursiveItemCount,SortName"
+        "Fields=ProductionYear,UserData,RunTimeTicks,SeriesId,ChildCount,RecursiveItemCount,SortName,DateCreated"
         "&EnableImages=false";
     std::string resp;
     int status = httpRequest(url, "GET", "", "", auth.accessToken, resp);
@@ -3752,6 +3752,7 @@ bool JellyfinClient::getItemsByQuery(const std::string& serverUrl,
         item.recursiveItemCount    = c->self->jsonGetInt(obj,    "RecursiveItemCount");
         item.sortName              = c->self->jsonGetString(obj, "SortName");
         item.artist                = c->self->jsonGetString(obj, "AlbumArtist");
+        item.dateCreated           = c->self->jsonGetString(obj, "DateCreated");
         if (!item.id.empty() && !item.name.empty())
             c->out->push_back(item);
     }, &ctx);

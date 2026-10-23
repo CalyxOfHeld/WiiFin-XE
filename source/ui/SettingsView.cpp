@@ -20,7 +20,8 @@
 /* The rows, by what they set (describe and activate take these) */
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
            R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS, R_CUSTOMIZE,
-           R_SAVER, R_SPEAKER, R_SAVER_LOGO, R_POWER_BTN, R_RESET_BTN };
+           R_SAVER, R_SPEAKER, R_SAVER_LOGO, R_POWER_BTN, R_RESET_BTN,
+           R_SAVER_SPEED, R_SAVER_EFFECT };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -60,7 +61,7 @@ std::vector<int> SettingsView::sectionRows(int s) const
         return profile ? std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER, R_AREA }
                        : std::vector<int>{ R_THEME, R_CUSTOMIZE, R_BACKGROUNDS, R_START, R_DIM, R_HEADER, R_AREA };
     case S_PLAYBACK: return { R_QUALITY, R_DIRECT, R_SMOOTH, R_LIGHT, R_SPEAKER };
-    case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_SAVER, R_SAVER_LOGO, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT, R_POWER_BTN, R_RESET_BTN };
+    case S_SYSTEM:   return { R_MUSIC, R_SOUNDS, R_SAVER, R_SAVER_LOGO, R_SAVER_SPEED, R_SAVER_EFFECT, R_CLOCK, R_LANGUAGE, R_SSL, R_EXIT, R_POWER_BTN, R_RESET_BTN };
     case S_SIGNIN:   return profile ? std::vector<int>{ R_SIGNIN, R_STARTUP } : std::vector<int>{};
     default:         return {};
     }
@@ -253,7 +254,7 @@ SettingsView::RowInfo SettingsView::describe(int id)
         /* TRANSLATORS: the screensaver starts after this many minutes */
         if (m > 0) snprintf(v, sizeof v, tr("%d min"), m);
         set(N_("Screensaver"),
-            m > 0 ? N_("The WiiFin logo drifts on a dark screen after a while untouched (paused too)")
+            m > 0 ? N_("A logo drifts on a dark screen after a while untouched (paused too)")
                   : N_("The screen stays as it is, however long it's left"),
             m > 0 ? "" : N_("Off"), m > 0 ? p.accent : OFF);
         if (m > 0) r.value = v;
@@ -274,13 +275,37 @@ SettingsView::RowInfo SettingsView::describe(int id)
     case R_SAVER_LOGO: {
         const int l = Screensaver::logo();
         set(N_("Screensaver Logo"),
-            l == Screensaver::LogoDvd ? N_("A DVD-player-style logo, a new colour at each edge")
-            : l == Screensaver::LogoOwn ? (Screensaver::ownLogoFound()
-                                             ? N_("Your picture: screensaver.png in apps/WiiFin/")
-                                             : N_("Put screensaver.png (or .jpg) in apps/WiiFin/; until then, the WiiFin logo"))
-                                        : N_("The WiiFin logo"),
-            l == Screensaver::LogoDvd ? N_("DVD") : l == Screensaver::LogoOwn ? N_("Your Own") : N_("WiiFin"),
+            l == Screensaver::LogoDvd ? N_("A DVD-player-style logo")
+            : l == Screensaver::LogoOwn
+                ? (Screensaver::picture().empty()
+                       ? N_("Put a PNG or JPEG in apps/WiiFin/pictures/; until then, the WiiFin logo")
+                   : Screensaver::ownLogoFound()
+                       ? N_("Your picture, from apps/WiiFin/ (A: the next one)")
+                       : N_("That picture can't be used: a JPEG, or a PNG up to 1600 pixels, under 3 MB"))
+                : N_("The WiiFin logo"),
+            l == Screensaver::LogoDvd ? N_("DVD") : l == Screensaver::LogoOwn ? N_("Picture") : N_("WiiFin"),
             l ? p.accent : OFF);
+        if (l == Screensaver::LogoOwn && !Screensaver::picture().empty()) r.value = Screensaver::pictureLabel();
+        break;
+    }
+    case R_SAVER_SPEED: {
+        const int sp = Screensaver::speed();
+        set(N_("Screensaver Speed"),
+            sp == Screensaver::SpeedSlow ? N_("Drifts slowly; a corner comes about every ten minutes")
+            : sp == Screensaver::SpeedFast ? N_("Drifts quickly; a corner comes every few minutes")
+                                           : N_("Drifts steadily; a corner comes every five minutes or so"),
+            sp == Screensaver::SpeedSlow ? N_("Slow") : sp == Screensaver::SpeedFast ? N_("Fast") : N_("Normal"),
+            sp == Screensaver::SpeedNormal ? OFF : p.accent);
+        break;
+    }
+    case R_SAVER_EFFECT: {
+        const int e = Screensaver::effect();
+        set(N_("Screensaver Colours"),
+            e == Screensaver::EffectFade ? N_("The colour fades slowly from one to the next")
+            : e == Screensaver::EffectNone ? N_("Its own colours, always (the DVD logo white)")
+                                           : N_("A new colour each time it touches an edge"),
+            e == Screensaver::EffectFade ? N_("Fade") : e == Screensaver::EffectNone ? N_("Off") : N_("Each Edge"),
+            e == Screensaver::EffectEdge ? OFF : p.accent);
         break;
     }
     case R_SPEAKER: {
@@ -405,7 +430,9 @@ void SettingsView::activate(int index) {
         case R_SAVER:   Screensaver::setMinutes(Screensaver::nextMinutes(Screensaver::minutes(), 1)); break;
         case R_POWER_BTN: g_app_powerAction = (g_app_powerAction + 1) % BTN_ACTION_COUNT; break;
         case R_RESET_BTN: g_app_resetAction = (g_app_resetAction + 1) % BTN_ACTION_COUNT; break;
-        case R_SAVER_LOGO: Screensaver::setLogo((Screensaver::logo() + 1) % Screensaver::LOGO_COUNT); break;
+        case R_SAVER_LOGO: Screensaver::nextLogo(); break;
+        case R_SAVER_SPEED: Screensaver::setSpeed((Screensaver::speed() + 1) % Screensaver::SPEED_COUNT); break;
+        case R_SAVER_EFFECT: Screensaver::setEffect((Screensaver::effect() + 1) % Screensaver::EFFECT_COUNT); break;
         case R_SPEAKER: RemoteSpeaker::setMode((RemoteSpeaker::mode() + 1) % RemoteSpeaker::MODE_COUNT); break;
         case R_EXIT:   /* the channel has no loader to go back to */
             if (appFromLoader()) g_app_exitToLoader = !g_app_exitToLoader;

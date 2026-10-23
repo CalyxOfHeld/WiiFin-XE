@@ -19,7 +19,7 @@ static void jpegErrExit(j_common_ptr cinfo) {
 // from the worker thread and corrupts the heap allocator state.
 static void jpegNoOp(j_common_ptr) {}
 
-GRRLIB_texImg* loadJPEGTexture(const u8* data, u32 size) {
+GRRLIB_texImg* loadJPEGTexture(const u8* data, u32 size, u32 maxSide) {
     // Reject immediately if data doesn't start with the JPEG SOI marker.
     if (size < 3 || data[0] != 0xFF || data[1] != 0xD8 || data[2] != 0xFF)
         return nullptr;
@@ -54,6 +54,12 @@ GRRLIB_texImg* loadJPEGTexture(const u8* data, u32 size) {
     // server, so the integer DCT and plain chroma upsampling are not visible.
     cinfo.dct_method          = JDCT_IFAST;
     cinfo.do_fancy_upsampling = FALSE;
+    if (maxSide) {
+        const u32 big = cinfo.image_width > cinfo.image_height ? cinfo.image_width : cinfo.image_height;
+        cinfo.scale_num   = 1;
+        cinfo.scale_denom = 1;
+        while (cinfo.scale_denom < 8 && big / cinfo.scale_denom > maxSide) cinfo.scale_denom *= 2;
+    }
     jpeg_start_decompress(&cinfo);
 
     u32 w  = cinfo.output_width;

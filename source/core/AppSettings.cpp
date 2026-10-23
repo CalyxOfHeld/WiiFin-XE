@@ -101,6 +101,12 @@ void App::loadSettings() {
             Screensaver::setMinutes(atoi(val));
         } else if (strcmp(key, "screensaver_logo") == 0) {
             Screensaver::setLogo(atoi(val));
+        } else if (strcmp(key, "screensaver_picture") == 0) {
+            Screensaver::setPicture(val);
+        } else if (strcmp(key, "screensaver_speed") == 0) {
+            Screensaver::setSpeed(atoi(val));
+        } else if (strcmp(key, "screensaver_effect") == 0) {
+            Screensaver::setEffect(atoi(val));
         } else if (strcmp(key, "remote_speaker") == 0) {
             RemoteSpeaker::setMode(atoi(val));
         } else if (strcmp(key, "clock_12h") == 0) {
@@ -246,6 +252,9 @@ void App::saveSettings() {
     fprintf(f, "clock_12h=%d\n",        Ui::clock12h() ? 1 : 0);
     fprintf(f, "screensaver_min=%d\n",  Screensaver::minutes());
     fprintf(f, "screensaver_logo=%d\n", Screensaver::logo());
+    fprintf(f, "screensaver_picture=%s\n", Screensaver::picture().c_str());
+    fprintf(f, "screensaver_speed=%d\n", Screensaver::speed());
+    fprintf(f, "screensaver_effect=%d\n", Screensaver::effect());
     fprintf(f, "remote_speaker=%d\n",   RemoteSpeaker::mode());
     fprintf(f, "dim_rows=%d\n",         Ui::dimRows() ? 1 : 0);
     fprintf(f, "classic_header=%d\n",   Ui::classicHeader() ? 1 : 0);
