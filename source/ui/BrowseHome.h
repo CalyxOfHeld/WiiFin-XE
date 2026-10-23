@@ -70,6 +70,8 @@ public:
     void setUserName(const std::string& n) { userName = n; }
 
 private:
+    /* the orders of an expanded row of parts (2); the row's own first */
+    enum Sort { SORT_ADDED_NEW, SORT_ADDED_OLD, SORT_RELEASED, SORT_TITLE, SORT_RATING, SORT_COUNT };
     struct Row {
         std::string                 title;
         bool                        square = false;   /* album art */
@@ -82,9 +84,14 @@ private:
         int                         first  = 0;      /* first visible tile         */
         /* a row of several parts, one after the other (New Additions, Top
          * Rated: one per library): where each starts, its name */
-        struct Section { int start; std::string label; std::string query; };
+        struct Section {
+            int start; std::string label; std::string query;
+            std::string parent, types;                /* sorted another way (expanded) */
+            std::string filter = "";                  /* and narrowed: "&GenreIds=..." */
+        };
         std::vector<Section>        sections;
         std::string                 query;            /* what it shows; empty: can't expand */
+        int                         sort = -1;        /* its order (Sort); -1: no other */
     };
     static int sectionOf(const Row& r, int i);   /* -1: no sections */
 
@@ -99,6 +106,9 @@ private:
     int         expSec    = -1;    /* the part shown */
     int         sideSel   = 0, sideTop = 0;
     bool        sideFocus = false; /* the highlight in that list */
+    int         expSort = -1, expSortWant = -1;   /* -1: the row's own query */
+    int         expSortAt(int k) const;           /* k-th order offered: the row's own first */
+    std::string sortedQuery(const Row::Section& s, int sort) const;
     float       expLeft() const;
     float       expRight() const;
     float       expListW() const;
@@ -141,7 +151,8 @@ private:
     void loaderLoop();
     static void* loaderMain(void* self);
 
-    static float rowDrop(const Row& r);      /* the Libraries row sits lower */
+    float rowStride(int r) const;            /* row r's top to the next one's */
+    float rowPos(float r) const;
     float bandHeight() const;
     float tileW(const Row& r) const;
     float stride(const Row& r) const;

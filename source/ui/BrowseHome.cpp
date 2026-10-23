@@ -22,20 +22,21 @@ GRRLIB_texImg* loadJPEGTexture(const u8* data, u32 size);
 
 /* ---- Layout (640x480; rows, band and header span the whole screen, which
  * is wider in 16:9 — see Ui::screenLeft/Right) ----------------------------- */
-static const float BAND_Y     = 48,  BAND_H = 252;   /* focused row panel        */
-static const float POSTER_Y   = 80;                  /* top of the focused row   */
+static const float BAND_Y     = 48,  BAND_H = 254;   /* focused row panel        */
+static const float POSTER_Y   = 86;                  /* top of the focused row   */
+static const float TITLE_UP   = 33;                  /* a row's title over its posters: near
+                                                      * the band's top, clear of the selection */
 static const float POSTER_H   = 146, POSTER_W = 98;  /* 2:3 posters              */
 static const float GAP        = 9;
 #define X0 (Ui::screenLeft() + 30.0f)              /* first poster of a row */
-static const float ROW_STRIDE = 252;                 /* poster top to poster top */
-static const float INFO_Y     = 240, INFO_H = 52;
-/* the Libraries row (no info panel): lower, clear of the header, on a
- * shorter band */
-static const float WIDE_DROP  = 14, BAND_H_WIDE = 210;
+static const float ROW_STRIDE = 258;                 /* poster top to poster top */
+static const float INFO_Y     = 244, INFO_H = 52;
+/* the Libraries row (no info panel): a shorter band, the next row closer */
+static const float BAND_H_WIDE = 204;
 #define INFO_X (Ui::screenLeft() + 28.0f)
 #define INFO_W (Ui::screenWidth() - 56.0f)
 static const int   MAX_ITEMS  = 20;                  /* per row (home)           */
-static const int   CATALOG_ITEMS = 60;               /* per row (browse page)    */
+static const int   CATALOG_GENRES = 12;              /* parts of a library's row (browse page) */
 static const int   SECTION_ITEMS = 12;               /* per library (New Additions, Top Rated) */
 
 /* Header pills */
@@ -209,12 +210,13 @@ void BrowseHome::buildHome(const std::vector<JellyfinLibrary>& libs)
     };
 
     /* one part of a row of several (one per library), empty ones dropped */
-    auto addSection = [&](Row& r, const std::string& label, const std::string& query) {
+    auto addSection = [&](Row& r, const std::string& label, const std::string& query,
+                          const std::string& parent, const char* types) {
         std::vector<JellyfinItem> got;
         client.getItemsByQuery(serverUrl, auth, query, got);
         if (got.empty()) return;
         if ((int)got.size() > SECTION_ITEMS) got.resize(SECTION_ITEMS);
-        r.sections.push_back({ (int)r.items.size(), label, query });
+        r.sections.push_back({ (int)r.items.size(), label, query, parent, types });
         r.items.insert(r.items.end(), got.begin(), got.end());
     };
     auto pushRow = [&](Row& r) {
@@ -239,20 +241,26 @@ void BrowseHome::buildHome(const std::vector<JellyfinLibrary>& libs)
     Row added, top;
     added.title = tr("New Additions");
     top.title   = tr("Top Rated");
+    added.sort  = SORT_ADDED_NEW;
+    top.sort    = SORT_RATING;
     for (const auto& lib : libs) {
         const std::string& t = lib.collectionType;
         if (!(t == "movies" || t == "tvshows" || t == "music" || t == "homevideos" ||
               t == "musicvideos" || t.empty() || t == "mixed"))
             continue;
+        /* what the library's titles are, sorted another way */
+        const char* types = t == "movies" ? "Movie" : t == "tvshows" ? "Series" : t == "music" ? "MusicAlbum"
+                          : t == "homevideos" || t == "musicvideos" ? "Video,MusicVideo,Movie"
+                          : "Movie,Series,Video";
         snprintf(q, sizeof(q), "/Users/%s/Items/Latest?ParentId=%s&Limit=%d",
                  uid.c_str(), lib.id.c_str(), SECTION_ITEMS);
-        addSection(added, lib.name, q);
+        addSection(added, lib.name, q, lib.id, types);
         if (t == "movies" || t == "tvshows") {
             snprintf(q, sizeof(q),
                      "/Users/%s/Items?ParentId=%s&Recursive=true&IncludeItemTypes=%s"
                      "&SortBy=CommunityRating,SortName&SortOrder=Descending&Limit=%d",
-                     uid.c_str(), lib.id.c_str(), t == "movies" ? "Movie" : "Series", SECTION_ITEMS);
-            addSection(top, lib.name, q);
+                     uid.c_str(), lib.id.c_str(), types, SECTION_ITEMS);
+            addSection(top, lib.name, q, lib.id, types);
         }
     }
     /* the rows' own queries: every library at once (the "All" part of the
@@ -304,6 +312,8 @@ void BrowseHome::buildCatalog(const std::vector<JellyfinLibrary>& libs)
         }
     }
 
+    /* a row per library, as New Additions: its titles A-Z (All), then a
+     * part per genre; 2 opens it with every part listed on the left */
     for (const auto& lib : libs) {
         const std::string& t = lib.collectionType;
         const char* types = t == "movies"  ? "Movie"
@@ -312,26 +322,35 @@ void BrowseHome::buildCatalog(const std::vector<JellyfinLibrary>& libs)
                           : (t == "homevideos" || t == "musicvideos") ? "Video,MusicVideo,Movie"
                           : nullptr;
         if (!types) continue;
-        snprintf(q, sizeof(q),
-                 "/Users/%s/Items?ParentId=%s&Recursive=true&IncludeItemTypes=%s"
-                 "&SortBy=SortName&SortOrder=Ascending&Limit=%d",
-                 uid.c_str(), lib.id.c_str(), types, CATALOG_ITEMS);
-        char title[160];
-        /* TRANSLATORS: a row of the browse page; %s is the name of a library */
-        snprintf(title, sizeof(title), tr("All %s"), lib.name.c_str());
-        ADD_ROW(std::string(title), q, t == "music", CATALOG_ITEMS);
-
-        if (t != "movies" && t != "tvshows") continue;
-        std::vector<JellyfinItem> genres;
-        snprintf(q, sizeof(q), "/Genres?ParentId=%s&UserId=%s&SortBy=SortName&Limit=8",
-                 lib.id.c_str(), uid.c_str());
-        client.getItemsByQuery(serverUrl, auth, q, genres);
-        for (const auto& g : genres) {
+        Row r;
+        r.title  = lib.name;
+        r.square = t == "music";
+        r.sort   = SORT_TITLE;
+        auto addPart = [&](const std::string& label, const std::string& filter, int cap) {
             snprintf(q, sizeof(q),
-                     "/Users/%s/Items?ParentId=%s&Recursive=true&IncludeItemTypes=%s"
-                     "&GenreIds=%s&SortBy=Random&Limit=%d",
-                     uid.c_str(), lib.id.c_str(), types, g.id.c_str(), MAX_ITEMS);
-            ADD_ROW(g.name + " \xc2\xb7 " + lib.name, q, false, MAX_ITEMS);
+                     "/Users/%s/Items?ParentId=%s&Recursive=true&IncludeItemTypes=%s%s"
+                     "&SortBy=SortName&SortOrder=Ascending&Limit=%d",
+                     uid.c_str(), lib.id.c_str(), types, filter.c_str(), cap);
+            std::vector<JellyfinItem> got;
+            client.getItemsByQuery(serverUrl, auth, q, got);
+            if (got.empty()) return;
+            if ((int)got.size() > cap) got.resize(cap);
+            r.sections.push_back({ (int)r.items.size(), label, q, lib.id, types, filter });
+            r.items.insert(r.items.end(), got.begin(), got.end());
+        };
+        addPart(tr("All"), "", MAX_ITEMS);
+
+        if (t == "movies" || t == "tvshows") {
+            std::vector<JellyfinItem> genres;
+            snprintf(q, sizeof(q), "/Genres?ParentId=%s&UserId=%s&SortBy=SortName&Limit=%d",
+                     lib.id.c_str(), uid.c_str(), CATALOG_GENRES);
+            client.getItemsByQuery(serverUrl, auth, q, genres);
+            for (const auto& g : genres) addPart(g.name, "&GenreIds=" + g.id, SECTION_ITEMS);
+        }
+        if (!r.items.empty()) {
+            r.tex.assign(r.items.size(), nullptr);
+            r.st.assign(r.items.size(), TILE_NONE);
+            rows.push_back(std::move(r));
         }
     }
 }
@@ -362,7 +381,20 @@ const JellyfinItem* BrowseHome::selectedItem() const
 
 /* ---- Geometry ------------------------------------------------------------ */
 
-float BrowseHome::rowDrop(const Row& r) { return r.wide ? WIDE_DROP : 0.0f; }
+/* row r's top to the next row's: less after a row without an info panel */
+float BrowseHome::rowStride(int r) const
+{
+    return r >= 0 && r < (int)rows.size() && rows[r].wide ? ROW_STRIDE - (BAND_H - BAND_H_WIDE) : ROW_STRIDE;
+}
+
+/* where row r (fractional while sliding) sits, from the first row's place */
+float BrowseHome::rowPos(float r) const
+{
+    int i = (int)floorf(r);
+    float p = 0;
+    for (int k = 0; k < i; ++k) p += rowStride(k);
+    return p + (r - i) * rowStride(i);
+}
 
 /* the band's height, following the rows as they slide */
 float BrowseHome::bandHeight() const
@@ -621,8 +653,7 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
         if (nRows > 0) {
             Row& row = rows[rowSel];
             float tw = tileW(row), st = stride(row);
-            const float py = POSTER_Y + rowDrop(row);
-            if (ir.y >= py && ir.y < py + POSTER_H) {
+            if (ir.y >= POSTER_Y && ir.y < POSTER_Y + POSTER_H) {
                 hoverLeft  = ir.x < X0 - 4;
                 hoverRight = ir.x > Ui::screenRight() - 24.0f;
                 for (int i = 0; i < (int)row.items.size(); ++i) {
@@ -631,7 +662,7 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
                     if (ir.x >= x && ir.x < x + tw) hoverTile = i;
                 }
             }
-            hoverNextRow = rowSel + 1 < nRows && ir.y >= POSTER_Y + ROW_STRIDE - 26;
+            hoverNextRow = rowSel + 1 < nRows && ir.y >= POSTER_Y + rowStride(rowSel) - TITLE_UP;
         }
         if (hoverHeader >= 0) headerFocus = hoverHeader;
         else if (ir.y > 44) headerFocus = -1;
@@ -735,7 +766,7 @@ void BrowseHome::drawRow(int r, float offY, float focus)
     Row& row = rows[r];
     const float ws = WiiUtils::wsScaleX();
     const float tw = tileW(row), st = stride(row);
-    const float y = POSTER_Y + rowDrop(row) + offY;
+    const float y = POSTER_Y + offY;
     const bool  focused = focus > 0.5f && headerFocus < 0;
     const Look  L = look();
 
@@ -751,8 +782,8 @@ void BrowseHome::drawRow(int r, float offY, float focus)
         cur = sectionOf(row, focus > 0.5f ? row.sel : (lead < 0 ? 0 : lead));
         if (cur >= 0) head += "  \xc2\xb7  " + row.sections[cur].label;
     }
-    Ui::text(X0 - 2, y - 25, head.c_str(), 16, tc);
-    if (focus > 0.5f) Ui::text(X0 - 1, y - 25, head.c_str(), 16, tc);
+    Ui::text(X0 - 2, y - TITLE_UP, head.c_str(), 16, tc);
+    if (focus > 0.5f) Ui::text(X0 - 1, y - TITLE_UP, head.c_str(), 16, tc);
     const float headEnd = X0 - 2 + Ui::textWidth(head.c_str(), 16) + 18;
     for (int s = 0; s < (int)row.sections.size(); ++s) {
         const float sx = X0 + (row.sections[s].start - row.scroll) * st;
@@ -761,7 +792,7 @@ void BrowseHome::drawRow(int r, float offY, float focus)
             GRRLIB_Rectangle(sx - GAP * ws * 0.5f - 1, y, 2, POSTER_H, Ui::alpha(L.titleDim, 0.6f), 1);
         if (s == cur || sx < headEnd) continue;
         std::string lab = fit(row.sections[s].label, 14, (int)(Ui::screenRight() - 24.0f - sx));
-        Ui::text(sx, y - 23, lab.c_str(), 14, tc);
+        Ui::text(sx, y - TITLE_UP + 2, lab.c_str(), 14, tc);
     }
 
     u32 tint = lerpCol(L.dimTint, 0xFFFFFFFF, focus);
@@ -988,7 +1019,7 @@ void BrowseHome::render(const ir_t& ir)
     for (int r = rowSel - 2; r <= rowSel + 2; ++r) {
         if (r < 0 || r >= (int)rows.size()) continue;
         float d = r - rowAnim;
-        float off = d * ROW_STRIDE;
+        float off = rowPos((float)r) - rowPos(rowAnim);
         if (off < -ROW_STRIDE - 40 || off > 480 - POSTER_Y + 30) continue;
         float focus = 1.0f - fabsf(d);
         if (focus < 0) focus = 0;
@@ -1086,13 +1117,18 @@ void BrowseHome::expFollow()
 
 void BrowseHome::expand()
 {
-    /* open already: the part picked in the list on the left */
+    /* open already: the part picked in the list on the left, or another order */
     if (expanded) {
-        if (sideSel < 0 || sideSel >= (int)expSecs.size() || sideSel == expSec) return;
+        const bool part  = sideSel >= 0 && sideSel < (int)expSecs.size() && sideSel != expSec;
+        const bool order = expSortWant != expSort;
+        if (!part && !order) return;
         freeTextures(exp);
-        expSec     = sideSel;
-        exp.title  = expBase + " \xc2\xb7 " + expSecs[expSec].label;
-        exp.query  = expSecs[expSec].query;
+        if (part) {
+            expSec    = sideSel;
+            exp.title = expBase + " \xc2\xb7 " + expSecs[expSec].label;
+            exp.query = expSecs[expSec].query;
+        }
+        expSort = expSortWant;
         exp.items.clear(); exp.tex.clear(); exp.st.clear();
         exp.sel    = 0;
         fetchExpanded();
@@ -1109,10 +1145,25 @@ void BrowseHome::expand()
     exp.title  = title;
     exp.query  = query;
     exp.square = r.square;
+    exp.sort   = r.sort;
+    expSort    = expSortWant = r.sort;
     expBase    = r.title;
     expSecs.clear();
-    if (!r.sections.empty() && !r.query.empty())   /* first: every library at once */
-        expSecs.push_back({ 0, tr("All"), r.query });
+    if (!r.sections.empty() && !r.query.empty()) {   /* first: every library at once */
+        std::string types;                           /* what any of them hold */
+        for (const auto& sec : r.sections) {
+            size_t a = 0;
+            while (a < sec.types.size()) {
+                size_t b = sec.types.find(',', a);
+                if (b == std::string::npos) b = sec.types.size();
+                const std::string t = sec.types.substr(a, b - a);
+                if (("," + types + ",").find("," + t + ",") == std::string::npos)
+                    types += (types.empty() ? "" : ",") + t;
+                a = b + 1;
+            }
+        }
+        expSecs.push_back({ 0, tr("All"), r.query, "", types });
+    }
     const int skip = (int)expSecs.size();
     expSecs.insert(expSecs.end(), r.sections.begin(), r.sections.end());
     expSec     = sideSel = s < 0 ? -1 : s + skip;
@@ -1132,7 +1183,9 @@ void BrowseHome::fetchExpanded()
 {
     std::string keep = exp.sel >= 0 && exp.sel < (int)exp.items.size() ? exp.items[exp.sel].id : "";
     freeTextures(exp);
-    std::string q = exp.query;
+    /* another order than the row's own: asked of the library itself */
+    std::string q = expSort >= 0 && expSort != exp.sort && expSec >= 0 && expSec < (int)expSecs.size()
+                    ? sortedQuery(expSecs[expSec], expSort) : exp.query;
     char lim[24];
     snprintf(lim, sizeof(lim), "Limit=%d", EXPAND_ITEMS);
     size_t p = q.find("Limit=");
@@ -1154,6 +1207,38 @@ void BrowseHome::fetchExpanded()
         if (exp.items[i].id == keep) { exp.sel = i; break; }
     expTop = 0;
     expFollow();
+}
+
+static const char* const SORT_NAMES[] = {
+    /* TRANSLATORS: orders of an expanded home row (New Additions, Top Rated) */
+    N_("Date Added: Newest"), N_("Date Added: Oldest"), N_("Release Date"), N_("Title A-Z"), N_("Rating")
+};
+
+int BrowseHome::expSortAt(int k) const
+{
+    if (k == 0 || exp.sort < 0) return exp.sort;
+    int i = 0;
+    for (int s = 0; s < SORT_COUNT; ++s) {
+        if (s == exp.sort) continue;
+        if (++i == k) return s;
+    }
+    return exp.sort;
+}
+
+std::string BrowseHome::sortedQuery(const Row::Section& s, int sort) const
+{
+    static const char* const BY[SORT_COUNT] = {
+        "DateCreated,SortName&SortOrder=Descending",
+        "DateCreated,SortName&SortOrder=Ascending",
+        "PremiereDate,ProductionYear,SortName&SortOrder=Descending",
+        "SortName&SortOrder=Ascending",
+        "CommunityRating,SortName&SortOrder=Descending",
+    };
+    char q[384];
+    snprintf(q, sizeof(q), "/Users/%s/Items?Recursive=true%s%s&IncludeItemTypes=%s%s&SortBy=%s&Limit=%d",
+             auth.userId.c_str(), s.parent.empty() ? "" : "&ParentId=", s.parent.c_str(),
+             s.types.c_str(), s.filter.c_str(), BY[sort < 0 || sort >= SORT_COUNT ? 0 : sort], EXPAND_ITEMS);
+    return q;
 }
 
 void BrowseHome::collapse()
@@ -1182,6 +1267,14 @@ BrowseHome::Action BrowseHome::updateExpanded(const ir_t& ir, bool& irMode)
         expTop = 0;
         expFollow();
         return Action::None;
+    }
+    /* 2: the next order (a row of parts: New Additions, Top Rated) */
+    if (Input::is2Pressed() && exp.sort >= 0 && expSec >= 0) {
+        int k = 0;
+        while (k < SORT_COUNT && expSortAt(k) != expSort) ++k;
+        expSortWant = expSortAt((k + 1) % SORT_COUNT);
+        sideFocus = false;
+        return Action::Expand;   /* expand(): that order */
     }
 
     /* pointer: the parts on the left, or the page */
@@ -1271,9 +1364,12 @@ void BrowseHome::renderExpanded(const ir_t& ir)
     const int n = (int)exp.items.size(), cols = expCols(), lines = expLines(), v = expView();
     const float ws = WiiUtils::wsScaleX();
 
-    char pos[24];
-    snprintf(pos, sizeof(pos), "%d / %d", n > 0 ? exp.sel + 1 : 0, n);
-    Ui::header(fit(exp.title, 24, 440).c_str(), pos);
+    /* the order in force, then where the selection is */
+    char pos[96];
+    const bool sorts = exp.sort >= 0 && expSec >= 0 && expSort >= 0 && expSort < SORT_COUNT;
+    snprintf(pos, sizeof(pos), "%s%s%d / %d", sorts ? tr(SORT_NAMES[expSort]) : "", sorts ? "  \xc2\xb7  " : "",
+             n > 0 ? exp.sel + 1 : 0, n);
+    Ui::header(fit(exp.title, 24, sorts ? 330 : 440).c_str(), pos);
 
     /* the parts of the row, the one shown marked */
     if (!expSecs.empty()) {
@@ -1395,8 +1491,9 @@ void BrowseHome::renderExpanded(const ir_t& ir)
     }
 
     static const char* const VIEWS[Ui::LIBRARY_STYLE_COUNT] = { N_("Posters"), N_("List"), N_("List + Posters") };
-    const Ui::Hint l[] = { { "A", sideFocus ? N_("Show") : N_("Open") }, { "B", N_("Back") }, { "1", VIEWS[v] } };
+    const Ui::Hint l[] = { { "A", sideFocus ? N_("Show") : N_("Open") }, { "B", N_("Back") }, { "1", VIEWS[v] },
+                           { "2", N_("Sort") } };
     const Ui::Hint r[] = { { "-/+", N_("Page") } };
-    std::string cap = v == 0 && contentFocus && exp.sel >= 0 && exp.sel < n ? fit(expName(exp.items[exp.sel]), 14, 240) : "";
-    Ui::footer(l, 3, r, n > cols * lines && !sideFocus ? 1 : 0, cap.empty() ? nullptr : cap.c_str());
+    std::string cap = v == 0 && contentFocus && exp.sel >= 0 && exp.sel < n ? fit(expName(exp.items[exp.sel]), 14, 200) : "";
+    Ui::footer(l, sorts ? 4 : 3, r, n > cols * lines && !sideFocus ? 1 : 0, cap.empty() ? nullptr : cap.c_str());
 }
