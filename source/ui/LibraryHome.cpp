@@ -449,7 +449,10 @@ void LibraryView::renderGlobalFavorites(ir_t& ir) {
  * --------------------------------------------------------------- */
 static const char* const PROFILE_MENU[6] = {
     N_("Now Playing"), N_("Back to Jellyfin"), N_("All Libraries"), N_("Switch Profile"), N_("Settings"),
-    N_("WiiFin Menu")
+    N_("WiiFin Main Menu")
+};
+static const Ui::Icon PROFILE_ICONS[6] = {
+    Ui::Icon::Play, Ui::Icon::Back, Ui::Icon::Browse, Ui::Icon::Profile, Ui::Icon::Settings, Ui::Icon::Menu
 };
 /* Now Playing, first, while a music session plays */
 static int pmFirst() { return MusicSession::active() ? 0 : 1; }
@@ -503,8 +506,10 @@ void LibraryView::renderProfileMenu(ir_t& ir) {
     Ui::text(320 - PM_W / 2 + 28, top - 49, filterDejaVu(userName, 30).c_str(), 18, p.text);
     for (int i = 0; i < n; ++i) {
         profileMenuFocus[i] = Ui::approach(profileMenuFocus[i], i == profileMenuSel ? 1.0f : 0.0f);
-        Ui::button(320 - PM_W / 2, top + i * PM_STEP, PM_W, PM_BH, PROFILE_MENU[pmFirst() + i], 18,
-                   profileMenuFocus[i] > 0.01f ? Ui::pulse() * profileMenuFocus[i] : 0.0f);
+        const float focus = profileMenuFocus[i] > 0.01f ? Ui::pulse() * profileMenuFocus[i] : 0.0f;
+        Ui::button(320 - PM_W / 2, top + i * PM_STEP, PM_W, PM_BH, PROFILE_MENU[pmFirst() + i], 18, focus);
+        Ui::icon(PROFILE_ICONS[pmFirst() + i], 320 - PM_W / 2 + 30, top + i * PM_STEP + PM_BH * 0.5f,
+                 Ui::mix(p.text, p.accentDark, focus));
     }
     const Ui::Hint l[] = { { "A", N_("Select") } };
     const Ui::Hint r[] = { { "B", N_("Back") } };

@@ -41,11 +41,20 @@ static u32 fromClassic(u32 c)
     return out;
 }
 
-/* The upper half holds the expansion's buttons: only the Classic
- * Controller's are wanted (a Nunchuk's C/Z use the same bits). */
-static u32 fromWpad(u32 w, bool classic)
+/* A Nunchuk's buttons, as a Classic Controller's shoulder buttons: C is
+ * -, Z is + (tabs, pages) */
+static u32 fromNunchuk(u32 n)
 {
-    return (w & 0xFFFF) | (classic ? fromClassic(w & 0xFFFF0000u) : 0);
+    return ((n & WPAD_NUNCHUK_BUTTON_C) ? WPAD_BUTTON_MINUS : 0) |
+           ((n & WPAD_NUNCHUK_BUTTON_Z) ? WPAD_BUTTON_PLUS  : 0);
+}
+
+/* The upper half holds the expansion's buttons, the Classic Controller's
+ * or the Nunchuk's (the same bits, read by what is plugged in). */
+static u32 fromWpad(u32 w, bool classic, bool nunchuk)
+{
+    return (w & 0xFFFF) | (classic ? fromClassic(w & 0xFFFF0000u) : 0)
+                        | (nunchuk ? fromNunchuk(w & 0xFFFF0000u) : 0);
 }
 
 static u32 fromGameCube(u16 p)
@@ -139,6 +148,20 @@ static u32 classicStickDir(int ch)
     return WPAD_BUTTON_LEFT;
 }
 
+/* A Nunchuk's stick pushed past half way */
+static u32 nunchukStickDir(int ch)
+{
+    WPADData* wd = WPAD_Data(ch);
+    if (!wd || wd->exp.type != WPAD_EXP_NUNCHUK) return 0;
+    const joystick_t& js = wd->exp.nunchuk.js;
+    if (js.mag <= 0.5f) return 0;
+    float a = js.ang;                             /* 0 up, 90 right */
+    if (a >= 315 || a < 45) return WPAD_BUTTON_UP;
+    if (a < 135)            return WPAD_BUTTON_RIGHT;
+    if (a < 225)            return WPAD_BUTTON_DOWN;
+    return WPAD_BUTTON_LEFT;
+}
+
 /* A GameCube controller's sticks (the C-Stick too) */
 static u32 gcStickDir(int port)
 {
@@ -195,7 +218,7 @@ void Input::update() {
         lastDropReport = nowMs;
     }
 
-    /* every Wii Remote (and its Classic Controller) */
+    /* every Wii Remote (and its Classic Controller or Nunchuk) */
     u32 wiiDown = 0, wiiHeld = 0;
     bool plusDown = false;
     int remoteChan = -1, classicChan = -1;        /* pressed this frame */
@@ -203,12 +226,15 @@ void Input::update() {
         if (!remoteThere[ch]) continue;
         WPADData* wd = WPAD_Data(ch);
         const bool classic = wd && wd->exp.type == WPAD_EXP_CLASSIC;
+        const bool nunchuk = wd && wd->exp.type == WPAD_EXP_NUNCHUK;
         const u32 d = WPAD_ButtonsDown(ch);
-        wiiDown |= fromWpad(d, classic);
-        wiiHeld |= fromWpad(WPAD_ButtonsHeld(ch), classic);
-        plusDown |= (d & WPAD_BUTTON_PLUS) || (classic && (d & WPAD_CLASSIC_BUTTON_PLUS));
+        wiiDown |= fromWpad(d, classic, nunchuk);
+        wiiHeld |= fromWpad(WPAD_ButtonsHeld(ch), classic, nunchuk);
+        plusDown |= (d & WPAD_BUTTON_PLUS) || (classic && (d & WPAD_CLASSIC_BUTTON_PLUS))
+                 || (nunchuk && (d & WPAD_NUNCHUK_BUTTON_Z));
         if (classic && (d & 0xFFFF0000u) && classicChan < 0) classicChan = ch;
-        if ((d & 0xFFFF) && remoteChan < 0) remoteChan = ch;
+        /* the Nunchuk is the Wii Remote's half: its hints, its pointer */
+        if (((d & 0xFFFF) || (nunchuk && (d & 0xFFFF0000u))) && remoteChan < 0) remoteChan = ch;
     }
 
     /* the keyboard: every key since the last frame */
@@ -286,16 +312,19 @@ void Input::update() {
     }
 
     /* sticks: a new push counts as a press of that controller */
-    static u32 prevStick[2][PORTS] = {};
+    static u32 prevStick[3][PORTS] = {};
     u32 stick = 0, stickDown = 0;
     for (int i = 0; i < PORTS; ++i) {
         const u32 g = gcStickDir(i), c = classicStickDir(i);
+        const u32 n = remoteThere[i] ? nunchukStickDir(i) : 0;
         if ((g & ~prevStick[0][i]) && gcPort < 0)      gcPort = i;
         if ((c & ~prevStick[1][i]) && classicChan < 0) classicChan = i;
-        stickDown |= (g & ~prevStick[0][i]) | (c & ~prevStick[1][i]);
-        stick |= g | c;
+        if ((n & ~prevStick[2][i]) && remoteChan < 0)  remoteChan = i;
+        stickDown |= (g & ~prevStick[0][i]) | (c & ~prevStick[1][i]) | (n & ~prevStick[2][i]);
+        stick |= g | c | n;
         prevStick[0][i] = g;
         prevStick[1][i] = c;
+        prevStick[2][i] = n;
     }
 
     /* any other controller's button or stick, or a key: the screen's own

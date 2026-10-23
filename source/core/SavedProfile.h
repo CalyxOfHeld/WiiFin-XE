@@ -22,6 +22,11 @@ struct SavedProfile {
     /* libraries left off its home (ids, comma-separated): All Libraries
      * still lists and opens them */
     std::string hiddenLibs;
+
+    /* the name it goes by in WiiFin (the profiles, the menu), set on the
+     * profile screen; empty: the account's user name */
+    std::string nickname;
+    const std::string& shownName() const { return nickname.empty() ? username : nickname; }
 };
 
 /* The look a profile has, or WiiFin's start-up one (the menus) */

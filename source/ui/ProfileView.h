@@ -1,8 +1,10 @@
 #pragma once
 #include <vector>
+#include <string>
 #include <grrlib.h>
 #include <wiiuse/wpad.h>
 #include "../core/SavedProfile.h"
+#include "Keyboard.h"
 
 enum class ProfileResult {
     None,
@@ -10,6 +12,7 @@ enum class ProfileResult {
     DeleteOne,  /* selectedIdx is set — caller removes it then re-loops  */
     AddNew,     /* user wants to connect a new account                   */
     Back,       /* user pressed B                                        */
+    Rename,     /* selectedIdx is set — its nickname becomes newName     */
 };
 
 class ProfileView {
@@ -21,7 +24,9 @@ public:
     ProfileResult update(ir_t& ir);
     void          render(ir_t& ir);
 
-    int selectedIdx = 0; /* valid when result is Selected or DeleteOne */
+    int selectedIdx = 0; /* valid when result is Selected, DeleteOne or Rename */
+    std::string newName; /* Rename: the nickname ("": the user name again) */
+    void setFocus(int row) { if (row >= 0 && row <= (int)profiles.size()) focusedRow = row; }
 
 private:
     GRRLIB_ttfFont* font;
@@ -31,6 +36,9 @@ private:
     int  focusedRow    = 0;
     bool irMode        = false;
     bool confirmDelete = false;
+    bool renaming      = false;   /* 1: the keyboard, for its nickname */
+    Keyboard    kb;
+    std::string draft;
 
     static const int ROW_H   = 66;
     static const int ROW_Y0  = 74;

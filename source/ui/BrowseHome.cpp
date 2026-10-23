@@ -1043,34 +1043,12 @@ void BrowseHome::drawHeader()
         Ui::roundRect(x, PILL_Y, w, PILL_H, PILL_H * 0.5f, L.pillTop, L.pillBottom);
         Ui::roundBorder(x, PILL_Y, w, PILL_H, PILL_H * 0.5f, f ? 2.0f : 1.5f, f ? L.pillFocus : L.pillBorder);
         float tx = x + w * 0.5f;
-        /* the icons, drawn alike: 2 px strokes in the label's colour, in
-         * a 14 px box left of it */
-        const float cx = x + 17, cy = PILL_Y + 13;
-        const u32   ic = L.pillText;
-        switch (b) {
-        case HB_SEARCH: {   /* magnifier */
-            float mx = x + 15, my = PILL_Y + 12;
-            Ui::roundBorder(mx - 5, my - 5, 10, 10, 5, 2.0f, ic);
-            Ui::triangle(mx + 3, my + 4, mx + 5, my + 2, mx + 9, my + 8, ic);
-            Ui::triangle(mx + 3, my + 4, mx + 9, my + 8, mx + 7, my + 10, ic);
-            break;
+        /* the icon, left of the label */
+        static const Ui::Icon ICONS[4] = { Ui::Icon::Search, Ui::Icon::Home, Ui::Icon::Browse, Ui::Icon::Menu };
+        if (b <= HB_MENU) {
+            Ui::icon(ICONS[b], x + 17, PILL_Y + 13, L.pillText);
+            tx += 7;
         }
-        case HB_HOME:       /* house: roof, walls, a door */
-            Ui::triangle(cx - 7, cy - 1, cx, cy - 7, cx + 7, cy - 1, ic);
-            Ui::roundBorder(cx - 4.5f, cy - 2, 9, 8, 1, 2.0f, ic);
-            Ui::roundRect(cx - 1, cy + 2, 2, 4, 0, ic);
-            break;
-        case HB_BROWSE:     /* four tiles */
-            for (int k = 0; k < 4; ++k)
-                Ui::roundBorder(cx - 6 + (k % 2) * 7, cy - 6 + (k / 2) * 7, 5, 5, 1, 1.5f, ic);
-            break;
-        case HB_MENU:       /* three bars */
-            for (int k = 0; k < 3; ++k)
-                Ui::roundRect(cx - 6, cy - 5 + k * 4.5f, 12, 2, 1, ic);
-            break;
-        default: break;
-        }
-        if (b != HB_TOGGLE) tx += 7;
         Ui::textCentered(tx, PILL_Y + 4, pillLabel(i, catalog), 15, L.pillText);
         /* the page shown: a short bar under its label */
         if ((b == HB_HOME && !catalog) || (b == HB_BROWSE && catalog))

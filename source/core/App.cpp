@@ -530,7 +530,7 @@ void App::loop() {
         if (!waitForNetwork()) return; /* DNS won't work without this */
         LibraryView lv(font, jpFont, cursorPointerTex, ringTex,
                        jellyfinClient, auth, p.serverUrl);
-        lv.setUserName(p.username);
+        lv.setUserName(p.shownName());
         lv.setHiddenLibraries(p.hiddenLibs);
         /* the server's remote control, while this profile is open */
         jellyfinClient.postCapabilities(p.serverUrl, auth);
@@ -655,12 +655,14 @@ void App::loop() {
     /* ---- Helper: profile picker loop; autoOpen: that profile opened
      * first, as if picked (Open at Start-Up) ---- */
     auto runProfilePicker = [&](int autoOpen = -1) {
+        int pickerFocus = 0;   /* the row picked last (a profile just renamed) */
         while (running) {
             if (profiles.empty()) {
                 runConnect();
                 return;
             }
             ProfileView pv(font, cursorPointerTex, profiles);
+            pv.setFocus(pickerFocus);
             ProfileResult res = ProfileResult::None;
             if (autoOpen >= 0 && autoOpen < (int)profiles.size()) {
                 pv.selectedIdx = autoOpen;
@@ -677,6 +679,15 @@ void App::loop() {
                 GRRLIB_Render();
             }
             if (!running || res == ProfileResult::Back) return;
+            pickerFocus = 0;
+            if (res == ProfileResult::Rename) {
+                if (pv.selectedIdx >= 0 && pv.selectedIdx < (int)profiles.size()) {
+                    profiles[pv.selectedIdx].nickname = pv.newName;
+                    saveSettings();
+                    pickerFocus = pv.selectedIdx;
+                }
+                continue;
+            }
             if (res == ProfileResult::DeleteOne) {
                 int idx = pv.selectedIdx;
                 if (idx >= 0 && idx < (int)profiles.size()) {

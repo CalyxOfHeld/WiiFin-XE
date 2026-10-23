@@ -121,6 +121,7 @@ void App::loadSettings() {
             if (strcmp(field, "pass_salt")     == 0) profiles[idx].passSalt     = val;
             if (strcmp(field, "pass_hash")     == 0) profiles[idx].passHash     = val;
             if (strcmp(field, "hidden_libs")   == 0) profiles[idx].hiddenLibs   = val;
+            if (strcmp(field, "nickname")      == 0) profiles[idx].nickname     = val;
         } else {
             /* Legacy single-profile keys — migrate on first load */
             if (strcmp(key, "server_url")   == 0) {
@@ -247,6 +248,8 @@ void App::saveSettings() {
         }
         if (!p.hiddenLibs.empty())
             fprintf(f, "profile.%d.hidden_libs=%s\n", i, sanitizeConfigValue(p.hiddenLibs).c_str());
+        if (!p.nickname.empty())
+            fprintf(f, "profile.%d.nickname=%s\n", i, sanitizeConfigValue(p.nickname).c_str());
     }
     fflush(f);
     fclose(f);

@@ -193,7 +193,7 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
             float dw = BTN_W * sc, dh = BTN_H * sc;
             bool  sel = (hmSel == i);
             Ui::button(bcx[i] - dw * 0.5f, bcy - dh * 0.5f, dw, dh,
-                       i == 1 ? N_("Reset") : toLoader ? N_("Homebrew Channel") : N_("Wii Menu"),
+                       i == 1 ? N_("Restart") : toLoader ? N_("Homebrew Channel") : N_("Wii Menu"),
                        (int)(22 * sc),
                        sel ? Ui::pulse() : 0.0f);
         }
@@ -208,7 +208,7 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
             float adx = 320 - adw * 0.5f, ady = 240 - adh * 0.5f;
             Ui::card(adx, ady, adw, adh, 20 * psc, 0.0f);
 
-            const char* line1 = (confirmFor == 1) ? tr("Reset the application?")
+            const char* line1 = (confirmFor == 1) ? tr("Restart WiiFin?")
                               : toLoader ? tr("Return to the Homebrew Channel?")
                                          : tr("Return to the Wii Menu?");
             Ui::textCentered(320, ady + 32 * psc, line1, (int)(20 * psc), P.text);

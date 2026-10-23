@@ -98,6 +98,10 @@ void texCover(GRRLIB_texImg* tex, float x, float y, float w, float h, float r,
               float aspect, u32 tint = 0xFFFFFFFF);
 /* Solid triangle (arrows, play glyphs). */
 void triangle(float x0, float y0, float x1, float y1, float x2, float y2, u32 color);
+/* Small line icons (about 14 px, 2 px strokes) centred on cx, cy: the
+ * header's buttons and the menus */
+enum class Icon { Search, Home, Browse, Menu, Play, Back, Profile, Settings };
+void icon(Icon i, float cx, float cy, u32 color);
 
 /* Colour helpers */
 u32  mix(u32 a, u32 b, float t);

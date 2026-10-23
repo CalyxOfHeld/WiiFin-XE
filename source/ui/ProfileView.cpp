@@ -12,6 +12,7 @@ ProfileView::ProfileView(GRRLIB_ttfFont* f, GRRLIB_texImg* cursor,
     : font(f), cursorTex(cursor), profiles(p)
 {
     focusedRow = 0;
+    kb.setEnterLabel(N_("Done"));
 }
 
 /* -----------------------------------------------------------------------
@@ -22,6 +23,22 @@ ProfileResult ProfileView::update(ir_t& ir) {
 
     int totalRows = (int)profiles.size() + 1; /* profiles + "Add New" row */
     const int rowBefore = focusedRow;
+
+    /* its nickname typed: Done keeps it (nothing: the user name again) */
+    if (renaming) {
+        kb.setOrigin((640 - kb.width()) * 0.5f, 214);
+        const Keyboard::Result r = kb.update(ir, draft, 32);
+        if (r == Keyboard::Result::Cancel) { renaming = false; SoundFX::play(SoundFX::FX::Back); }
+        if (r == Keyboard::Result::Enter) {
+            renaming = false;
+            size_t a = draft.find_first_not_of(' '), b = draft.find_last_not_of(' ');
+            newName = a == std::string::npos ? "" : draft.substr(a, b - a + 1);
+            selectedIdx = focusedRow;
+            SoundFX::play(SoundFX::FX::Open);
+            return ProfileResult::Rename;
+        }
+        return ProfileResult::None;
+    }
 
     /* the delete question over the list: the list behind it stays put (the
      * pointer moving over another row closed it); A on Delete or anywhere
@@ -81,6 +98,15 @@ ProfileResult ProfileView::update(ir_t& ir) {
         return ProfileResult::Back;
     }
 
+    /* 1 = a nickname for the profile */
+    if (Input::is1Pressed() && focusedRow < (int)profiles.size()) {
+        renaming = true;
+        draft = profiles[focusedRow].shownName();
+        kb.reset();
+        SoundFX::play(SoundFX::FX::Select);
+        return ProfileResult::None;
+    }
+
     /* MINUS (isLPressed) = toggle delete confirm for a profile row */
     if (Input::isLPressed() && focusedRow < (int)profiles.size()) {
         confirmDelete = !confirmDelete;
@@ -136,15 +162,19 @@ void ProfileView::render(ir_t& ir) {
         }
         const SavedProfile& p = profiles[i];
 
-        /* Avatar: first letter of the user name in a Wii-blue disc */
-        Ui::avatar(cx, cy, 20, p.username.c_str(), 0.0f);
+        /* Avatar: first letter of its name in a Wii-blue disc */
+        Ui::avatar(cx, cy, 20, p.shownName().c_str(), 0.0f);
 
-        const char* name = !p.username.empty() ? p.username.c_str()
+        const char* name = !p.shownName().empty() ? p.shownName().c_str()
                          : !p.serverName.empty() ? p.serverName.c_str() : p.serverUrl.c_str();
         char server[96];
         if (!p.serverName.empty()) snprintf(server, sizeof(server), "%s  \xe2\x80\xa2  %s", p.serverName.c_str(), p.serverUrl.c_str());
         else                       snprintf(server, sizeof(server), "%s", p.serverUrl.c_str());
         Ui::text(x + 68, y + 9,  name,   20, pal.text);
+        if (!p.nickname.empty() && !p.username.empty()) {   /* and the account's name after it */
+            const int nw = Ui::textWidth(name, 20);
+            Ui::text(x + 68 + nw + 10, y + 13, p.username.c_str(), 15, pal.textDim);
+        }
         Ui::text(x + 68, y + 34, server, 13, pal.textDim);
     }
 
@@ -158,13 +188,27 @@ void ProfileView::render(ir_t& ir) {
         Ui::button(330, 248, 140, 38, N_("Cancel"), 17, 0.0f);
     }
 
-    if (confirmDelete) {
+    /* Nickname: the name being typed over the list, the keyboard below */
+    if (renaming) {
+        GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, pal.dim, 1);
+        Ui::card((640 - kb.width()) * 0.5f - 10, 104, kb.width() + 20, kb.height() + 120, 16, 0.0f);
+        Ui::text((640 - kb.width()) * 0.5f + 4, 116, tr("Nickname"), 18, pal.text);
+        Ui::textRight((640 + kb.width()) * 0.5f - 4, 120, tr("Leave it empty for the user name"), 13, pal.textDim);
+        std::string shown = draft + "_";
+        Ui::field((640 - kb.width()) * 0.5f, 150, kb.width(), 40, shown.c_str(), 18, true);
+        kb.render(ir);
+    }
+
+    if (renaming) {
+        static const Ui::Hint left[] = { { "A", N_("Type") }, { "B", N_("Delete") }, { "+", N_("Done") } };
+        Ui::bottomBar(left, 3);
+    } else if (confirmDelete) {
         static const Ui::Hint left[] = { { "A", N_("Delete") }, { "B", N_("Cancel") } };
         Ui::bottomBar(left, 2);
     } else {
-        static const Ui::Hint left[]  = { { "A", N_("Open") }, { "-", N_("Delete") } };
+        static const Ui::Hint left[]  = { { "A", N_("Open") }, { "1", N_("Nickname") }, { "-", N_("Delete") } };
         static const Ui::Hint right[] = { { "B", N_("Back") } };
-        Ui::bottomBar(left, 2, right, 1);
+        Ui::bottomBar(left, 3, right, 1);
     }
 
     /* IR cursor */

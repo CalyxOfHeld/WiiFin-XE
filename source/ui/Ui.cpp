@@ -335,6 +335,50 @@ void triangle(float x0, float y0, float x1, float y1, float x2, float y2, u32 c)
     GX_End();
 }
 
+void icon(Icon i, float cx, float cy, u32 c)
+{
+    switch (i) {
+    case Icon::Search: {       /* magnifier */
+        const float mx = cx - 2, my = cy - 1;
+        roundBorder(mx - 5, my - 5, 10, 10, 5, 2.0f, c);
+        triangle(mx + 3, my + 4, mx + 5, my + 2, mx + 9, my + 8, c);
+        triangle(mx + 3, my + 4, mx + 9, my + 8, mx + 7, my + 10, c);
+        break;
+    }
+    case Icon::Home:           /* house: roof, walls, a door */
+        triangle(cx - 7, cy - 1, cx, cy - 7, cx + 7, cy - 1, c);
+        roundBorder(cx - 4.5f, cy - 2, 9, 8, 1, 2.0f, c);
+        roundRect(cx - 1, cy + 2, 2, 4, 0, c);
+        break;
+    case Icon::Browse:         /* four tiles */
+        for (int k = 0; k < 4; ++k)
+            roundBorder(cx - 6 + (k % 2) * 7, cy - 6 + (k / 2) * 7, 5, 5, 1, 1.5f, c);
+        break;
+    case Icon::Menu:           /* three bars */
+        for (int k = 0; k < 3; ++k)
+            roundRect(cx - 6, cy - 5 + k * 4.5f, 12, 2, 1, c);
+        break;
+    case Icon::Play:
+        triangle(cx - 4, cy - 6, cx + 6, cy, cx - 4, cy + 6, c);
+        break;
+    case Icon::Back:           /* arrow to the left */
+        triangle(cx - 7, cy, cx - 1, cy - 6, cx - 1, cy + 6, c);
+        roundRect(cx - 2, cy - 1.5f, 9, 3, 1, c);
+        break;
+    case Icon::Profile:        /* head and shoulders */
+        roundBorder(cx - 3.5f, cy - 7, 7, 7, 3.5f, 2.0f, c);
+        roundRect(cx - 6, cy + 1.5f, 12, 5.5f, 2.5f, c);
+        break;
+    case Icon::Settings:       /* three sliders */
+        for (int k = 0; k < 3; ++k) {
+            const float y = cy - 5 + k * 5, kx = cx + (k == 1 ? 3 : -3);
+            roundRect(cx - 7, y - 1, 14, 2, 1, c);
+            circle(kx, y, 2.5f, c);
+        }
+        break;
+    }
+}
+
 /* ---- Text --------------------------------------------------------------- */
 
 int  textWidth(const char* s, int size) { return (int)Text::width(s_font, s, size); }
