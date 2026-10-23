@@ -4,6 +4,8 @@
 #include <ogc/pad.h>
 #include <ogc/lwp_watchdog.h>
 #include <ogc/system.h>
+#include <ogc/usbmouse.h>
+#include <math.h>
 
 static u32 rawDownBits = 0;   /* pressed this frame, no repeat */
 static u32 heldBits    = 0;
@@ -74,6 +76,15 @@ static const int PORTS = 4;                    /* GameCube ports, Wii Remotes */
 static u16  s_padHeld[PORTS] = {};
 static bool s_padUp[PORTS]   = {};            /* last read answered */
 static int  s_pointerChan    = WPAD_CHAN_0;   /* the Wii Remote used last */
+
+/* A USB mouse (boot protocol: most wired ones): the pointer while it is
+ * the one moving, left click A, right click B, the wheel Up / Down.  A
+ * Wii Remote pointing or pressed takes the pointer back. */
+static int   s_mouse   = 0;                   /* 0 not tried, 1 driver up, -1 none */
+static bool  s_mouseOn = false;               /* the mouse has the pointer */
+static float s_mouseX  = 320, s_mouseY = 240; /* pointer space, 640 x 480 */
+static u8    s_mouseBtn = 0;
+static const float MOUSE_SPEED = 1.25f;
 
 /* A GameCube stick pushed past half way: its D-pad direction */
 static u32 padStickDir(int x, int y)
@@ -172,6 +183,40 @@ void Input::update() {
         if ((d & 0xFFFF) && remoteChan < 0) remoteChan = ch;
     }
 
+    /* the mouse: every report since the last frame */
+    if (s_mouse == 0) {
+        s_mouse = MOUSE_Init() >= 0 ? 1 : -1;
+        SYS_Report("[Input] USB mouse driver %s\n", s_mouse > 0 ? "up" : "unavailable");
+    }
+    u32 mouseDown = 0, mouseHeld = 0;
+    if (s_mouse > 0) {
+        mouse_event ev;
+        u8 pressed = 0;
+        int wheel = 0;
+        bool moved = false;
+        while (MOUSE_GetEvent(&ev) > 0) {
+            if (ev.rx || ev.ry) moved = true;
+            s_mouseX += ev.rx * MOUSE_SPEED;
+            s_mouseY += ev.ry * MOUSE_SPEED;
+            wheel    += ev.rz;
+            pressed  |= ev.button & ~s_mouseBtn;     /* a click inside one frame counts */
+            s_mouseBtn = ev.button;
+        }
+        s_mouseX = s_mouseX < 0 ? 0 : s_mouseX > 639 ? 639 : s_mouseX;
+        s_mouseY = s_mouseY < 0 ? 0 : s_mouseY > 479 ? 479 : s_mouseY;
+        if ((moved || pressed || wheel) && !s_mouseOn) {
+            s_mouseOn = true;
+            SYS_Report("[Input] USB mouse: pointer\n");
+        }
+        if (pressed & 1) mouseDown |= WPAD_BUTTON_A;
+        if (pressed & 2) mouseDown |= WPAD_BUTTON_B;
+        if (wheel > 0)   mouseDown |= WPAD_BUTTON_UP;
+        if (wheel < 0)   mouseDown |= WPAD_BUTTON_DOWN;
+        if (s_mouseBtn & 1) mouseHeld |= WPAD_BUTTON_A;
+        if (s_mouseBtn & 2) mouseHeld |= WPAD_BUTTON_B;
+    }
+    if (remoteChan >= 0 || classicChan >= 0) s_mouseOn = false;   /* a Wii Remote's button */
+
     /* sticks: a new push counts as a press of that controller */
     static u32 prevStick[2][PORTS] = {};
     u32 stick = 0, stickDown = 0;
@@ -185,7 +230,7 @@ void Input::update() {
         prevStick[1][i] = c;
     }
 
-    u32 down = wiiDown | gcDown | stickDown;
+    u32 down = wiiDown | gcDown | stickDown | mouseDown;
     /* the hints follow the controller used last; the pointer, the Wii
      * Remote used last */
     if (gcPort >= 0)           Ui::setButtonStyle(Ui::ButtonStyle::GameCube);
@@ -195,10 +240,10 @@ void Input::update() {
     else if (classicChan >= 0) s_pointerChan = classicChan;
     /* which controller sent what: for controller bug reports */
     if (down & ~DIRS)
-        SYS_Report("[Input] pressed 0x%x (remote 0x%x ch %d, gamecube 0x%x port %d, stick 0x%x)\n",
+        SYS_Report("[Input] pressed 0x%x (remote 0x%x ch %d, gamecube 0x%x port %d, stick 0x%x, mouse 0x%x)\n",
                    (unsigned)down, (unsigned)wiiDown, remoteChan >= 0 ? remoteChan + 1 : classicChan + 1,
-                   (unsigned)gcDown, gcPort + 1, (unsigned)stickDown);
-    u32 held = wiiHeld | gcHeld | stick;
+                   (unsigned)gcDown, gcPort + 1, (unsigned)stickDown, (unsigned)mouseDown);
+    u32 held = wiiHeld | gcHeld | stick | mouseHeld;
 
     /* A held direction repeats: after 400 ms, then every 90 ms */
     static u64 heldSince[4], lastRepeat[4];
@@ -240,8 +285,23 @@ bool Input::is2Pressed()     { return buttonsDown & WPAD_BUTTON_2; }
 
 int Input::pointerChan() { return s_pointerChan; }
 
+float Input::pointerRoll()
+{
+    if (s_mouseOn) return 0.0f;
+    orient_t o;
+    WPAD_Orientation(s_pointerChan, &o);
+    return o.roll;
+}
+
+void Input::shutdown()
+{
+    if (s_mouse > 0) MOUSE_Deinit();
+    s_mouse = -1;
+    s_mouseOn = false;
+}
+
 /* the pointer of the Wii Remote used last; another one pointing at the
- * screen when that one is not */
+ * screen when that one is not; the mouse's while it is the one moving */
 void Input::readIR(ir_t& ir) {
     WPAD_IR(s_pointerChan, &ir);
     for (int ch = 0; !ir.valid && ch < PORTS; ++ch) {
@@ -249,6 +309,20 @@ void Input::readIR(ir_t& ir) {
         ir_t other;
         WPAD_IR(ch, &other);
         if (other.valid) { ir = other; s_pointerChan = ch; }
+    }
+    /* a Wii Remote pointer that moves takes it back from the mouse */
+    static float lastX = -1, lastY = -1;
+    if (ir.valid) {
+        if (s_mouseOn && lastX >= 0 && fabsf(ir.x - lastX) + fabsf(ir.y - lastY) > 12.0f) s_mouseOn = false;
+        lastX = ir.x; lastY = ir.y;
+    } else {
+        lastX = lastY = -1;
+    }
+    if (s_mouseOn) {
+        ir.valid = 1;
+        ir.x = s_mouseX;
+        ir.y = s_mouseY;
+        ir.angle = 0;
     }
     Ui::pointerToScreen(ir);
 }

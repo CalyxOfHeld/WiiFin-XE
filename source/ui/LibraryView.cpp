@@ -90,7 +90,7 @@ void LibraryView::drawCursor(ir_t& ir) {
         orient_t orient;
         WPAD_Orientation(Input::pointerChan(), &orient);
         GRRLIB_DrawImg((int)ir.x - 20, (int)ir.y - 4,
-                       cursorTex, orient.roll, 1.0f, 1.0f, 0xFFFFFFFF);
+                       cursorTex, Input::pointerRoll(), 1.0f, 1.0f, 0xFFFFFFFF);
     }
 }
 

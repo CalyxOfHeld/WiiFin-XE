@@ -20,7 +20,8 @@
  * The is*Pressed() directions repeat while held (menus, lists, keyboard);
  * rawDown() does not (the player: a held D-pad must not seek again and
  * again).  No pointer without a Wii Remote: screens fall back to the
- * D-pad when ir.valid is false.
+ * D-pad when ir.valid is false.  A USB mouse is a pointer too: left click
+ * A, right click B, the wheel Up / Down.
  * ----------------------------------------------------------------------- */
 class Input {
 public:
@@ -32,6 +33,10 @@ public:
     static void readIR(ir_t& ir);
     /* The Wii Remote whose pointer that is (the one used last). */
     static int pointerChan();
+    /* The pointer's tilt (its drawing): the Wii Remote's, none for a mouse. */
+    static float pointerRoll();
+    /* Before leaving WiiFin: the USB mouse's thread stopped. */
+    static void shutdown();
 
     /* Buttons pressed this frame, Wii Remote bits, no repeat. */
     static u32 rawDown();

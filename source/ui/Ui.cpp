@@ -523,7 +523,7 @@ const char* buttonName(const char* b)
 /* A button as it looks on the controller used last: the GameCube's big
  * green A, small red B, X and Y beans, the Z bar and the L / R triggers;
  * the Wii Remote's B trigger; HOME with its house. */
-enum class Shape { Disc, Square, Pill, Bar, Trigger };
+enum class Shape { Disc, Square, Pill, Bar, Trigger, BeanX, BeanY };
 struct Glyph {
     Shape shape;
     float w, h;
@@ -541,8 +541,8 @@ static Glyph glyphOf(const char* b)
         const u32 grey = 0xC9CDD2FF, greyEdge = 0x8A9097FF, dark = 0x2E3237FF;
         if (one && b[0] == 'A') { g.w = g.h = 20; g.fill = 0x2FB56AFF; g.edge = 0x1E7F49FF; g.ink = 0xFFFFFFFF; }
         else if (one && b[0] == 'B') { g.w = g.h = 16; g.fill = 0xD8463CFF; g.edge = 0x9A2E27FF; g.ink = 0xFFFFFFFF; }
-        else if (one && b[0] == 'X') { g = { Shape::Pill, 13, 19, grey, greyEdge, dark, false }; }
-        else if (one && b[0] == 'Y') { g = { Shape::Pill, 19, 13, grey, greyEdge, dark, false }; }
+        else if (one && b[0] == 'X') { g = { Shape::BeanX, 17, 25, grey, greyEdge, dark, false }; }
+        else if (one && b[0] == 'Y') { g = { Shape::BeanY, 25, 17, grey, greyEdge, dark, false }; }
         else if (one && b[0] == 'Z') { g = { Shape::Bar, 22, 12, 0x6A5ACDFF, 0x463A9AFF, 0xFFFFFFFF, false }; }
         else if (one && (b[0] == 'L' || b[0] == 'R')) { g = { Shape::Trigger, 20, 15, grey, greyEdge, dark, false }; }
         return g;
@@ -551,6 +551,29 @@ static Glyph glyphOf(const char* b)
     /* the Wii Remote's B is a trigger: a square, as in the Wii's own menus */
     if (s_buttonStyle == ButtonStyle::WiiRemote && one && b[0] == 'B') g.shape = Shape::Square;
     return g;
+}
+
+/* The GameCube's X and Y: kidney beans curved around A.  Y lies above A,
+ * its left end lower, bowed toward A below; X stands right of A, its top
+ * leaning left, bowed toward A on its left.  Drawn as discs along that arc
+ * (its edge first, then its fill), centred on cx, cy. */
+static void beanGlyph(float cx, float cy, bool isY, u32 edge, u32 fill)
+{
+    const int   N = 16;
+    const float R = 14.0f, r = 4.5f;                       /* the arc, the bean's half thickness */
+    const float a0 = (isY ? -140.0f : -50.0f) * (float)M_PI / 180.0f;
+    const float a1 = (isY ? -80.0f  :  10.0f) * (float)M_PI / 180.0f;
+    float px[N], py[N], x0 = 1e9f, x1 = -1e9f, y0 = 1e9f, y1 = -1e9f;
+    for (int i = 0; i < N; ++i) {
+        const float t = a0 + (a1 - a0) * i / (N - 1);
+        px[i] = R * cosf(t);   /* around 0, 0: toward A */
+        py[i] = R * sinf(t);
+        x0 = fminf(x0, px[i]); x1 = fmaxf(x1, px[i]);
+        y0 = fminf(y0, py[i]); y1 = fmaxf(y1, py[i]);
+    }
+    const float dx = cx - (x0 + x1) * 0.5f, dy = cy - (y0 + y1) * 0.5f;
+    for (int i = 0; i < N; ++i) circle(px[i] + dx, py[i] + dy, r + 1.5f, edge);
+    for (int i = 0; i < N; ++i) circle(px[i] + dx, py[i] + dy, r, fill);
 }
 
 /* the shape, its edge around it, centred on cx, cy */
@@ -575,6 +598,10 @@ static void drawShape(const Glyph& g, float cx, float cy)
     case Shape::Bar:
         roundRect(x, y, g.w, g.h, 3.5f, g.edge);
         roundRect(x + 1.5f, y + 1.5f, g.w - 3, g.h - 3, 2.5f, g.fill);
+        break;
+    case Shape::BeanX:
+    case Shape::BeanY:
+        beanGlyph(cx, cy, g.shape == Shape::BeanY, g.edge, g.fill);
         break;
     case Shape::Trigger:
         /* round on top, flat underneath */
@@ -623,6 +650,8 @@ static void buttonGlyph(float cx, float cy, const char* b)
     else if (b[0] == '+')  plusGlyph(cx, cy, g.ink);
     else if (g.shape == Shape::Bar || g.shape == Shape::Trigger)
         glyphCentered(cx, cy - 6, b, b[1] ? 10 : 11, g.ink);
+    else if (g.shape == Shape::BeanX || g.shape == Shape::BeanY)
+        glyphCentered(cx, cy - 6, b, 11, g.ink);
     else
         glyphCentered(cx, cy - 7, b, 12, g.ink);
 }

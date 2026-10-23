@@ -1267,7 +1267,7 @@ void frame()
     if (ir.valid && s.cursor) {
         orient_t o;
         WPAD_Orientation(Input::pointerChan(), &o);
-        GRRLIB_DrawImg((int)ir.x - 8, (int)ir.y - 4, s.cursor, o.roll, 1, 1, 0xFFFFFFFF);
+        GRRLIB_DrawImg((int)ir.x - 8, (int)ir.y - 4, s.cursor, Input::pointerRoll(), 1, 1, 0xFFFFFFFF);
     }
 }
 
