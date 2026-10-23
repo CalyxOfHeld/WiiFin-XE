@@ -100,7 +100,7 @@ void texCover(GRRLIB_texImg* tex, float x, float y, float w, float h, float r,
 void triangle(float x0, float y0, float x1, float y1, float x2, float y2, u32 color);
 /* Small line icons (about 14 px, 2 px strokes) centred on cx, cy: the
  * header's buttons and the menus */
-enum class Icon { Search, Home, Browse, Menu, Play, Back, Profile, Settings };
+enum class Icon { Search, Home, Browse, Menu, Play, Back, Profile, Settings, Folder };
 void icon(Icon i, float cx, float cy, u32 color);
 
 /* Colour helpers */

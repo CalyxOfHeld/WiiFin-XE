@@ -445,18 +445,20 @@ void LibraryView::renderGlobalFavorites(ir_t& ir) {
 
 /* ---------------------------------------------------------------
  * The profile menu, A on the avatar: back to the libraries, the profiles,
- * the settings (signed in still), or WiiFin's own menu
+ * the settings (signed in still), WiiMC-SS XE (Local Media), or WiiFin's
+ * own menu
  * --------------------------------------------------------------- */
-static const char* const PROFILE_MENU[6] = {
+static const char* const PROFILE_MENU[7] = {
     N_("Now Playing"), N_("Back to Jellyfin"), N_("All Libraries"), N_("Switch Profile"), N_("Settings"),
-    N_("WiiFin Main Menu")
+    N_("Local Media"), N_("WiiFin Main Menu")
 };
-static const Ui::Icon PROFILE_ICONS[6] = {
-    Ui::Icon::Play, Ui::Icon::Back, Ui::Icon::Browse, Ui::Icon::Profile, Ui::Icon::Settings, Ui::Icon::Menu
+static const Ui::Icon PROFILE_ICONS[7] = {
+    Ui::Icon::Play, Ui::Icon::Back, Ui::Icon::Browse, Ui::Icon::Profile, Ui::Icon::Settings,
+    Ui::Icon::Folder, Ui::Icon::Menu
 };
 /* Now Playing, first, while a music session plays */
 static int pmFirst() { return MusicSession::active() ? 0 : 1; }
-static int pmCount() { return 6 - pmFirst(); }
+static int pmCount() { return 7 - pmFirst(); }
 static const int PM_W = 300, PM_BH = 42, PM_STEP = 54;
 static int pmTop() { return 240 - (pmCount() * PM_STEP + 50) / 2 + 50; }
 
@@ -491,9 +493,10 @@ bool LibraryView::updateProfileMenu(ir_t& ir) {
     case 2: state = State::LibsReady; openLibManager(); return false;
     case 3: exitTo = Exit::Profiles;   break;
     case 4: exitTo = Exit::Settings;   break;
+    case 5: exitTo = Exit::LocalMedia; break;
     default: exitTo = Exit::WiiFinMenu; break;
     }
-    SoundFX::play(entry == 4 || entry == 0 ? SoundFX::FX::Open : SoundFX::FX::Back);
+    SoundFX::play(entry == 4 || entry == 0 || entry == 5 ? SoundFX::FX::Open : SoundFX::FX::Back);
     return true;
 }
 

@@ -376,6 +376,10 @@ void icon(Icon i, float cx, float cy, u32 c)
             circle(kx, y, 2.5f, c);
         }
         break;
+    case Icon::Folder:         /* a folder: its tab, its body */
+        roundRect(cx - 7, cy - 6, 6, 3, 1, c);
+        roundBorder(cx - 7, cy - 4, 14, 10, 1.5f, 2.0f, c);
+        break;
     }
 }
 

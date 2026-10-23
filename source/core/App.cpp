@@ -50,6 +50,8 @@ volatile bool g_app_reset    = false;
 volatile bool g_restartApp = false;
 bool g_app_exitToLoader = true;
 std::string g_app_startProfile;
+/* Local Media: the WiiMC-SS XE DOL started at the end, in WiiFin's place */
+static std::string s_localMedia;
 bool g_app_startBrowse = true;
 /* the loader's mark, read at start-up (main menu) before anything could
  * write over low memory */
@@ -138,9 +140,9 @@ extern unsigned int data_jp_font_ttf_len;
 // Display at 280x70 (4:1 ratio preserved, sx=sy=0.547).
 static const int BX        = 170;
 static const int BW        = 300;
-static const int BH        = 58;
-static const int BY_START  = 168;
-static const int B_SPACING = 74;
+static const int BH        = 54;
+static const int BY_START  = 138;
+static const int B_SPACING = 68;
 
 void App::init(const char* argv0) {
     if (argv0) s_argv0 = argv0;
@@ -442,12 +444,30 @@ void App::loop() {
     int  selectedIndex = 0;
     bool irMode        = false;
     int  prevIrBtn     = -1;  /* last button index hovered via IR; -1 = none */
-    const int MENU_COUNT = 3;
+    const int MENU_COUNT = 4;
     float menuFocus[MENU_COUNT] = {};
     const std::string menuItems[] = {
         N_("Connect To Jellyfin"),
+        N_("Local Media"),
         N_("Settings"),
         N_("Exit")
+    };
+
+    /* Local Media: WiiMC-SS XE, if it is there (else a notice); WiiFin
+     * closes, then starts it (the end of loop()) */
+    auto startLocalMedia = [&]() -> bool {
+        const char* const TRY[] = {"sd:/apps/wiimc/boot.dol", "usb:/apps/wiimc/boot.dol"};
+        struct stat st;
+        for (const char* p : TRY)
+            if (stat(p, &st) == 0 && st.st_size > 0) {
+                s_localMedia = p;
+                SYS_Report("[WiiFin] local media: %s\n", p);
+                running = false;
+                return true;
+            }
+        Ui::showNotice(tr("WiiMC-SS XE not found"),
+                       tr("Put it in sd:/apps/wiimc/ to play your own videos and music."), 5000);
+        return false;
     };
 
     /* Thin wrapper so existing call sites don't need to change. */
@@ -585,6 +605,9 @@ void App::loop() {
                 SoundFX::play(SoundFX::FX::Back);
                 if (wantsExit) { running = false; return; }
                 lv.onPlaybackFinished("");
+            } else if (lv.exitTo == LibraryView::Exit::LocalMedia) {
+                lv.exitTo = LibraryView::Exit::Profiles;
+                if (startLocalMedia()) { MusicSession::stop(true); return; }
             } else if (lv.exitTo == LibraryView::Exit::Settings) {
                 /* Settings from the profile menu: signed in still */
                 lv.exitTo = LibraryView::Exit::Profiles;
@@ -789,10 +812,11 @@ void App::loop() {
                     runProfilePicker();
                     break;
                 }
-                case 1:
+                case 1: startLocalMedia(); break;
+                case 2:
                     runSettings(nullptr);   /* WiiFin's own look, and the system */
                     break;
-                case 2: running = false; break;   /* where: Exit To */
+                case 3: running = false; break;   /* where: Exit To */
             }
         }
 
@@ -860,6 +884,16 @@ void App::loop() {
      * back): not the WAD's channel */
     const bool loader = appFromLoader();
     if (g_app_powerOff)        SYS_ResetSystem(SYS_POWEROFF,    0, 0);
+    else if (!s_localMedia.empty() && !g_app_reset) {
+        /* Local Media: WiiMC-SS XE with its meta.xml's arguments (the
+         * Homebrew Channel's would be) and wiifin=, where its Exit comes
+         * back to; failing that, back to the loader */
+        std::string meta = s_localMedia.substr(0, s_localMedia.rfind('/') + 1) + "meta.xml";
+        std::vector<std::string> args = Reload::metaArgs(meta.c_str());
+        args.push_back("wiifin=" + (s_argv0.empty() ? std::string("sd:/apps/WiiFin/boot.dol") : s_argv0));
+        Reload::launch(s_localMedia.c_str(), args);   /* returns only if it could not read it */
+        exit(0);
+    }
     else if (g_restartApp) {
         /* the HOME menu's Reset: the channel (WAD) launched again by the
          * system, which exit() didn't do (it went to the Wii Menu); from a

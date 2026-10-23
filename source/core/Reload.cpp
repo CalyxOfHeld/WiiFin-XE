@@ -110,9 +110,15 @@ namespace {
 /* argv[0], where the new program finds it: high in MEM2, out of reach of its
  * first allocations */
 char* const ARG_AREA = (char*)0x93300000;
+/* at the jump, the DOL and the routine moved here, in MEM2: out of the way
+ * of the sections of any program (another one's may cover the heap the
+ * DOL was read into) */
+u8*   const STAGE_AREA = (u8*)0x92000000;
+const long  STAGE_MAX  = 0x1200000;               /* 18 MB: up to 0x93200000 */
+u8*   const CODE_AREA  = (u8*)0x93280000;
 }
 
-bool Reload::self(const char* path)
+bool Reload::launch(const char* path, const std::vector<std::string>& args)
 {
     if (!path || !path[0]) return false;
     FILE* f = fopen(path, "rb");
@@ -120,39 +126,75 @@ bool Reload::self(const char* path)
     fseek(f, 0, SEEK_END);
     const long size = ftell(f);
     fseek(f, 0, SEEK_SET);
-    if (size < 0x100) { fclose(f); return false; }
+    if (size < 0x100 || size > STAGE_MAX) { fclose(f); return false; }
     u8* dol = (u8*)memalign(32, (size + 31) & ~31);
     if (!dol) { fclose(f); return false; }
     const bool read = fread(dol, 1, size, f) == (size_t)size;
     fclose(f);
     const u32 entry = *(u32*)(dol + 0xE0);
     if (!read || (entry & 0xF0000000) != 0x80000000) { free(dol); return false; }
-    DCFlushRange(dol, (size + 31) & ~31);
 
-    /* the routine, copied out of the sections about to be overwritten */
-    const size_t len = (size_t)(reloadTrampolineEnd - (char*)reloadTrampoline);
-    void* code = memalign(32, (len + 31) & ~31);
-    if (!code) { free(dol); return false; }
-    memcpy(code, (const void*)reloadTrampoline, len);
-    DCFlushRange(code, (len + 31) & ~31);
-    ICInvalidateRange(code, (len + 31) & ~31);
-
-    /* its "_arg" block: magic, command line, its length, argc, argv, end */
-    const size_t pl = strlen(path) + 1;
-    memcpy(ARG_AREA + 64, path, pl);
+    /* its "_arg" block: magic, command line (argv[0], then the arguments,
+     * each ended by a 0), its length, argc, argv (0, 0: libogc splits the
+     * line), end */
+    std::string line(path);
+    line += '\0';
+    for (const std::string& a : args) { line += a; line += '\0'; }
+    if (line.size() > 0x10000) { free(dol); return false; }
+    memcpy(ARG_AREA + 64, line.data(), line.size());
     u32* arg = (u32*)ARG_AREA;
     arg[0] = 0x5f617267;
     arg[1] = (u32)(ARG_AREA + 64);
-    arg[2] = (u32)pl;
+    arg[2] = (u32)line.size();
     arg[3] = 0;
     arg[4] = 0;
     arg[5] = 0;
-    DCFlushRange(ARG_AREA, 64 + pl);
+    DCFlushRange(ARG_AREA, 64 + line.size());
 
+    const size_t len = (size_t)(reloadTrampolineEnd - (char*)reloadTrampoline);
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
     u32 level;
     _CPU_ISR_Disable(level);
     (void)level;
-    ((void (*)(const void*, const void*))code)(dol, arg);
+    /* nothing runs any more but this: the DOL and the routine to MEM2 */
+    memmove(STAGE_AREA, dol, size);
+    DCFlushRange(STAGE_AREA, (size + 31) & ~31);
+    memcpy(CODE_AREA, (const void*)reloadTrampoline, len);
+    DCFlushRange(CODE_AREA, (len + 31) & ~31);
+    ICInvalidateRange(CODE_AREA, (len + 31) & ~31);
+    ((void (*)(const void*, const void*))(void*)CODE_AREA)(STAGE_AREA, arg);
     return false;   /* never back */
+}
+
+bool Reload::self(const char* path)
+{
+    return launch(path, {});
+}
+
+/* the <arg> lines of the app's meta.xml (the Homebrew Channel passes them;
+ * started from here it would not), the commented-out ones left out */
+std::vector<std::string> Reload::metaArgs(const char* metaPath)
+{
+    std::vector<std::string> out;
+    FILE* f = fopen(metaPath, "rb");
+    if (!f) return out;
+    std::string xml;
+    char buf[1024];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0 && xml.size() < 65536) xml.append(buf, n);
+    fclose(f);
+    for (size_t c; (c = xml.find("<!--")) != std::string::npos; ) {
+        const size_t e = xml.find("-->", c);
+        xml.erase(c, e == std::string::npos ? std::string::npos : e + 3 - c);
+    }
+    for (size_t a = 0; (a = xml.find("<arg>", a)) != std::string::npos; ) {
+        a += 5;
+        const size_t e = xml.find("</arg>", a);
+        if (e == std::string::npos) break;
+        std::string v = xml.substr(a, e - a);
+        const size_t b = v.find_first_not_of(" \t\r\n"), z = v.find_last_not_of(" \t\r\n");
+        if (b != std::string::npos) out.push_back(v.substr(b, z - b + 1));
+        a = e + 6;
+    }
+    return out;
 }

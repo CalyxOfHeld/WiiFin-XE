@@ -37,7 +37,8 @@ public:
     /* Why update() returned true with nothing to play: B on the libraries
      * or the profile menu's choice */
     /* SignIn: the server refused the profile's token, its password again */
-    enum class Exit { Profiles, Settings, WiiFinMenu, NowPlaying, SignIn };
+    /* LocalMedia: WiiMC-SS XE, in WiiFin's place */
+    enum class Exit { Profiles, Settings, WiiFinMenu, NowPlaying, SignIn, LocalMedia };
     Exit exitTo = Exit::Profiles;
     bool signInAgain = false;   /* loadLibraries: the token refused, leave for the sign-in */
     /* back from the Settings the profile menu opened: the home again, as
@@ -313,7 +314,7 @@ private:
      * WiiFin's menu */
     bool  profileMenu        = false;
     int   profileMenuSel     = 0;
-    float profileMenuFocus[6] = {};
+    float profileMenuFocus[7] = {};
     void openProfileMenu();
     bool updateProfileMenu(ir_t& ir);
     void renderProfileMenu(ir_t& ir);
