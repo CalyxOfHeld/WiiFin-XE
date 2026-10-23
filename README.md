@@ -83,7 +83,3 @@ Pull requests, bug reports and ideas are welcome:
 
 This project is licensed under the **GPLv3**.
 See the [LICENSE](LICENSE) file for more details.
-
-The GameCube button glyphs (`data/images/gc_buttons.png`) are made from the
-[Dolphin](https://github.com/dolphin-emu/dolphin) emulator's touch overlay
-images, GPL-2.0-or-later, by `tools/gc_glyphs.py`.
