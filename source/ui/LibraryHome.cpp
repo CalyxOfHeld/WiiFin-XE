@@ -51,6 +51,12 @@ bool LibraryView::updateHome(ir_t& ir, bool aPressed) {
         case BrowseHome::Action::Profiles:
             openProfileMenu();
             return false;
+        case BrowseHome::Action::Expand:      // 2: the row as a page
+            page.stopLoader();
+            runWithLoading([&]() { page.expand(); });
+            page.startLoader();
+            irMode = false;
+            break;
         default: break;
         }
         return false;

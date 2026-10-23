@@ -499,7 +499,17 @@ void App::loop() {
         applyView(viewOf(p));
         struct Leave {
             App& app; SavedProfile& p;
-            ~Leave() { app.applyView(app.startView); if (p.signIn == SavedProfile::Password) p.accessToken.clear(); }
+            ~Leave() {
+                /* a view changed where it shows (1 on a library: Posters,
+                 * List...): the profile's from now on */
+                const ViewPrefs was = app.viewOf(p), now = app.currentView();
+                const bool changed = was.theme != now.theme || was.homeLayout != now.homeLayout ||
+                                     was.libraryStyle != now.libraryStyle || was.solidColors != now.solidColors;
+                if (changed) app.keepView(p);
+                if (p.signIn == SavedProfile::Password) p.accessToken.clear();
+                app.applyView(app.startView);
+                if (changed) app.saveSettings();
+            }
         } leave{ *this, p };
         JellyfinAuth auth;
         auth.userId      = p.userId;

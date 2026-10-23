@@ -86,6 +86,7 @@ bool LibraryView::updateItemList(ir_t& ir, bool aPressed) {
     const int LW = listWidth();
     if (sortPanel) { updateSortPanel(); return false; }
     if (Input::is2Pressed() && sortable()) { openSortPanel(); return false; }
+    if (Input::is1Pressed()) { cycleLibraryView(); return false; }
 
     if (Input::isBackPressed()) {
         if (inItemsDrilldown) {
@@ -235,6 +236,31 @@ LibraryView::State LibraryView::pageLoadState() const {
     return State::ItemsInit;
 }
 
+/* a library that opens as a grid of posters or a list (openLibrary) */
+bool LibraryView::viewSwitchable() const {
+    return !inItemsDrilldown && !inBoxSetDrilldown && !drilldownFromSearch &&
+           (currentLibType == "movies" || currentLibType == "tvshows" || currentLibType == "boxsets" ||
+            currentLibType == "music");
+}
+
+/* 1: the next library view (Posters, List, List + Posters), the setting
+ * itself (every library); where there is no grid, List and List + Posters */
+void LibraryView::cycleLibraryView() {
+    int s = (int)Ui::libraryStyle();
+    if (viewSwitchable()) s = (s + 1) % Ui::LIBRARY_STYLE_COUNT;
+    else                  s = s == (int)Ui::LibraryStyle::ListCover ? (int)Ui::LibraryStyle::List
+                                                                    : (int)Ui::LibraryStyle::ListCover;
+    Ui::setLibraryStyle((Ui::LibraryStyle)s);
+    SYS_Report("[Library] view %d\n", s);
+    const bool grid = viewSwitchable() && !Ui::listMode();
+    irMode = false;
+    if (grid == posterMode) return;   /* List <-> List + Posters: the same list */
+    posterMode = grid;
+    freePosters();
+    itemPage = 0;
+    state = posterMode ? pageLoadState() : State::ItemsInit;
+}
+
 void LibraryView::goToTab(int t) {
     if (state == State::LibsReady || state == State::GlobalFavoritesReady) {
         /* home: Libraries, Activity, Favorites */
@@ -276,6 +302,7 @@ bool LibraryView::updatePosterGrid(ir_t& ir, bool aPressed) {
     int n = (int)items.size();
     if (sortPanel) { updateSortPanel(); return false; }
     if (Input::is2Pressed() && sortable()) { openSortPanel(); return false; }
+    if (Input::is1Pressed() && viewSwitchable()) { cycleLibraryView(); return false; }
     if (Input::is2Pressed() && currentLibType == "musicvideos") return startVideoShuffle();
     if (Input::is2Pressed() && currentLibType == "playlists" && posterSel < (int)items.size() &&
         items[posterSel].type == "Playlist")
@@ -574,9 +601,11 @@ void LibraryView::renderItemList(ir_t& ir) {
     const std::string sum = sortSummary();
     const bool shuffles = !sortable() && (currentLibType == "music" || currentLibType == "musicvideos" ||
                                           currentLibType == "playlists");
-    const Ui::Hint l[] = { { "A", N_("Open") }, { "B", N_("Back") },
-                           { "2", shuffles ? N_("Shuffle") : sum.empty() ? N_("Sort") : sum.c_str() } };
-    const int nl = sortable() || shuffles ? 3 : 2;
+    Ui::Hint l[4] = { { "A", N_("Open") }, { "B", N_("Back") } };
+    int nl = 2;
+    if (sortable() || shuffles)
+        l[nl++] = { "2", shuffles ? N_("Shuffle") : sum.empty() ? N_("Sort") : sum.c_str() };
+    l[nl++] = { "1", N_("View") };
     if ((currentLibType == "music" && !inItemsDrilldown) || tabbedList()) {
         const bool az = !(sortable() && listSort.sort != 0);   /* A-Z: by name only */
         const Ui::Hint r[] = { { "LR", N_("A-Z") }, { "-/+", N_("Tab") } };
@@ -647,7 +676,10 @@ void LibraryView::renderPosterGrid(ir_t& ir) {
 
     // Footer: selected title centred, page on the right, the sort in force
     const std::string sum = sortSummary();
-    const Ui::Hint l[] = { { "B", N_("Back") }, { "2", sum.empty() ? N_("Sort") : sum.c_str() } };
+    Ui::Hint l[3] = { { "B", N_("Back") } };
+    int nl = 1;
+    if (sortable()) l[nl++] = { "2", sum.empty() ? N_("Sort") : sum.c_str() };
+    if (viewSwitchable()) l[nl++] = { "1", N_("View") };
     char pageStr[32];
     snprintf(pageStr, sizeof(pageStr), tr("Page %d / %d"), itemPage + 1, totalPages);
     const Ui::Hint r[] = { { "", pageStr } };
@@ -660,12 +692,13 @@ void LibraryView::renderPosterGrid(ir_t& ir) {
             center = named.c_str();
         }
         const Ui::Hint lm[] = { { "B", N_("Back") },
-                                { "2", sortable() ? (sum.empty() ? N_("Sort") : sum.c_str()) : N_("Shuffle") } };
+                                { "2", sortable() ? (sum.empty() ? N_("Sort") : sum.c_str()) : N_("Shuffle") },
+                                { "1", N_("View") } };
         const Ui::Hint rm[] = { { "-/+", N_("Tab") }, { "", pageStr } };
-        Ui::footer(lm, 2, inItemsDrilldown ? r : rm, inItemsDrilldown ? (totalPages > 1 ? 1 : 0) : (totalPages > 1 ? 2 : 1), center);
+        Ui::footer(lm, viewSwitchable() ? 3 : 2, inItemsDrilldown ? r : rm, inItemsDrilldown ? (totalPages > 1 ? 1 : 0) : (totalPages > 1 ? 2 : 1), center);
         if (sortPanel) renderSortPanel();
         return;
     }
-    Ui::footer(l, sortable() ? 2 : 1, r, totalPages > 1 ? 1 : 0, center);
+    Ui::footer(l, nl, r, totalPages > 1 ? 1 : 0, center);
     if (sortPanel) renderSortPanel();
 }

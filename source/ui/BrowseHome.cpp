@@ -137,6 +137,7 @@ BrowseHome::~BrowseHome()
 {
     stopLoader();
     for (auto& r : rows) freeTextures(r);
+    freeTextures(exp);
     if (texLock != LWP_MUTEX_NULL) LWP_MutexDestroy(texLock);
     if (--s_logoUsers == 0 && s_logo) { GRRLIB_FreeTexture(s_logo); s_logo = nullptr; }
 }
@@ -146,6 +147,7 @@ void BrowseHome::invalidate()
     stopLoader();
     for (auto& r : rows) freeTextures(r);
     rows.clear();
+    freeTextures(exp);   /* an expanded row stays open: fetched again by build() */
     isBuilt = false;
 }
 
@@ -177,6 +179,7 @@ void BrowseHome::build(const std::vector<JellyfinLibrary>& libs)
         if (rows[i].title == keepTitle) { rowSel = i; break; }
     rowAnim = (float)rowSel;
     headerFocus = -1;
+    if (expanded) fetchExpanded();   /* fresh too: resume points, favourites */
     isBuilt = true;
 }
 
@@ -185,6 +188,7 @@ void BrowseHome::build(const std::vector<JellyfinLibrary>& libs)
         Row r_;                                                              \
         r_.title  = (T_);                                                    \
         r_.square = (SQ_);                                                   \
+        r_.query  = (Q_);                                                    \
         client.getItemsByQuery(serverUrl, auth, (Q_), r_.items);             \
         if (!r_.items.empty()) {                                             \
             if ((int)r_.items.size() > (CAP_)) r_.items.resize(CAP_);        \
@@ -207,7 +211,7 @@ void BrowseHome::buildHome(const std::vector<JellyfinLibrary>& libs)
         client.getItemsByQuery(serverUrl, auth, query, got);
         if (got.empty()) return;
         if ((int)got.size() > SECTION_ITEMS) got.resize(SECTION_ITEMS);
-        r.sections.push_back({ (int)r.items.size(), label });
+        r.sections.push_back({ (int)r.items.size(), label, query });
         r.items.insert(r.items.end(), got.begin(), got.end());
     };
     auto pushRow = [&](Row& r) {
@@ -337,6 +341,8 @@ static bool squareInTall(bool rowSquare, bool rowWide, const JellyfinItem& it)
 
 const JellyfinItem* BrowseHome::selectedItem() const
 {
+    if (expanded)
+        return exp.sel >= 0 && exp.sel < (int)exp.items.size() ? &exp.items[exp.sel] : nullptr;
     if (rowSel < 0 || rowSel >= (int)rows.size()) return nullptr;
     const Row& r = rows[rowSel];
     if (r.sel < 0 || r.sel >= (int)r.items.size()) return nullptr;
@@ -432,6 +438,18 @@ void BrowseHome::tileWindow(const Row& r, int& first, int& last) const
  * below, then the one above), then the rest of those rows. */
 bool BrowseHome::pickNext(int& outR, int& outI)
 {
+    if (expanded) {   /* the page's tiles only: r -1 */
+        int first, last;
+        expWindow(first, last);
+        for (int i = first; i <= last && i < (int)exp.items.size(); ++i) {
+            LWP_MutexLock(texLock);
+            bool take = exp.st[i] == TILE_NONE;
+            if (take) exp.st[i] = TILE_LOADING;
+            LWP_MutexUnlock(texLock);
+            if (take) { outR = -1; outI = i; return true; }
+        }
+        return false;
+    }
     const int nRows = (int)rows.size();
     const int order[4] = { rowSel, rowSel + 1, rowSel - 1, rowSel + 2 };
     for (int pass = 0; pass < 2; ++pass) {
@@ -464,14 +482,15 @@ void BrowseHome::loaderLoop()
     while (!stopReq) {
         int r, i;
         if (!pickNext(r, i)) { usleep(30 * 1000); continue; }
-        const JellyfinItem& it = rows[r].items[i];
+        Row& row = r < 0 ? exp : rows[r];
+        const JellyfinItem& it = row.items[i];
         /* Episodes: the series poster fits a portrait tile better */
         const std::string& id = (it.type == "Episode" && !it.seriesId.empty()) ? it.seriesId : it.id;
         /* the size drawn: Jellyfin fits the picture inside it, so a smaller
          * or narrower request came back blurred once cropped */
         int h = (int)POSTER_H,
-            w = rows[r].wide ? (int)(POSTER_H * 16.0f / 9.0f) : rows[r].square ? h : (int)POSTER_W;
-        if (squareInTall(rows[r].square, rows[r].wide, it)) h = w;
+            w = row.wide ? (int)(POSTER_H * 16.0f / 9.0f) : row.square ? h : (int)POSTER_W;
+        if (squareInTall(row.square, row.wide, it)) h = w;
         std::string bytes;
         client.getItemImageBytes(serverUrl, auth, id, w, h, bytes);
         /* seasons without artwork of their own: use the series poster */
@@ -480,9 +499,9 @@ void BrowseHome::loaderLoop()
         GRRLIB_texImg* t = bytes.empty() ? nullptr
                          : loadJPEGTexture((const u8*)bytes.data(), (u32)bytes.size());
         LWP_MutexLock(texLock);
-        if (rows[r].st[i] == TILE_LOADING) {          /* not evicted meanwhile */
-            rows[r].tex[i] = t;
-            rows[r].st[i]  = t ? TILE_READY : TILE_FAILED;
+        if (row.st[i] == TILE_LOADING) {              /* not evicted meanwhile */
+            row.tex[i] = t;
+            row.st[i]  = t ? TILE_READY : TILE_FAILED;
             t = nullptr;
         }
         LWP_MutexUnlock(texLock);
@@ -495,6 +514,17 @@ void BrowseHome::loaderLoop()
  * the GPU is done with the textures it frees. */
 void BrowseHome::evictFarRows()
 {
+    if (expanded) {   /* the page's tiles around what it shows */
+        int first, last;
+        expWindow(first, last);
+        LWP_MutexLock(texLock);
+        for (int i = 0; i < (int)exp.st.size(); ++i) {
+            if (exp.st[i] == TILE_NONE || (i >= first - 12 && i <= last + 12)) continue;
+            if (exp.tex[i]) { GRRLIB_FreeTexture(exp.tex[i]); exp.tex[i] = nullptr; }
+            exp.st[i] = TILE_NONE;
+        }
+        LWP_MutexUnlock(texLock);
+    }
     for (int r = 0; r < (int)rows.size(); ++r) {
         Row& row = rows[r];
         bool keepRow = r >= rowSel - 1 && r <= rowSel + 2;
@@ -517,6 +547,7 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
 {
     const int nRows = (int)rows.size();
     evictFarRows();
+    if (expanded) return updateExpanded(ir, irMode);
 
     /* Animation (targets from the previous frame's selection) */
     rowAnim = Ui::approach(rowAnim, (float)rowSel, 0.22f);
@@ -529,6 +560,11 @@ BrowseHome::Action BrowseHome::update(const ir_t& ir, bool& irMode)
 
     if (Input::is1Pressed()) return Action::Search;
     if (Input::isActionPressed()) return Action::Browse;
+    /* 2: the focused row as a page (its part, in a row of parts; not the
+     * Libraries row: nothing to ask the server) */
+    if (Input::is2Pressed() && headerFocus < 0 && rowSel < nRows &&
+        (!rows[rowSel].sections.empty() || !rows[rowSel].query.empty()))
+        return Action::Expand;
     if (mode == Mode::Catalog && Input::isBackPressed()) return Action::Back;
     /* B on the home: the avatar, its menu open */
     if (mode == Mode::Home && Input::isBackPressed()) { headerFocus = 2; irMode = false; return Action::Profiles; }
@@ -767,6 +803,8 @@ void BrowseHome::drawInfoPanel(float k)
     const JellyfinItem* itp = selectedItem();
     if (!itp || k <= 0.01f) return;
     const JellyfinItem& it = *itp;
+    /* a library: its picture says its name; A opens it, nothing to add */
+    if (it.type == "CollectionFolder") return;
     const Row& row = rows[rowSel];
 
     /* Pointer tab from the selected poster into the panel */
@@ -783,7 +821,6 @@ void BrowseHome::drawInfoPanel(float k)
     /* Title */
     std::string title = it.name;
     if ((it.type == "Episode" || it.type == "Season") && !it.seriesName.empty()) title = it.seriesName;
-    if (it.type == "CollectionFolder") title = it.name;
     title = fit(title, 17, (int)INFO_W - 32);
     Ui::text(INFO_X + 16, INFO_Y + 6, title.c_str(), 17, Ui::alpha(L.panelText, k));
 
@@ -797,15 +834,7 @@ void BrowseHome::drawInfoPanel(float k)
         x += w + 12;
     }
     char meta[160] = "";
-    if (it.type == "CollectionFolder") {
-        const std::string& t = it.seriesName;
-        snprintf(meta, sizeof(meta), "%s",
-                 t == "movies" ? tr("Movie library  \xc2\xb7  open it with A")
-                 : t == "tvshows" ? tr("TV library  \xc2\xb7  open it with A")
-                 : t == "music" ? tr("Music library  \xc2\xb7  open it with A")
-                 : t == "boxsets" ? tr("Collection library  \xc2\xb7  open it with A")
-                 : tr("Media library  \xc2\xb7  open it with A"));
-    } else if (it.type == "Series") {
+    if (it.type == "Series") {
         if (it.recursiveItemCount > 0)
             snprintf(meta, sizeof(meta), it.recursiveItemCount > 1 ? tr("%d episodes") : tr("%d episode"),
                      it.recursiveItemCount);
@@ -914,7 +943,7 @@ void BrowseHome::drawHeader()
 
 void BrowseHome::render(const ir_t& ir)
 {
-    (void)ir;
+    if (expanded) { renderExpanded(ir); return; }
     Ui::background();
 
     /* Focused-row band */
@@ -954,14 +983,310 @@ void BrowseHome::render(const ir_t& ir)
 
     /* Button hints along the bottom */
     {
-        const Ui::Hint hHome[] = { { "A", N_("Open") }, { "1", N_("Search") }, { "+!", N_("Browse") } };
-        const Ui::Hint hCat[]  = { { "A", N_("Open") }, { "1", N_("Search") }, { "B", N_("Home") } };
-        const Ui::Hint* h = mode == Mode::Catalog ? hCat : hHome;
+        const Ui::Hint hHome[] = { { "A", N_("Open") }, { "2", N_("Expand") }, { "1", N_("Search") }, { "+!", N_("Browse") } };
+        const Ui::Hint hCat[]  = { { "A", N_("Open") }, { "2", N_("Expand") }, { "1", N_("Search") }, { "B", N_("Home") } };
+        Ui::Hint h[4];
+        int nh = 0;
+        const bool canExpand = rowSel < (int)rows.size() &&
+                               (!rows[rowSel].sections.empty() || !rows[rowSel].query.empty());
+        for (const Ui::Hint& e : mode == Mode::Catalog ? hCat : hHome)
+            if (canExpand || strcmp(e.button, "2") != 0) h[nh++] = e;
         float w = 0;
-        for (int i = 0; i < 3; ++i) w += Ui::hintWidth(h[i]);
+        for (int i = 0; i < nh; ++i) w += Ui::hintWidth(h[i]);
         float x = Ui::screenRight() - 14 - w;
-        for (int i = 0; i < 3; ++i) x += Ui::hint(x, 454, h[i]);
+        for (int i = 0; i < nh; ++i) x += Ui::hint(x, 454, h[i]);
     }
 
     drawHeader();
+}
+
+/* ---- A row as a page (expand) ---------------------------------------------- */
+
+static const int   EXPAND_ITEMS = 100;
+static const float EXP_Y = 58;                               /* top of the first line   */
+static const float EXP_W = 80, EXP_H = 120, EXP_GAP = 10;    /* grid tiles (2:3)        */
+static const float EXP_STRIDE = EXP_H + 10;
+static const int   EXP_GRID_LINES = 3;
+static const float EXP_LIST_X = 40;
+static const int   EXP_LIST_ROWS = 10, EXP_LIST_H = 36;
+static const float EXP_LIST_W = 560, EXP_LIST_W_COVER = 370;
+
+int BrowseHome::expView() { return (int)Ui::libraryStyle(); }
+
+int BrowseHome::expCols() const
+{
+    if (expView() != 0) return 1;
+    const float ws = WiiUtils::wsScaleX();
+    int c = (int)((Ui::screenWidth() - 56.0f + EXP_GAP * ws) / ((EXP_W + EXP_GAP) * ws));
+    return c < 1 ? 1 : c;
+}
+
+int BrowseHome::expLines() const { return expView() == 0 ? EXP_GRID_LINES : EXP_LIST_ROWS; }
+
+/* the grid: the tiles shown; a list: none, or the cover beside it */
+void BrowseHome::expWindow(int& first, int& last) const
+{
+    const int v = expView();
+    if (v == 0)      { first = expTop * expCols(); last = first + expCols() * expLines() - 1; }
+    else if (v == 2) { first = last = exp.sel; }
+    else             { first = 0; last = -1; }
+}
+
+void BrowseHome::expFollow()
+{
+    const int cols = expCols(), lines = expLines(), line = exp.sel / cols;
+    if (line < expTop) expTop = line;
+    if (line >= expTop + lines) expTop = line - lines + 1;
+    if (expTop < 0) expTop = 0;
+}
+
+void BrowseHome::expand()
+{
+    if (rowSel < 0 || rowSel >= (int)rows.size()) return;
+    const Row& r = rows[rowSel];
+    std::string title = r.title, query = r.query;
+    int s = sectionOf(r, r.sel);
+    if (s >= 0) { title += " \xc2\xb7 " + r.sections[s].label; query = r.sections[s].query; }
+    if (query.empty()) return;
+    freeTextures(exp);
+    exp = Row();
+    exp.title  = title;
+    exp.query  = query;
+    exp.square = r.square;
+    if (r.sel >= 0 && r.sel < (int)r.items.size()) {   /* the selection stays on it */
+        exp.items.push_back(r.items[r.sel]);
+        exp.tex.assign(1, nullptr);
+        exp.st.assign(1, TILE_NONE);
+    }
+    expanded = true;
+    fetchExpanded();
+}
+
+/* the row's query for more of it (Limit=EXPAND_ITEMS), the selection kept */
+void BrowseHome::fetchExpanded()
+{
+    std::string keep = exp.sel >= 0 && exp.sel < (int)exp.items.size() ? exp.items[exp.sel].id : "";
+    freeTextures(exp);
+    std::string q = exp.query;
+    char lim[24];
+    snprintf(lim, sizeof(lim), "Limit=%d", EXPAND_ITEMS);
+    size_t p = q.find("Limit=");
+    if (p != std::string::npos) {
+        size_t e = q.find('&', p);
+        q.replace(p, e == std::string::npos ? std::string::npos : e - p, lim);
+    } else {
+        q += (q.find('?') == std::string::npos ? "?" : "&");
+        q += lim;
+    }
+    std::vector<JellyfinItem> got;
+    client.getItemsByQuery(serverUrl, auth, q, got);
+    if ((int)got.size() > EXPAND_ITEMS) got.resize(EXPAND_ITEMS);
+    exp.items = std::move(got);
+    exp.tex.assign(exp.items.size(), nullptr);
+    exp.st.assign(exp.items.size(), TILE_NONE);
+    exp.sel = 0;
+    for (int i = 0; i < (int)exp.items.size(); ++i)
+        if (exp.items[i].id == keep) { exp.sel = i; break; }
+    expTop = 0;
+    expFollow();
+}
+
+void BrowseHome::collapse()
+{
+    stopLoader();
+    freeTextures(exp);
+    exp = Row();
+    expanded = false;
+    startLoader();
+}
+
+BrowseHome::Action BrowseHome::updateExpanded(const ir_t& ir, bool& irMode)
+{
+    const int n = (int)exp.items.size();
+    bool up    = Input::isUpPressed(),   down  = Input::isDownPressed();
+    bool left  = Input::isLeftPressed(), right = Input::isRightPressed();
+    bool a     = Input::isAJustPressed();
+    if (up || down || left || right) irMode = false;
+
+    if (Input::isBackPressed()) { collapse(); return Action::None; }
+    /* 1: the next library view (Posters, List, List + Posters) */
+    if (Input::is1Pressed()) {
+        Ui::setLibraryStyle((Ui::LibraryStyle)((expView() + 1) % Ui::LIBRARY_STYLE_COUNT));
+        expTop = 0;
+        expFollow();
+        return Action::None;
+    }
+    if (n == 0) return Action::None;
+
+    const int cols = expCols(), page = cols * expLines();
+    int sel = exp.sel;
+    if (Input::isLPressed()) sel -= page;
+    if (Input::isRPressed()) sel += page;
+    if (expView() == 0) {
+        if (left)  sel--;
+        if (right) sel++;
+        if (up    && sel - cols >= 0) sel -= cols;
+        if (down) sel = sel + cols < n ? sel + cols : (sel / cols < (n - 1) / cols ? n - 1 : sel);
+    } else {
+        if (up)    sel--;
+        if (down)  sel++;
+        if (left)  sel -= page;
+        if (right) sel += page;
+    }
+    if (sel < 0) sel = 0;
+    if (sel > n - 1) sel = n - 1;
+    if (sel != exp.sel) { exp.sel = sel; expFollow(); }
+
+    /* pointer */
+    int hover = -1;
+    if (ir.valid && irMode) {
+        const float ws = WiiUtils::wsScaleX();
+        if (expView() == 0) {
+            const float tw = EXP_W * ws, gap = EXP_GAP * ws;
+            const float x0 = 320.0f - (cols * tw + (cols - 1) * gap) * 0.5f;
+            for (int l = 0; l < expLines(); ++l)
+                for (int c = 0; c < cols; ++c) {
+                    int i = (expTop + l) * cols + c;
+                    float x = x0 + c * (tw + gap), y = EXP_Y + l * EXP_STRIDE;
+                    if (i < n && ir.x >= x && ir.x < x + tw && ir.y >= y && ir.y < y + EXP_H) hover = i;
+                }
+        } else {
+            const float lw = expView() == 2 ? EXP_LIST_W_COVER : EXP_LIST_W;
+            if (ir.x >= EXP_LIST_X && ir.x < EXP_LIST_X + lw && ir.y >= EXP_Y) {
+                int i = expTop + (int)((ir.y - EXP_Y) / EXP_LIST_H);
+                if (i - expTop < EXP_LIST_ROWS && i < n) hover = i;
+            }
+        }
+        if (hover >= 0) exp.sel = hover;
+    }
+    if (a && (!irMode || hover >= 0)) return Action::Open;
+    return Action::None;
+}
+
+/* what a tile or a line is called: an episode by its series too */
+static std::string expName(const JellyfinItem& it)
+{
+    if (it.type == "Episode" && !it.seriesName.empty()) return it.seriesName + " \xc2\xb7 " + it.name;
+    if (it.type == "Season" && !it.seriesName.empty())  return it.seriesName + " \xc2\xb7 " + it.name;
+    return it.name;
+}
+
+void BrowseHome::renderExpanded(const ir_t& ir)
+{
+    (void)ir;
+    Ui::background();
+    const Ui::Palette& p = Ui::pal();
+    const Look L = look();
+    const int n = (int)exp.items.size(), cols = expCols(), lines = expLines(), v = expView();
+    const float ws = WiiUtils::wsScaleX();
+
+    char pos[24];
+    snprintf(pos, sizeof(pos), "%d / %d", n > 0 ? exp.sel + 1 : 0, n);
+    Ui::header(fit(exp.title, 24, 440).c_str(), pos);
+
+    if (n == 0) Ui::textCentered(320, 200, tr("Nothing to show yet"), 16, p.textDim);
+
+    auto texOf = [&](int i) {
+        LWP_MutexLock(texLock);
+        GRRLIB_texImg* t = exp.tex[i];
+        LWP_MutexUnlock(texLock);
+        return t;
+    };
+
+    if (v == 0) {
+        const float tw = EXP_W * ws, gap = EXP_GAP * ws;
+        const float x0 = 320.0f - (cols * tw + (cols - 1) * gap) * 0.5f;
+        for (int pass = 0; pass < 2; ++pass)                 /* selected tile last */
+            for (int l = 0; l < lines; ++l)
+                for (int c = 0; c < cols; ++c) {
+                    int i = (expTop + l) * cols + c;
+                    if (i >= n) break;
+                    bool sel = i == exp.sel;
+                    if (sel != (pass == 1)) continue;
+                    float dx = x0 + c * (tw + gap), dy = EXP_Y + l * EXP_STRIDE, dw = tw, dh = EXP_H;
+                    if (sel) {
+                        float g = 4;
+                        dx -= g * ws * 0.5f; dy -= g * 0.5f; dw += g * ws; dh += g;
+                        Ui::shadow(dx - 3, dy - 3, dw + 6, dh + 6, 8, 10.0f, L.selShadow);
+                    } else {
+                        Ui::shadow(dx + 1, dy + 3, dw - 2, dh - 2, 5, 5.0f, L.tileShadow);
+                    }
+                    const JellyfinItem& it = exp.items[i];
+                    GRRLIB_texImg* tex = texOf(i);
+                    if (tex && (exp.square || it.type == "MusicAlbum")) {
+                        const float sq = dw / ws;
+                        Ui::roundRect(dx, dy, dw, dh, 5, L.phTop, L.phBottom);
+                        Ui::texCover(tex, dx, dy + (dh - sq) * 0.5f, dw, sq, 3, 1.0f);
+                    } else if (tex) {
+                        Ui::texCover(tex, dx, dy, dw, dh, 5, (dw / ws) / dh);
+                    } else {
+                        Ui::roundRect(dx, dy, dw, dh, 5, L.phTop, L.phBottom);
+                        std::string cap = fit(it.type == "Episode" && !it.seriesName.empty() ? it.seriesName : it.name,
+                                              12, (int)dw - 8);
+                        Ui::textCentered(dx + dw * 0.5f, dy + dh * 0.5f - 7, cap.c_str(), 12, L.phText);
+                    }
+                    if (it.playbackPositionTicks > 0 && it.runtimeTicks > 0)
+                        Ui::progress(dx + 5, dy + dh - 9, dw - 10, 4,
+                                     (float)it.playbackPositionTicks / (float)it.runtimeTicks);
+                    if (sel) Ui::roundBorder(dx, dy, dw, dh, 5, 3.0f, L.selBorder);
+                    else     Ui::roundBorder(dx, dy, dw, dh, 5, 1.0f, L.tileBorder);
+                }
+        int total = (n + cols - 1) / cols;
+        Ui::scrollbar(Ui::screenRight() - 18.0f, EXP_Y, lines * EXP_STRIDE - 10, expTop, lines, total);
+    } else {
+        const float lw = v == 2 ? EXP_LIST_W_COVER : EXP_LIST_W;
+        for (int r = 0; r < lines; ++r) {
+            int i = expTop + r;
+            if (i >= n) break;
+            const JellyfinItem& it = exp.items[i];
+            float ry = EXP_Y + r * EXP_LIST_H;
+            bool sel = i == exp.sel;
+            Ui::card(EXP_LIST_X, ry + 2, lw, EXP_LIST_H - 4, 9, sel ? 1.0f : 0.0f);
+            float rightW = 0;
+            if (it.year > 0) {
+                char y[12];
+                snprintf(y, sizeof(y), "%d", it.year);
+                Ui::textRight(EXP_LIST_X + lw - 12, ry + 10, y, 14, p.textDim);
+                rightW = Ui::textWidth(y, 14) + 12;
+            }
+            std::string t = fit(expName(it), 16, (int)(lw - 28 - rightW));
+            Ui::text(EXP_LIST_X + 14, ry + 9, t.c_str(), 16, sel ? p.accentDark : p.text);
+            if (it.playbackPositionTicks > 0 && it.runtimeTicks > 0)
+                Ui::progress(EXP_LIST_X + 14, ry + EXP_LIST_H - 9, 60, 3,
+                             (float)it.playbackPositionTicks / (float)it.runtimeTicks);
+        }
+        Ui::scrollbar(EXP_LIST_X + lw + 8, EXP_Y + 2, lines * EXP_LIST_H - 4, expTop, lines, n);
+
+        /* List + Posters: the selected title's cover beside the list */
+        if (v == 2 && exp.sel >= 0 && exp.sel < n) {
+            const JellyfinItem& it = exp.items[exp.sel];
+            const float PX = EXP_LIST_X + lw + 26, PW = 600 - PX, PY = EXP_Y + 2;
+            const bool sq = exp.square || it.type == "MusicAlbum";
+            const float PH = sq ? PW : PW * 1.5f;
+            GRRLIB_texImg* tex = texOf(exp.sel);
+            if (tex) Ui::texCover(tex, PX, PY, PW, PH, 6, PW / PH);
+            else {
+                Ui::roundRect(PX, PY, PW, PH, 6, L.phTop, L.phBottom);
+                Ui::textCentered(PX + PW * 0.5f, PY + PH * 0.5f - 7, fit(it.name, 13, (int)PW - 10).c_str(), 13, L.phText);
+            }
+            Ui::text(PX, PY + PH + 10, fit(expName(it), 15, (int)PW).c_str(), 15, p.text);
+            int mins = (int)(it.runtimeTicks / 600000000LL);
+            char meta[64] = "";
+            if (it.type == "Episode")
+                snprintf(meta, sizeof(meta), tr("S%d E%d"), it.seasonNumber, it.episodeNumber);
+            else if (mins > 0)
+                snprintf(meta, sizeof(meta), "%s", Lang::runTime(mins).c_str());
+            if (it.year > 0) {
+                size_t l = strlen(meta);
+                snprintf(meta + l, sizeof(meta) - l, "%s%d", l ? "  \xc2\xb7  " : "", it.year);
+            }
+            if (meta[0]) Ui::text(PX, PY + PH + 30, meta, 13, p.textDim);
+        }
+    }
+
+    static const char* const VIEWS[Ui::LIBRARY_STYLE_COUNT] = { N_("Posters"), N_("List"), N_("List + Posters") };
+    const Ui::Hint l[] = { { "A", N_("Open") }, { "B", N_("Back") }, { "1", VIEWS[v] } };
+    const Ui::Hint r[] = { { "-/+", N_("Page") } };
+    std::string cap = v == 0 && exp.sel >= 0 && exp.sel < n ? fit(expName(exp.items[exp.sel]), 14, 240) : "";
+    Ui::footer(l, 3, r, n > cols * lines ? 1 : 0, cap.empty() ? nullptr : cap.c_str());
 }

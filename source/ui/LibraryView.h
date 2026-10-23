@@ -524,6 +524,8 @@ private:
     bool updateItemList(ir_t& ir, bool aPressed);
     void renderItemList(ir_t& ir);
     State pageLoadState() const;   // the load of the current tab's page
+    bool  viewSwitchable() const;  // a library that opens as a grid or a list
+    void  cycleLibraryView();      // 1: Posters, List, List + Posters
     /* A tab of the bar on the screen (home or library), as -/+ reach it */
     void goToTab(int t);
     bool updatePosterGrid(ir_t& ir, bool aPressed);

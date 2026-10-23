@@ -24,7 +24,8 @@
  * ----------------------------------------------------------------------- */
 class BrowseHome {
 public:
-    enum class Action { None, Open, Search, Browse, Back, Profiles };
+    /* Expand: 2 on a row: expand() it, inside a loading screen */
+    enum class Action { None, Open, Search, Browse, Back, Profiles, Expand };
     /* Home: what to watch now (resume, next up, latest, top rated, favourites).
      * Catalog: the "browse" page (libraries, every title A-Z, genres). */
     enum class Mode { Home, Catalog };
@@ -47,12 +48,20 @@ public:
     Action update(const ir_t& ir, bool& irMode);
     void   render(const ir_t& ir);
 
+    /* The focused row (or the part of it selected) as a page of its own,
+     * more of it, in the library view (Posters: a grid; List; List +
+     * Posters); 1 changes the view, B back to the rows.  Blocking network:
+     * the loader stopped, inside a loading screen. */
+    void expand();
+    bool isExpanded() const { return expanded; }
+
     /* Item under the selection (valid after Action::Open). */
     const JellyfinItem* selectedItem() const;
     /* Changes whenever the highlight moves (LibraryView's sounds) */
     unsigned focusKey() const {
         unsigned k = (unsigned)(rowSel + 1) * 7919u + (unsigned)(headerFocus + 2) * 104729u;
         if (rowSel >= 0 && rowSel < (int)rows.size()) k += (unsigned)rows[rowSel].sel * 2654435761u;
+        if (expanded) k += (unsigned)(exp.sel + 1) * 31337u + (unsigned)expView() * 977u + 1u;
         return k;
     }
     void setUserName(const std::string& n) { userName = n; }
@@ -70,10 +79,25 @@ private:
         int                         first  = 0;      /* first visible tile         */
         /* a row of several parts, one after the other (New Additions, Top
          * Rated: one per library): where each starts, its name */
-        struct Section { int start; std::string label; };
+        struct Section { int start; std::string label; std::string query; };
         std::vector<Section>        sections;
+        std::string                 query;            /* what it shows; empty: can't expand */
     };
     static int sectionOf(const Row& r, int i);   /* -1: no sections */
+
+    /* the expanded row (expand()): its own tiles, the loader's while open */
+    Row         exp;
+    bool        expanded = false;
+    int         expTop   = 0;      /* first line shown: of tiles (grid) or titles (list) */
+    static int  expView();         /* 0 grid, 1 list, 2 list + cover: the library view */
+    int         expCols() const;
+    int         expLines() const;  /* lines on the page */
+    void        expWindow(int& first, int& last) const;   /* tiles worth loading */
+    void        expFollow();
+    void        fetchExpanded();
+    void        collapse();
+    Action      updateExpanded(const ir_t& ir, bool& irMode);
+    void        renderExpanded(const ir_t& ir);
     enum TileState : unsigned char { TILE_NONE, TILE_LOADING, TILE_READY, TILE_FAILED };
 
     JellyfinClient&     client;
