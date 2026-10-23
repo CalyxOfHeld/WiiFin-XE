@@ -3,9 +3,9 @@
 a jellyfish in Jellyfin's purple-to-blue and the name, on a dark plate so
 both read on any background.
 
-    python tools/hbc_icon.py [bold font.ttf]
+    python tools/hbc_icon.py [out.png]
 
-The font defaults to Segoe UI Bold (Windows).
+Fonts: Segoe UI Bold and Black (Windows).
 """
 import math, sys
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageChops
@@ -75,7 +75,8 @@ def jellyfish(s):
     return body, shine
 
 def main():
-    font_path = sys.argv[1] if len(sys.argv) > 1 else "C:/Windows/Fonts/segoeuib.ttf"
+    out_path = sys.argv[1] if len(sys.argv) > 1 else "apps/WiiFin/icon.png"
+    font_path, black_path = "C:/Windows/Fonts/segoeuib.ttf", "C:/Windows/Fonts/seguibl.ttf"
     size = (W * SS, H * SS)
     big = Image.new("RGBA", size, (0, 0, 0, 0))
 
@@ -103,24 +104,24 @@ def main():
     # the name: "Wii" white, "Fin" in the gradient, "XE" a gradient tag
     tx = 47 * SS
     f = ImageFont.truetype(font_path, 21 * SS)
-    fx = ImageFont.truetype(font_path, 10 * SS)
+    fx = ImageFont.truetype(black_path, 13 * SS)
     white = Image.new("L", size, 0)
     fin = Image.new("L", size, 0)
     dw, df = ImageDraw.Draw(white), ImageDraw.Draw(fin)
-    base = 25 * SS
+    base = 23 * SS
     dw.text((tx, base), "Wii", font=f, fill=255, anchor="ls")
     fin_x = tx + dw.textlength("Wii", font=f) + SS * 0.5
     df.text((fin_x, base), "Fin", font=f, fill=255, anchor="ls")
     name_end = fin_x + df.textlength("Fin", font=f)
-    tag_w, tag_h = dw.textlength("XE", font=fx) + 9 * SS, 12 * SS
-    tag_x1, tag_y0 = name_end, base + 5 * SS
+    tag_w, tag_h = dw.textlength("XE", font=fx) + 10 * SS, 16 * SS
+    tag_x1, tag_y0 = name_end, base + 4 * SS
     tag_x0 = tag_x1 - tag_w
     tag = Image.new("L", size, 0)
     ImageDraw.Draw(tag).rounded_rectangle((tag_x0, tag_y0, tag_x1, tag_y0 + tag_h), radius=tag_h / 2, fill=255)
     tagtext = Image.new("L", size, 0)
     ImageDraw.Draw(tagtext).text(((tag_x0 + tag_x1) / 2, tag_y0 + tag_h / 2), "XE", font=fx, fill=255, anchor="mm")
     dash_y = tag_y0 + tag_h / 2
-    dw.rounded_rectangle((tag_x0 - 7 * SS, dash_y - SS, tag_x0 - 2 * SS, dash_y + SS), radius=SS, fill=255)
+    dw.rounded_rectangle((tag_x0 - 9 * SS, dash_y - 1.25 * SS, tag_x0 - 3 * SS, dash_y + 1.25 * SS), radius=SS, fill=255)
 
     grad = horizontal(size, LILAC, SKY, fin_x, tag_x1)
     big.paste((255, 255, 255, 255), (0, 0), white)
@@ -128,7 +129,7 @@ def main():
     big.paste(horizontal(size, PURPLE, BLUE, tag_x0, tag_x1), (0, 0), tag)
     big.paste((255, 255, 255, 255), (0, 0), tagtext)
 
-    big.resize((W, H), Image.LANCZOS).save("apps/WiiFin/icon.png", optimize=True)
+    big.resize((W, H), Image.LANCZOS).save(out_path, optimize=True)
 
 if __name__ == "__main__":
     main()
