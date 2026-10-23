@@ -46,6 +46,10 @@ public:
      * ('\n' Enter, '\b' Backspace / Delete), 0 when no more. */
     static int typedChar();
 
+    /* This frame's presses dropped: a screen that closed with them (the
+     * HOME menu's B) leaves none for the one under it.  Held stays. */
+    static void consume();
+
     /* Buttons pressed this frame, Wii Remote bits, no repeat. */
     static u32 rawDown();
     /* Buttons held, Wii Remote bits. */

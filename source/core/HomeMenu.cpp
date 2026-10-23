@@ -84,7 +84,11 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
         /* ---- Input ---- */
         if (state == 0) {
             const bool home = Input::isHomePressed() && ticks_to_millisecs(gettime()) - openedAt > 300;
-            if (Input::isBPressed() || home) { if (musicEnabled) MusicBGM::resume(); return false; }
+            if (Input::isBPressed() || home) {
+                if (musicEnabled) MusicBGM::resume();
+                Input::consume();   /* the B (or HOME) that closed it: not for the screen under it */
+                return false;
+            }
 
             if (ir.valid) {
                 for (int i = 0; i < 2; i++) {

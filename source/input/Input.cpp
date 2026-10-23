@@ -379,6 +379,7 @@ bool Input::isDownPressed()  { return buttonsDown & WPAD_BUTTON_DOWN; }
 bool Input::isLeftPressed()  { return buttonsDown & WPAD_BUTTON_LEFT; }
 bool Input::isRightPressed() { return buttonsDown & WPAD_BUTTON_RIGHT; }
 bool Input::isAJustPressed() { return buttonsDown & WPAD_BUTTON_A; }
+void Input::consume() { rawDownBits = buttonsDown = 0; actionDown = false; }
 bool Input::isBPressed()     { return buttonsDown & WPAD_BUTTON_B; }
 bool Input::isBackPressed()  { return buttonsDown & WPAD_BUTTON_B; }
 bool Input::isLPressed()     { return buttonsDown & WPAD_BUTTON_MINUS; }
