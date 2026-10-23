@@ -18,10 +18,10 @@ extern unsigned char data_saver_cd_png[];
 
 namespace {
 
-int   s_minutes = 3;
-int   s_logoKind = Screensaver::LogoWiiFin;
-int   s_speed = Screensaver::SpeedNormal;
-int   s_effect = Screensaver::EffectEdge;
+int   s_minutes = 1;
+int   s_logoKind = Screensaver::LogoVhs;
+int   s_speed = Screensaver::SpeedSlow;
+int   s_effect = Screensaver::EffectFade;
 std::string s_dir;               /* WiiFin's folder: screensaver.png there */
 u64   s_lastActive = 0;          /* ms */
 bool  s_on = false;

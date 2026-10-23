@@ -127,7 +127,7 @@ static const Palette& themePal()
 Palette builtInPalette(Theme t) { return builtInPal(t); }
 /* Solid colours: each gradient becomes its middle colour, without the
  * pinstripes (the bands a gradient shows on a 480i TV, issue 22) */
-static bool s_solid = false;
+static bool s_solid = true;
 void setSolidColors(bool on) { s_solid = on; ++s_palGen; }
 static bool s_clock12 = false;
 void setClock12h(bool on) { s_clock12 = on; }

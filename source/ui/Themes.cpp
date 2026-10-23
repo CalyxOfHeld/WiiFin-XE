@@ -249,4 +249,29 @@ int saveTheme(CustomTheme& t)
     return findCustomTheme(file);
 }
 
+bool removeTheme(const std::string& file)
+{
+    if (s_dir.empty() || file.empty() || file.find('/') != std::string::npos) return false;
+    const std::string from = s_dir + file;
+    struct stat st;
+    if (stat(from.c_str(), &st) != 0) { loadThemes(s_dir); return true; }   /* gone already */
+    const std::string bin = s_dir + "removed";
+    mkdir(bin.c_str(), 0777);   /* EEXIST is fine */
+    /* never over one removed before: Name.theme, Name-2.theme... */
+    const std::string stem = file.substr(0, file.size() - 6);
+    std::string to = bin + "/" + file;
+    for (int n = 2; stat(to.c_str(), &st) == 0 && n < 100; ++n) {
+        char suffix[16];
+        snprintf(suffix, sizeof(suffix), "-%d.theme", n);
+        to = bin + "/" + stem + suffix;
+    }
+    if (stat(to.c_str(), &st) == 0 || rename(from.c_str(), to.c_str()) != 0) {
+        SYS_Report("[Theme] can't move %s to %s\n", from.c_str(), to.c_str());
+        return false;
+    }
+    SYS_Report("[Theme] removed %s (now %s)\n", file.c_str(), to.c_str());
+    loadThemes(s_dir);   /* in use: back to its base, a built-in */
+    return true;
+}
+
 } // namespace Ui

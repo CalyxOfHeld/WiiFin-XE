@@ -33,7 +33,7 @@ private:
     void loadSdFonts(const std::string& dir);
     ir_t ir;
     JellyfinClient jellyfinClient;
-    bool musicEnabled = true;
+    bool musicEnabled = false;
     /* WiiFin's own look (the menus, and a profile without its own) */
     ViewPrefs startView;
     ViewPrefs currentView() const;                 /* what Ui shows now */

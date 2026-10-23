@@ -76,7 +76,7 @@ extern "C" {
     volatile int   g_wiifin_burned_subs = 0;
     volatile float g_wiifin_fps         = 0.0f;
     float          g_wiifin_test_freeze = 0.0f;
-    volatile int   g_wiifin_disc_light  = 1;
+    volatile int   g_wiifin_disc_light  = 0;
 
     /* MPlayer's audio output (ao_gekko) reads the console's slot
      * illumination when a playback starts, and pulses the disc light with

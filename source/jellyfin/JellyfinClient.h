@@ -645,7 +645,7 @@ public:
     bool tokenRefused = false;
 
     // Video transcode quality: 0 = Low, 1 = Normal, 2 = High (see videoBitrate()).
-    int videoQuality = 1;
+    int videoQuality = 3;   /* Max, as far as the connection allows (linkCap) */
     // Ask Jellyfin to re-encode video and audio instead of copying a
     // compatible source stream.  Set after the server failed a transcode
     // with HTTP 500 (copying an old AVI/Xvid file into MPEG-TS fails).

@@ -48,12 +48,24 @@ static int partAt(float x, float y)
     return -1;
 }
 
-static int rowAt(float x, float y)
+/* row i of the list: Reset and Remove share the last line */
+static void rowRect(int i, bool withRemove, float& x, float& y, float& w)
 {
-    if (x < LX || x >= LX + LW) return -1;
-    for (int i = 0; i < Ui::THEME_COLOR_COUNT + 2; ++i) {
-        const float ry = LY + i * RSTEP + (i >= Ui::THEME_COLOR_COUNT ? 8 : 0);
-        if (y >= ry && y < ry + RH) return i;
+    const int line = i == Ui::THEME_COLOR_COUNT + 2 ? i - 1 : i;
+    x = LX; w = LW;
+    y = LY + line * RSTEP + (line >= Ui::THEME_COLOR_COUNT ? 8 : 0);
+    if (withRemove && line == Ui::THEME_COLOR_COUNT + 1) {
+        w = (LW - 6) * 0.5f;
+        if (i != line) x = LX + w + 6;
+    }
+}
+
+static int rowAt(float x, float y, bool withRemove)
+{
+    for (int i = 0; i < Ui::THEME_COLOR_COUNT + (withRemove ? 3 : 2); ++i) {
+        float rx, ry, rw;
+        rowRect(i, withRemove, rx, ry, rw);
+        if (x >= rx && x < rx + rw && y >= ry && y < ry + RH) return i;
     }
     return -1;
 }
@@ -73,7 +85,7 @@ void ThemeEditor::open()
     opened = work;
     pal = Ui::buildPalette(work);
     Ui::setPreviewPalette(&pal);
-    sel = 0; part = 0; inPicker = grabbed = dirty = asking = false;
+    sel = 0; part = 0; inPicker = grabbed = dirty = asking = removing = false;
     dragging = lastHover = -1;
     typing = Typing::None;
     for (float& f : rowAnim) f = 0;
@@ -86,7 +98,7 @@ void ThemeEditor::open()
 void ThemeEditor::close()
 {
     Ui::setPreviewPalette(nullptr);   /* the theme in use: as it was, or the one saved */
-    asking = false;
+    asking = removing = false;
     typing = Typing::None;
 }
 
@@ -249,11 +261,39 @@ bool ThemeEditor::update(ir_t& ir)
         return false;
     }
 
+    if (removing) {
+        const int was = removeSel;
+        if (Input::isLeftPressed())  removeSel = 0;
+        if (Input::isRightPressed()) removeSel = 1;
+        if (ir.valid && ir.y >= 266 && ir.y < 304) {
+            if (ir.x >= 170 && ir.x < 310) removeSel = 0;
+            if (ir.x >= 330 && ir.x < 470) removeSel = 1;
+        }
+        if (removeSel != was) SoundFX::play(SoundFX::FX::Move);
+        if (Input::isBackPressed() || (Input::isAJustPressed() && removeSel == 1)) {
+            removing = false;
+            SoundFX::play(SoundFX::FX::Back);
+            return false;
+        }
+        if (Input::isAJustPressed()) {
+            removing = false;
+            if (!Ui::removeTheme(opened.file)) {
+                Ui::showNotice(tr("The theme wasn't removed"), tr("The SD card may be locked."), 5000);
+                return false;
+            }
+            SoundFX::play(SoundFX::FX::Back);
+            Ui::showNotice(tr("Theme removed"), tr("It's in themes/removed/ on the SD card, if you want it back."), 4000);
+            close();   /* the theme in use: its base, a built-in one */
+            return true;
+        }
+        return false;
+    }
+
     const bool a = Input::isAJustPressed();
     if (!(Input::held() & WPAD_BUTTON_A)) dragging = -1;
 
     /* the pointer: a row of the list, a part of the picker */
-    const int hover = ir.valid ? rowAt(ir.x, ir.y) : -1;
+    const int hover = ir.valid ? rowAt(ir.x, ir.y, canRemove()) : -1;
     const int hpart = ir.valid && sel < Ui::THEME_COLOR_COUNT ? partAt(ir.x, ir.y) : -1;
     if (hover >= 0 && hover != lastHover && dragging < 0 && hover != sel) {
         sel = hover;
@@ -289,9 +329,14 @@ bool ThemeEditor::update(ir_t& ir)
     if (inPicker) return updatePicker(ir);
 
     /* the list */
+    /* up and down by line (Reset and Remove share one), left and right
+     * between those two */
     const int was = sel;
-    if (Input::isUpPressed())   sel = (sel + ROW_COUNT - 1) % ROW_COUNT;
-    if (Input::isDownPressed()) sel = (sel + 1) % ROW_COUNT;
+    const int line = sel == ROW_REMOVE ? ROW_RESET : sel, lines = ROW_RESET + 1;
+    if (Input::isUpPressed())   sel = (line + lines - 1) % lines;
+    if (Input::isDownPressed()) sel = (line + 1) % lines;
+    if (canRemove() && sel == ROW_RESET && Input::isRightPressed()) sel = ROW_REMOVE;
+    if (sel == ROW_REMOVE && Input::isLeftPressed()) sel = ROW_RESET;
     if (sel != was) {
         if (sel < Ui::THEME_COLOR_COUNT) { fromColor(); before = color(); }
         SoundFX::play(SoundFX::FX::Move);
@@ -317,6 +362,10 @@ bool ThemeEditor::update(ir_t& ir)
         Ui::setPreviewPalette(&pal);
         dirty = false;
         SoundFX::play(SoundFX::FX::Back);
+    } else if (act && sel == ROW_REMOVE) {
+        removing = true;
+        removeSel = 1;   /* Keep: A twice never removes by accident */
+        SoundFX::play(SoundFX::FX::Select);
     }
     return false;
 }
@@ -341,13 +390,15 @@ void ThemeEditor::render(ir_t& ir)
     Ui::background();
     Ui::header(tr("Customize Theme"), work.name.c_str());
 
-    /* the colours, then Save As and Reset */
+    /* the colours, then Save As, Reset and Remove */
     for (int i = 0; i < ROW_COUNT; ++i) {
+        if (i == ROW_REMOVE && !canRemove()) continue;
         rowAnim[i] = Ui::approach(rowAnim[i], i == sel && (!inPicker || i >= Ui::THEME_COLOR_COUNT) ? 1.0f
                                              : i == sel ? 0.45f : 0.0f);
-        const float y = LY + i * RSTEP + (i >= Ui::THEME_COLOR_COUNT ? 8 : 0);
+        float x, y, w;
+        rowRect(i, canRemove(), x, y, w);
         if (i >= Ui::THEME_COLOR_COUNT) {
-            Ui::button(LX, y, LW, RH, i == ROW_SAVE ? N_("Save As...") : N_("Reset"), 14,
+            Ui::button(x, y, w, RH, i == ROW_SAVE ? N_("Save As...") : i == ROW_RESET ? N_("Reset") : N_("Remove"), 14,
                        rowAnim[i] > 0.01f ? Ui::pulse() * rowAnim[i] : 0.0f);
             continue;
         }
@@ -418,6 +469,12 @@ void ThemeEditor::render(ir_t& ir)
         char code[48];
         snprintf(code, sizeof(code), "%s   %d, %d, %d", Ui::colorHex(c).c_str(), r, g, b);
         Ui::field(BX, FY, PX + PW - 14 - BX, FH, code, 15, f && part == P_TEXT);
+    } else if (sel == ROW_REMOVE) {
+        Ui::text(PX + 14, PY + 8, tr("Remove"), 18, p.text);
+        Ui::text(PX + 14, PY + 34, tr("Take this theme off the Theme list."), 13, p.textDim);
+        Ui::text(PX + 14, PY + 56, tr("Its file goes to themes/removed/."), 13, p.textDim);
+        Ui::text(PX + 14, PY + 78, tr("A PC can put it back from there."), 13, p.textDim);
+        Ui::text(PX + 14, PY + 100, tr("Anything using it goes back to its base theme."), 13, p.textDim);
     } else {
         Ui::text(PX + 14, PY + 8, tr(sel == ROW_SAVE ? "Save As..." : "Reset"), 18, p.text);
         Ui::text(PX + 14, PY + 34, sel == ROW_SAVE ? tr("Save these colours as a theme of your own, under a name.")
@@ -450,6 +507,22 @@ void ThemeEditor::render(ir_t& ir)
         Ui::textCentered(320, 222, tr("Leaving without saving puts the theme back."), 14, p.textDim);
         Ui::button(170, 250, 140, 38, N_("Save As..."), 17, askSel == 0 ? Ui::pulse() : 0.0f);
         Ui::button(330, 250, 140, 38, N_("Don't Save"), 17, askSel == 1 ? Ui::pulse() : 0.0f);
+        const Ui::Hint l[] = { { "A", N_("Select") }, { "B", N_("Cancel") } };
+        Ui::bottomBar(l, 2);
+        return;
+    }
+
+    if (removing) {
+        GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, p.dim, 1);
+        Ui::card(140, 160, 360, 160, 20, 0.0f);
+        char q[96];
+        /* TRANSLATORS: Customize Theme > Remove: %s is the theme's name */
+        snprintf(q, sizeof(q), tr("Remove \"%s\"?"), opened.name.c_str());
+        Ui::textCentered(320, 182, q, 21, p.text);
+        Ui::textCentered(320, 214, tr("It moves to themes/removed/ on the SD card."), 14, p.textDim);
+        Ui::textCentered(320, 234, tr("A PC can put it back."), 14, p.textDim);
+        Ui::button(170, 266, 140, 38, N_("Remove"), 17, removeSel == 0 ? Ui::pulse() : 0.0f);
+        Ui::button(330, 266, 140, 38, N_("Keep"), 17, removeSel == 1 ? Ui::pulse() : 0.0f);
         const Ui::Hint l[] = { { "A", N_("Select") }, { "B", N_("Cancel") } };
         Ui::bottomBar(l, 2);
         return;

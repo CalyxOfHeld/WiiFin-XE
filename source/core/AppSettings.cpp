@@ -16,8 +16,8 @@
 #include <string.h>
 
 void App::loadSettings() {
-    /* the clock as the console's region writes it, unless wiifin.cfg says */
-    Ui::setClock12h(CONF_GetRegion() == CONF_REGION_US);
+    /* the clock: 24-hour, unless wiifin.cfg says */
+    Ui::setClock12h(false);
     Lang::choose(-1);   /* the Wii's language, unless wiifin.cfg says */
     startView = currentView();
     if (settingsPath.empty()) return;

@@ -10,7 +10,8 @@
  * a square of shades (saturation and brightness) and a hue slide, red,
  * green and blue slides, and a field that takes #RRGGBB or r,g,b.  The
  * whole screen shows the colours as they change.  Save As writes it to
- * themes/ under a name; a built-in theme is never changed. */
+ * themes/ under a name; a built-in theme is never changed.  Remove moves
+ * a saved theme to themes/removed/. */
 class ThemeEditor {
 public:
     void open();
@@ -19,7 +20,8 @@ public:
     void render(ir_t& ir);
 
 private:
-    enum { ROW_SAVE = Ui::THEME_COLOR_COUNT, ROW_RESET, ROW_COUNT };
+    /* Remove: beside Reset, for a theme saved in themes/ */
+    enum { ROW_SAVE = Ui::THEME_COLOR_COUNT, ROW_RESET, ROW_REMOVE, ROW_COUNT };
     enum Part { P_SQUARE, P_HUE, P_RED, P_GREEN, P_BLUE, P_TEXT, P_COUNT };
 
     Ui::CustomTheme work, opened;   /* being edited; as it was opened */
@@ -46,6 +48,11 @@ private:
     /* B with changes not saved: Save As, or leave them */
     bool  asking = false;
     int   askSel = 0;
+
+    /* Remove: sure? (Keep first) */
+    bool  removing = false;
+    int   removeSel = 1;
+    bool  canRemove() const { return !opened.file.empty(); }
 
     u32  color() const;              /* the highlighted colour, as the theme has it */
     void setColor(u32 c, bool keepHsv);

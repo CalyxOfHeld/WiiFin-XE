@@ -14,7 +14,7 @@ const int RATE    = 3000;      /* the speaker's samples a second (libogc's setti
 const int PACKET  = 40;        /* samples a report: 20 bytes of 4-bit ADPCM */
 const int RING    = 4096;      /* 1.4 s */
 
-volatile int s_mode = RemoteSpeaker::Off;
+volatile int s_mode = RemoteSpeaker::Both;
 volatile bool s_running = false;     /* MPlayer playing: buffers taken */
 
 /* 3000 Hz mono, written in the audio interrupt, read by the thread */

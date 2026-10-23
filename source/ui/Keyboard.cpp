@@ -31,7 +31,7 @@ static unsigned long long nowMs() { return ticks_to_millisecs(gettime()); }
 
 /* the keys' size: Normal, Large, Larger (the widest 616 across: inside the
  * 4:3 picture's 640) */
-static int s_size = Keyboard::SizeNormal;
+static int s_size = Keyboard::SizeLarger;
 static const float CELL_WS[Keyboard::SIZE_COUNT] = { 46, 52, 56 };
 static const float CELL_HS[Keyboard::SIZE_COUNT] = { 40, 45, 49 };
 void  Keyboard::setSize(int s) { s_size = s >= 0 && s < SIZE_COUNT ? s : SizeNormal; }

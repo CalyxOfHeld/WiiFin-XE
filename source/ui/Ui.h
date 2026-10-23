@@ -79,6 +79,9 @@ std::string colorHex(u32 c);                      /* #RRGGBB, alpha too if not o
 /* written to themes/ (file from its name), the list read again; its
  * index there, -1 failed */
 int  saveTheme(CustomTheme& t);
+/* moved to themes/removed/ (never deleted: a PC can put it back), the list
+ * read again; in use: back to its base.  false: it couldn't be moved */
+bool removeTheme(const std::string& file);
 /* the colour editor's palette, drawn by everything while it's set */
 void setPreviewPalette(const Palette* p);
 bool customColors();                              /* a theme of one's own, or the editor's */

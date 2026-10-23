@@ -749,6 +749,7 @@ void App::loop() {
                 }
             }
             if (found < 0) {
+                p.picture = Avatars::JELLY;   /* a new profile starts as the jellyfish */
                 profiles.push_back(p);
                 found = (int)profiles.size() - 1;
                 runOnboarding(profiles[found]);   /* sign-in, home screen, library view */

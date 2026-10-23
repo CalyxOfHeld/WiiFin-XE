@@ -49,7 +49,7 @@ static const uint64_t FX_COOLDOWN_MS  = 150;  /* minimum interval between same-F
 static const long     CUSTOM_MAX_FILE = 2L << 20;
 static const unsigned CUSTOM_MAX_SECS = 10;
 
-static bool s_enabled = true;
+static bool s_enabled = false;
 static bool s_logging = false;
 
 /* Per-FX last-play timestamp (ms); 0 = never played, so first play always works */
