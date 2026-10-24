@@ -12,6 +12,10 @@
  *                   z x c v b n m , . _ '
  *                   [ Shift ][ #+= ][  Space  ][ Delete ][ Search ]
  *
+ *   for an address  [ Shift ][#+=][http://][https://][ Delete ][ Next ]
+ *                   (http:// and https:// put that in front of the text,
+ *                   in place of the one there)
+ *
  * Pointer: the highlight follows it and A types the key under it (A over
  * empty space does nothing).  D-pad: moves the highlight, A types it.
  * B deletes a character (leaves when the text is empty); - deletes too, 1
@@ -30,6 +34,7 @@ public:
     /* Top-left corner of the keys and the action key's label. */
     void setOrigin(float x, float y)    { x0 = x; y0 = y; }
     void setEnterLabel(const char* s)   { enterLabel = s; }
+    void setUrlKeys(bool on)            { urlKeys = on; }   /* http:// and https:// for Space */
     void reset();
 
     /* Edits text (at most maxLen bytes). */
@@ -49,11 +54,12 @@ public:
     float lift()   const { return height() - ROWS * 40.0f; }
 
 private:
-    enum Special { K_NONE = 0, K_SHIFT, K_SYM, K_SPACE, K_DEL, K_ENTER };
+    enum Special { K_NONE = 0, K_SHIFT, K_SYM, K_SPACE, K_DEL, K_ENTER, K_HTTP, K_HTTPS };
     struct Key { int row, col, span; char ch; Special sp; };
 
     float       x0 = 67, y0 = 140;
     const char* enterLabel = "OK";
+    bool  urlKeys = false;
     int   page  = 0;          /* 0 letters, 1 symbols         */
     int   shift = 0;          /* 0 off, 1 next letter, 2 lock */
     int   selRow = 1, selCol = 0;
@@ -62,6 +68,7 @@ private:
     int   flashRow = -1, flashCol = -1;
 
     Key  keyAt(int row, int col) const;               /* key covering a cell */
+    Key  bottomKey(Special sp) const;                 /* sp on the bottom row (sp K_NONE: not there) */
     bool keyUnder(const ir_t& ir, int& row, int& col) const;
     Result press(const Key& k, std::string& text, size_t maxLen);
     const char* label(const Key& k, char* buf) const;

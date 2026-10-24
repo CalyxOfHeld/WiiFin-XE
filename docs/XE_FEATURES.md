@@ -121,6 +121,8 @@ Shortcuts on each controller:
 
 B also deletes, and leaves when the text is empty.
 
+**Server URL:** the keyboard has **http://** and **https://** keys where Space would be. Each puts its prefix in front of what you typed, replacing the other one if it's there. Type the address, then add the prefix.
+
 **Keyboard Size** (Settings > View): Normal, Large or Larger. The labels grow with the keys.
 
 ## Screen area

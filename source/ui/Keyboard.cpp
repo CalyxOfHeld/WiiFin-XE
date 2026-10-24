@@ -21,10 +21,16 @@ static const char* const SYMBOLS[4] = {
     "1234567890.",
 };
 
-/* Bottom row: wide keys, as (first column, span) */
-static const struct { int col, span; int sp; } BOTTOM[5] = {
+/* Bottom row: wide keys, as (first column, span); for an address, http://
+ * and https:// in Space's place */
+struct BottomKey { int col, span; int sp; };
+static const BottomKey BOTTOM[] = {
     { 0, 2, 1 /* K_SHIFT */ }, { 2, 2, 2 /* K_SYM */ }, { 4, 3, 3 /* K_SPACE */ },
-    { 7, 2, 4 /* K_DEL */ },   { 9, 2, 5 /* K_ENTER */ },
+    { 7, 2, 4 /* K_DEL */ },   { 9, 2, 5 /* K_ENTER */ }, { 0, 0, 0 },
+};
+static const BottomKey BOTTOM_URL[] = {
+    { 0, 2, 1 /* K_SHIFT */ }, { 2, 1, 2 /* K_SYM */ }, { 3, 2, 6 /* K_HTTP */ }, { 5, 2, 7 /* K_HTTPS */ },
+    { 7, 2, 4 /* K_DEL */ },   { 9, 2, 5 /* K_ENTER */ }, { 0, 0, 0 },
 };
 
 static unsigned long long nowMs() { return ticks_to_millisecs(gettime()); }
@@ -54,12 +60,19 @@ Keyboard::Key Keyboard::keyAt(int row, int col) const
         k.ch = r[col];
         return k;
     }
-    for (const auto& b : BOTTOM)
-        if (col >= b.col && col < b.col + b.span) {
-            k.col = b.col; k.span = b.span; k.sp = (Special)b.sp;
+    for (const BottomKey* b = urlKeys ? BOTTOM_URL : BOTTOM; b->span; ++b)
+        if (col >= b->col && col < b->col + b->span) {
+            k.col = b->col; k.span = b->span; k.sp = (Special)b->sp;
             return k;
         }
     return k;
+}
+
+Keyboard::Key Keyboard::bottomKey(Special sp) const
+{
+    for (const BottomKey* b = urlKeys ? BOTTOM_URL : BOTTOM; b->span; ++b)
+        if (b->sp == sp) return Key{ ROWS - 1, b->col, b->span, 0, sp };
+    return Key{ ROWS - 1, 0, 1, 0, K_NONE };
 }
 
 bool Keyboard::keyUnder(const ir_t& ir, int& row, int& col) const
@@ -101,6 +114,16 @@ Keyboard::Result Keyboard::press(const Key& k, std::string& text, size_t maxLen)
         return Result::None;
     case K_ENTER:
         return Result::Enter;
+    case K_HTTP:
+    case K_HTTPS: {   /* the scheme in front, in place of one already there */
+        size_t rest = 0;
+        if (text.compare(0, 7, "http://") == 0) rest = 7;
+        else if (text.compare(0, 8, "https://") == 0) rest = 8;
+        const std::string t = (k.sp == K_HTTPS ? "https://" : "http://") + text.substr(rest);
+        if (t.size() <= maxLen) text = t;
+        SoundFX::play(SoundFX::FX::PressKey);
+        return Result::None;
+    }
     default: break;
     }
     if (!k.ch || text.size() >= maxLen) return Result::None;
@@ -157,10 +180,14 @@ Keyboard::Result Keyboard::update(const ir_t& ir, std::string& text, size_t maxL
     const bool del   = gc ? (gc & PAD_BUTTON_X) != 0  : Input::isLPressed();
     const bool space = gc ? (gc & PAD_BUTTON_Y) != 0  : Input::is1Pressed();
     const bool sym   = gc ? (gc & PAD_TRIGGER_R) != 0 : Input::is2Pressed();
-    if (gc & PAD_TRIGGER_L) press(Key{ 4, 0, 2, 0, K_SHIFT }, text, maxLen);
-    if (del)   press(Key{ 4, 7, 2, 0, K_DEL }, text, maxLen);
-    if (space) press(Key{ 4, 4, 3, 0, K_SPACE }, text, maxLen);
-    if (sym)   press(Key{ 4, 2, 2, 0, K_SYM }, text, maxLen);
+    if (gc & PAD_TRIGGER_L) press(bottomKey(K_SHIFT), text, maxLen);
+    if (del)   press(bottomKey(K_DEL), text, maxLen);
+    if (space) {   /* for an address, a space all the same (no key for it) */
+        Key k = bottomKey(K_SPACE);
+        if (k.sp == K_NONE) { k.sp = K_SPACE; k.row = -1; }
+        press(k, text, maxLen);
+    }
+    if (sym)   press(bottomKey(K_SYM), text, maxLen);
     if (Input::isActionPressed()) return Result::Enter;                       /* + (GameCube Z) */
     if (Input::isBackPressed()) {
         if (text.empty()) return Result::Cancel;
@@ -179,6 +206,8 @@ const char* Keyboard::label(const Key& k, char* buf) const
     case K_SPACE: return N_("Space");
     case K_DEL:   return N_("\xe2\x86\x90 Delete");
     case K_ENTER: return enterLabel;
+    case K_HTTP:  return "http://";
+    case K_HTTPS: return "https://";
     default: break;
     }
     buf[0] = (shift && k.ch >= 'a' && k.ch <= 'z') ? (char)(k.ch - 32) : k.ch;
