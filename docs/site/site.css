@@ -135,10 +135,81 @@ body::before {
 .menu .clock { font-size: 1.35rem; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 
 /* ---- spec strip ---- */
-.specs { border-block: 1px solid var(--line); background: var(--surface); }
-.specs ul { list-style: none; margin: 0; padding: 14px 0; display: flex; flex-wrap: wrap; gap: 8px 28px; justify-content: center; }
-.specs li { font: 600 var(--step--1) var(--font-mono); color: var(--ink-dim); }
-.specs b { color: var(--ink); font-weight: 700; }
+.specs {
+  border-block: 1px solid var(--line);
+  background: var(--surface);
+  padding: 14px 0;
+}
+.specs ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: center;
+  align-items: center;
+}
+.specs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--step--1);
+  font-family: var(--font-body);
+  color: var(--ink-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+.specs li svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.specs li b {
+  color: var(--ink);
+  font-weight: 700;
+  font-family: var(--font-display);
+}
+.specs li code {
+  font-size: .88em;
+  background: var(--code-bg);
+  padding: .1em .4em;
+  border-radius: 4px;
+}
+
+/* ---- Jellyfin explainer card ---- */
+.jellyfin-notice {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  margin: 0 0 36px;
+  box-shadow: var(--shadow);
+}
+.jellyfin-notice .notice-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.jellyfin-notice .notice-icon svg { width: 24px; height: 24px; }
+.jellyfin-notice .notice-content { flex: 1; min-width: 0; }
+.jellyfin-notice h3 { margin: 0 0 8px; font-size: var(--step-1); color: var(--ink); }
+.jellyfin-notice p { margin: 0 0 10px; color: var(--ink-dim); line-height: 1.6; }
+.jellyfin-notice p strong { color: var(--ink); }
+.jellyfin-notice .notice-sub { margin-top: 12px; font-size: var(--step--1); padding-top: 10px; border-top: 1px dashed var(--line); margin-bottom: 0; }
 
 /* ---- sections ---- */
 section.block { padding-block: 56px 8px; }
@@ -232,6 +303,8 @@ footer.site p { margin: 0; max-width: 80ch; }
   .features, .links, .shots, .xe-list { grid-template-columns: minmax(0, 1fr); }
   .channels { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .channels .empty { display: none; }
+  .jellyfin-notice { flex-direction: column; gap: 14px; padding: 18px; }
+  .specs li { white-space: normal; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }

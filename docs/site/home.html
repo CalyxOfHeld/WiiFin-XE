@@ -34,11 +34,11 @@
 <div class="specs">
   <div class="wrap">
     <ul>
-      <li><b>640×480</b> to the TV</li>
-      <li>converted by the server at <b>1.5–5 Mb/s</b></li>
-      <li><b>direct play</b>: SD Xvid, MPEG-2, H.264 up to 480p</li>
-      <li><b>10</b> interface languages</li>
-      <li>settings in <b>sd:/apps/WiiFin/</b></li>
+      <li><svg aria-hidden="true"><use href="#i-screen"/></svg><span><b>640×480</b> to the TV</span></li>
+      <li><svg aria-hidden="true"><use href="#i-server"/></svg><span>Server transcode at <b>1.5–5 Mb/s</b></span></li>
+      <li><svg aria-hidden="true"><use href="#i-play"/></svg><span><b>Direct Play:</b> SD Xvid, MPEG-2, H.264</span></li>
+      <li><svg aria-hidden="true"><use href="#i-globe"/></svg><span><b>10</b> interface languages</span></li>
+      <li><svg aria-hidden="true"><use href="#i-code"/></svg><span>Settings in <code>sd:/apps/WiiFin/</code></span></li>
     </ul>
   </div>
 </div>
@@ -48,6 +48,16 @@
     <p class="kicker">What it does</p>
     <h2>A Jellyfin client that feels at home on the Wii</h2>
     <p class="intro">Your Jellyfin server converts what the Wii can't play, as it plays. Everything else happens on the console: browsing, the player, the music and your settings.</p>
+
+    <div class="jellyfin-notice">
+      <div class="notice-icon"><svg aria-hidden="true"><use href="#i-server"/></svg></div>
+      <div class="notice-content">
+        <h3>New to Jellyfin? Here is how it works</h3>
+        <p><strong>WiiFin-XE is a client, not a standalone media center.</strong> The Wii's hardware cannot host your media library or convert high-definition videos on its own. Instead, it connects to a separate Jellyfin server running on your home network.</p>
+        <p><strong>What is Jellyfin?</strong> Jellyfin is a 100% free, open-source media system that organizes your movie, TV series, and music collection. If you don't have a server running yet, download and install Jellyfin for free on Windows, macOS, Linux, or Docker at <a href="https://jellyfin.org" target="_blank" rel="noopener"><strong>jellyfin.org</strong></a>, then follow our <a href="getting-started.html#setting-up-the-server">Server Setup Guide</a>.</p>
+        <p class="notice-sub"><em>Looking to play files directly from your SD card or USB hard drive without a server? Check out <a href="whats-new.html#wiimc-for-local-media">WiiMC for Local Media</a>.</em></p>
+      </div>
+    </div>
     <div class="features">
       <div>
         <h3><svg aria-hidden="true"><use href="#i-film"/></svg>Films and series</h3>
@@ -115,7 +125,7 @@
   <div class="wrap">
     <p class="kicker">Install</p>
     <h2>On your Wii in three steps</h2>
-    <p class="intro">You need a Wii with the Homebrew Channel, and a Jellyfin server on your network. <a href="getting-started.html#setting-up-the-server">Setting up the server</a> covers the server side.</p>
+    <p class="intro">You need a Wii with the Homebrew Channel, and a <a href="https://jellyfin.org" target="_blank" rel="noopener">Jellyfin server</a> running on your computer or local network. <a href="getting-started.html#setting-up-the-server">Setting up the server</a> covers the server side.</p>
     <ol class="steps">
       <li><h3>Copy it to the SD card</h3><p>Unzip <code>WiiFin-apps.zip</code> (or <code>WiiFin-hbc.zip</code>) at the root of the SD card. Everything goes in <code>apps/WiiFin/</code> (you can also transfer files over your network with ftpii).</p></li>
       <li><h3>Start it</h3><p>Open the Homebrew Channel and choose WiiFin-XE, the jellyfish icon.</p></li>
