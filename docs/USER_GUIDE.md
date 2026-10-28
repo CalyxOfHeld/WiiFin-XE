@@ -75,18 +75,18 @@ From the Jellyfin dashboard or apps:
 ### And also
 
 - The interface in the **Wii's ten languages**: English, French, German, Spanish, Italian, Dutch, Japanese, Korean, Simplified and Traditional Chinese, the Wii's own by default (French reviewed, the others waiting for native speakers: see [lang/README.md](../lang/README.md))
-- **Wii Remote** pointer, **Classic Controller**, **Wii U GamePad** (Virtual Console injects) and **GameCube controller**: everything works with the D-pad, no sensor bar needed (see [Controls](#-controls))
+- **Wii Remote** pointer, **Classic Controller**, **Wii U Pro Controller**, **Wii U GamePad** (Virtual Console injects) and **GameCube controller**: everything works with the D-pad, no sensor bar needed (see [Controls](#-controls))
 - **Interface sounds** and **background music**, both replaceable with your own files (see [Custom sounds](#-custom-sounds))
 - On-screen keyboard; screen area calibration for TVs that crop the picture; the disc slot light can stay off
 - Ships as a ready-to-use `.dol`, an installable `.wad` (Wii / vWii) and a Homebrew Channel package
 
 ## 🎮 Controls
 
-WiiFin-XE supports all standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**.
+WiiFin-XE supports all standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the wireless **Wii U Pro Controller**, the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**.
 
 The pointer is optional: every screen works completely with the D-pad and analog sticks.
 
-| Wii Remote (Wiimote) | Classic Controller / Wii U GamePad | GameCube controller | Action |
+| Wii Remote (Wiimote) | Classic / Wii U Pro / GamePad | GameCube controller | Action |
 |---|---|---|---|
 | A / B | A / B | A / B | Select / Back |
 | D-pad | D-pad or left stick | D-pad or stick | Move (hold to repeat); left / right: A-Z in lists, −10 / +10 s in the player (held: on seeking) |
@@ -98,8 +98,9 @@ The pointer is optional: every screen works completely with the D-pad and analog
 
 On-screen hints show the buttons of the controller used last (GameCube: A green, B red, X / Y beans, L / R, Z, START).
 
-- **Several controllers:** all four Wii Remotes and all four GameCube ports work at once.
+- **Several controllers:** all four Wii Remotes, Wii U Pro Controllers, and all four GameCube ports work at once.
 - **Wii Remote & Nunchuk:** use the IR pointer or D-pad; the Nunchuk's stick acts as the D-pad, C is − and Z is +.
+- **Wii U Pro Controller:** syncs wirelessly over Bluetooth. Supports dual analog sticks, rumble, and uses Classic Controller button hints.
 - **GameCube Controllers:** dual-analog sticks are fully utilized. By default, C-Stick scrubs playback (left/right ±10 s, held seeks continuously) and D-Pad controls volume (up/down). Roles can be customized in `Settings > Playback > Controller`.
 - **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons directly with a pulsing ring, and **A** executes the button. Press **B** to hide the overlay.
 - **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right go round the buttons.

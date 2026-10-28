@@ -1,6 +1,7 @@
 #include "Input.h"
 #include "../ui/Ui.h"
 #include <wiiuse/wpad.h>
+#include "wupc.h"
 #include <ogc/pad.h>
 #include <ogc/lwp_watchdog.h>
 #include <ogc/system.h>
@@ -239,9 +240,24 @@ static u32 gcSubStickDir(int port)
     return toCStickBits(padStickDir(PAD_SubStickX(port), PAD_SubStickY(port)));
 }
 
+/* A Wii U Pro Controller's left stick */
+static u32 wupcMainStickDir(int ch)
+{
+    if (!WUPC_Data(ch)) return 0;
+    return padStickDir(WUPC_lStickX(ch) / 10, WUPC_lStickY(ch) / 10);
+}
+
+/* A Wii U Pro Controller's right stick (C-Stick) */
+static u32 wupcSubStickDir(int ch)
+{
+    if (!WUPC_Data(ch)) return 0;
+    return padStickDir(WUPC_rStickX(ch) / 10, WUPC_rStickY(ch) / 10);
+}
+
 void Input::update() {
     static bool padInit = false;
     if (!padInit) { PAD_Init(); padInit = true; }
+    WUPC_UpdateButtonStats();
     WPAD_ScanPads();
     /* a Wii Remote connecting (later than WiiFin, or back from sleep) is in
      * buttons-only mode: libogc sets the pointer's mode only on those there
@@ -306,6 +322,17 @@ void Input::update() {
         if (classic && (d & 0xFFFF0000u) && classicChan < 0) classicChan = ch;
         /* the Nunchuk is the Wii Remote's half: its hints, its pointer */
         if (((d & 0xFFFF) || (nunchuk && (d & 0xFFFF0000u))) && remoteChan < 0) remoteChan = ch;
+    }
+
+    /* every Wii U Pro Controller (Bluetooth) */
+    for (int ch = 0; ch < PORTS; ++ch) {
+        if (!WUPC_Data(ch)) continue;
+        const u32 d = WUPC_ButtonsDown(ch);
+        const u32 h = WUPC_ButtonsHeld(ch);
+        wiiDown |= fromClassic(d);
+        wiiHeld |= fromClassic(h);
+        if (d & WPAD_CLASSIC_BUTTON_PLUS) plusDown = true;
+        if (d && classicChan < 0) classicChan = ch;
     }
 
     /* the keyboard: every key since the last frame */
@@ -393,6 +420,8 @@ void Input::update() {
     static u32 prevClassicMain[PORTS] = {};
     static u32 prevClassicSub[PORTS] = {};
     static u32 prevNunchuk[PORTS] = {};
+    static u32 prevWupcMain[PORTS] = {};
+    static u32 prevWupcSub[PORTS] = {};
     u32 stick = 0, stickDown = 0;
     for (int i = 0; i < PORTS; ++i) {
         const u32 gm = gcMainStickDir(i);
@@ -400,23 +429,29 @@ void Input::update() {
         const u32 cm = toStickBits(classicStickDir(i));
         const u32 cs = toCStickBits(classicSubStickDir(i));
         const u32 n  = remoteThere[i] ? toStickBits(nunchukStickDir(i)) : 0;
+        const u32 wm = toStickBits(wupcMainStickDir(i));
+        const u32 ws = toCStickBits(wupcSubStickDir(i));
 
         const u32 gNew = (gm & ~prevGcMain[i]) | (gs & ~prevGcSub[i]);
         const u32 cNew = (cm & ~prevClassicMain[i]) | (cs & ~prevClassicSub[i]);
         const u32 nNew = (n & ~prevNunchuk[i]);
+        const u32 wNew = (wm & ~prevWupcMain[i]) | (ws & ~prevWupcSub[i]);
 
         if (gNew && gcPort < 0)      gcPort = i;
         if (cNew && classicChan < 0) classicChan = i;
         if (nNew && remoteChan < 0)  remoteChan = i;
+        if (wNew && classicChan < 0) classicChan = i;
 
-        stickDown |= gNew | cNew | nNew;
-        stick     |= gm | gs | cm | cs | n;
+        stickDown |= gNew | cNew | nNew | wNew;
+        stick     |= gm | gs | cm | cs | n | wm | ws;
 
         prevGcMain[i]      = gm;
         prevGcSub[i]       = gs;
         prevClassicMain[i] = cm;
         prevClassicSub[i]  = cs;
         prevNunchuk[i]     = n;
+        prevWupcMain[i]    = wm;
+        prevWupcSub[i]     = ws;
     }
 
     /* any other controller's button or stick, or a key: the screen's own
@@ -510,6 +545,7 @@ int Input::typedChar()
  * completes into freed memory (DSI in __usbv0_messageCB) */
 void Input::shutdown()
 {
+    WUPC_Shutdown();
     if (s_kb > 0) KEYBOARD_Deinit();
     s_kb = -1;
     if (s_mouse > 0) UsbMouse::shutdown();

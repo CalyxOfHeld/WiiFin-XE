@@ -82,7 +82,8 @@ LDFLAGS     := -g $(MACHDEP) -Wl,-Map,$(TARGET).map -T tools/wii_wiifin.ld \
                -Wl,--wrap=LWP_JoinThread \
                -Wl,--wrap=SYS_Report \
                -Wl,--wrap=CONF_GetIdleLedMode \
-               -Wl,--wrap=GRRLIB_Render -Wl,--wrap=iosFree -Wl,--wrap=AUDIO_InitDMA   # see source/core/LwpJoinFix.cpp, Log.cpp, WiiPlayer.cpp, RenderHook.cpp, player/OgcCompat.c
+               -Wl,--wrap=GRRLIB_Render -Wl,--wrap=iosFree -Wl,--wrap=AUDIO_InitDMA \
+               -Wl,--wrap=wiiuse_accept -Wl,--wrap=wiiuse_connect   # see source/core/LwpJoinFix.cpp, Log.cpp, WiiPlayer.cpp, RenderHook.cpp, player/OgcCompat.c, input/wupc.c
 LIBPATHS    := -L$(LIBOGC_LIB) -L/opt/devkitpro/portlibs/wii/lib -L/opt/devkitpro/portlibs/ppc/lib \
                -Llibs/mbedtls/lib
 
@@ -122,6 +123,9 @@ $(BUILD)/%.o: source/core/%.cpp
 
 $(BUILD)/%.o: source/input/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: source/input/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD)/%.o: source/ui/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@

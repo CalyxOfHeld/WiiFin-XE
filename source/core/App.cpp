@@ -8,7 +8,8 @@
 #include "../ui/Avatars.h"
 #include "Screensaver.h"
 #include "Utils.h"
-#include "Input.h"
+#include "../input/Input.h"
+#include "../input/wupc.h"
 #include "MusicBGM.h"
 #include "MusicSession.h"
 #include "SoundFX.h"
@@ -302,6 +303,7 @@ void App::init(const char* argv0) {
     // the devoptab entry for "sd" with a stub that has open_r=NULL → errno=88.
     // fatInitDefault() alone correctly registers "sd" with a working FAT driver.
 
+    WUPC_Init();
     WPAD_Init();
     WPAD_SetDataFormat(WPAD_CHAN_0, WPAD_FMT_BTNS_ACC_IR);
     WPAD_SetVRes(WPAD_CHAN_0, 640, 480);
