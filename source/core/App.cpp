@@ -52,6 +52,7 @@ extern unsigned int  data_ring_png_len;
 volatile bool g_app_powerOff = false;
 volatile bool g_app_reset    = false;
 volatile bool g_restartApp = false;
+bool g_app_shuttingDown = false;
 bool g_app_exitToLoader = true;
 int  g_app_powerAction = BTN_POWER_OFF;
 int  g_app_resetAction = BTN_HBC;
@@ -996,6 +997,8 @@ void App::loop() {
     }
 
     // --- Cleanup ---
+    g_app_shuttingDown = true;
+    Screensaver::stop();
     saveSettings();
     Log::close();        // its writer thread must not touch the card past here
     MusicSession::stop(false);
@@ -1015,6 +1018,9 @@ void App::loop() {
     for (GRRLIB_ttfFont* f : sdFonts) GRRLIB_FreeTTF(f);
     for (void* d : sdFontData) free(d);
     GRRLIB_Exit();
+    VIDEO_SetBlack(false);
+    VIDEO_Flush();
+    VIDEO_WaitVSync();
     Input::shutdown();   /* the USB keyboard and mouse */
     WPAD_Shutdown();
     /* launched by a loader (the Homebrew Channel's stub, where exit() goes
@@ -1065,16 +1071,19 @@ void App::loop() {
     }
     else if (loader && (button == BTN_HBC || (button < 0 && g_app_exitToLoader))) {
         /* Exit To the loader: back to the one that launched WiiFin, its
-         * stub at 0x80001800.  Not by exit(): libogc 3.2's jumps there with
-         * the interrupts still on (3.1 stopped the threads first), and
-         * WiiFin's own (video, sound, IPC) broke into the loader: a black
-         * screen on a tester's Wii.  As Reload does: the system shut down,
-         * the interrupts off, then the stub */
+         * stub at 0x80001800. Unblanked video, cleanly shut down the system
+         * threads and subsystems, and jump directly to the reload stub with
+         * pipelines synchronized. Interrupts are left enabled for IOS IPC. */
         SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
-        u32 level;
-        _CPU_ISR_Disable(level);
-        (void)level;
-        ((void (*)(void))0x80001800)();
+        __asm__ __volatile__(
+            "sync\n"
+            "isync\n"
+            "lis 9, 0x8000\n"
+            "ori 9, 9, 0x1800\n"
+            "mtctr 9\n"
+            "bctr\n"
+            ::: "r9"
+        );
     }
     else {
         /* Restore the NAND-loader stub bytes at their installed VA (0x80804000)

@@ -58,5 +58,7 @@ bool active();
 
 /* each frame, last (RenderHook) */
 void draw();
+/* deactivates screensaver and frees loaded textures on app shutdown */
+void stop();
 
 } // namespace Screensaver
