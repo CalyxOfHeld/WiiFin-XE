@@ -110,9 +110,10 @@ int Keyboard::charIndexAt(const std::string& text, int fontSize, float clickX)
 Keyboard::Key Keyboard::keyAt(int row, int col) const
 {
     Key k{ row, col, 1, 0, K_NONE };
+    if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return k;
     if (row < 4) {
         const char* r = (page == 0 ? LETTERS : SYMBOLS)[row];
-        k.ch = r[col];
+        if (r && col < (int)strlen(r)) k.ch = r[col];
         return k;
     }
     for (const BottomKey* b = urlKeys ? BOTTOM_URL : BOTTOM; b->span; ++b)
@@ -266,7 +267,7 @@ Keyboard::Result Keyboard::update(const ir_t& ir, std::string& text, size_t maxL
     if (overKey) { Key k = keyAt(pr, pc); selRow = k.row; selCol = k.col; }
 
     /* D-pad */
-    if (selRow == -1) {
+    if (selRow < 0) {
         if (Input::isLeftPressed()) {
             moveCursorLeft(text, cursor);
             SoundFX::play(SoundFX::FX::Move);
@@ -335,7 +336,7 @@ Keyboard::Result Keyboard::update(const ir_t& ir, std::string& text, size_t maxL
     if (sym)   press(bottomKey(K_SYM), text, maxLen);
     if (Input::isActionPressed()) return Result::Enter;                       /* + (GameCube Z) */
     if (Input::isBackPressed()) {
-        if (selRow == -1 || text.empty()) return Result::Cancel;
+        if (selRow < 0 || text.empty()) return Result::Cancel;
         eraseBefore(text, cursor);
         SoundFX::play(SoundFX::FX::Backspace);
     }
@@ -368,7 +369,7 @@ void Keyboard::render(const ir_t& ir) const
     int hr = -1, hc = -1;
     bool hover = keyUnder(ir, hr, hc);
     Key hk = hover ? keyAt(hr, hc) : Key{ -1, -1, 0, 0, K_NONE };
-    Key sk = keyAt(selRow, selCol);
+    Key sk = (selRow >= 0 && selRow < ROWS) ? keyAt(selRow, selCol) : Key{ -1, -1, 0, 0, K_NONE };
     unsigned long long t = nowMs();
     const float scale = cellH() / 40.0f;   /* the labels grow with the keys */
     const int   esz = (int)(15 * scale + 0.5f);
