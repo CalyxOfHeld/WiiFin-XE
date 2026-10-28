@@ -177,20 +177,19 @@ const usb_endpointdesc* outEndpoint(const usb_interfacedesc* id)
 
 int scanCandidates(Candidate* c, int max)
 {
-    u8 countHid = 0, countVendor = 0;
+    u8 count = 0;
     usb_device_entry list[MAX_DEVICES];
     memset(list, 0, sizeof(list));
 
-    /* Query both standard HID class (0x03) and Vendor Specific class (0xFF, used by Xbox) */
-    if (USB_GetDeviceList(list, MAX_DEVICES, USB_CLASS_HID, &countHid) < 0) {
-        countHid = 0;
-    }
-    if (countHid < MAX_DEVICES) {
-        if (USB_GetDeviceList(list + countHid, MAX_DEVICES - countHid, 0xFF, &countVendor) < 0) {
-            countVendor = 0;
+    /* First query class 0 (returns all attached devices on modern IOS / ven_host + hid_host) */
+    if (USB_GetDeviceList(list, MAX_DEVICES, 0, &count) < 0 || count == 0) {
+        u8 countHid = 0, countVendor = 0;
+        if (USB_GetDeviceList(list, MAX_DEVICES, USB_CLASS_HID, &countHid) < 0) countHid = 0;
+        if (countHid < MAX_DEVICES) {
+            if (USB_GetDeviceList(list + countHid, MAX_DEVICES - countHid, 0xFF, &countVendor) < 0) countVendor = 0;
         }
+        count = countHid + countVendor;
     }
-    const int count = countHid + countVendor;
     if (count == 0) return 0;
 
     int nc = 0;
@@ -208,7 +207,16 @@ int scanCandidates(Candidate* c, int max)
                 USB_CloseDevice(&fd);
             }
         }
-        if (got < 0 || dd.bNumConfigurations < 1) continue;
+        if (got < 0 || dd.bNumConfigurations < 1) {
+            /* Fallback detection by VID/PID if descriptor querying failed on vendor endpoints */
+            PadType pt = identifyPad(e.vid, e.pid);
+            if (pt == PadType::XboxOne) {
+                c[nc++] = Candidate{ e, 0, 0x81, 0x01, 64, pt };
+            } else if (pt == PadType::Xbox360) {
+                c[nc++] = Candidate{ e, 0, 0x81, 0x02, 32, pt };
+            }
+            continue;
+        }
 
         for (int conf = 0; conf < dd.bNumConfigurations && nc < max; ++conf) {
             const usb_configurationdesc& cd = dd.configurations[conf];
@@ -249,13 +257,14 @@ bool openCandidate(const Candidate& c)
     s32 fd = -1;
     if (USB_OpenDevice(c.dev.device_id, c.dev.vid, c.dev.pid, &fd) < 0) return false;
 
-    /* Ensure configuration 1 is selected (essential for vendor-class 0xFF devices) */
-    USB_SetConfiguration(fd, 1);
-
-    if (USB_DeviceRemovalNotifyAsync(fd, removedCb, nullptr) < 0) {
-        USB_CloseDevice(&fd);
-        return false;
+    /* Check configuration and activate configuration 1 if unconfigured */
+    u8 config = 0;
+    if (USB_GetConfiguration(fd, &config) < 0 || config == 0) {
+        USB_SetConfiguration(fd, 1);
     }
+
+    /* Register device removal notification (do not fail if unsupported on vendor nodes) */
+    USB_DeviceRemovalNotifyAsync(fd, removedCb, nullptr);
 
     if (c.type == PadType::DualShock3) {
         /* DualShock 3 operational report activation packet */
@@ -273,11 +282,18 @@ bool openCandidate(const Candidate& c)
         }
     } else if (c.type == PadType::XboxOne) {
         if (s_cmdBuf && c.epOut) {
-            /* GIP Power-On packet */
+            /* 1. GIP Power-On packet */
             const u8 xboxone_init[5] = { 0x05, 0x20, 0x00, 0x01, 0x00 };
             memcpy(s_cmdBuf, xboxone_init, sizeof(xboxone_init));
             USB_WriteIntrMsgAsync(fd, c.epOut, sizeof(xboxone_init), s_cmdBuf, writeDummyCb, nullptr);
-            SYS_Report("[Gamepad] Xbox One power-on init sent (ep 0x%02x)\n", c.epOut);
+            usleep(10000);
+
+            /* 2. GIP S / Series initialization packet (required for Xbox One S, Series X|S, Elite 2) */
+            const u8 xboxone_s_init[5] = { 0x05, 0x20, 0x01, 0x0f, 0x06 };
+            memcpy(s_cmdBuf, xboxone_s_init, sizeof(xboxone_s_init));
+            USB_WriteIntrMsgAsync(fd, c.epOut, sizeof(xboxone_s_init), s_cmdBuf, writeDummyCb, nullptr);
+
+            SYS_Report("[Gamepad] Xbox One / Series init sent (ep 0x%02x)\n", c.epOut);
         }
     } else if (c.type == PadType::SwitchPro) {
         if (s_cmdBuf && c.epOut) {
@@ -461,6 +477,34 @@ void decodeDualShock3(const u8* buf, int len)
 void decodeXbox(const u8* buf, int len)
 {
     if (len < 4) return;
+
+    /* Acknowledge GIP packets that request ACK or announce mode/presence */
+    if (buf[0] == 0x07 || buf[0] == 0x02 || (len >= 2 && (buf[1] & 0x10))) {
+        if (s_cmdBuf && s_dev.epOut) {
+            const u8 seq = (len >= 3) ? buf[2] : 0;
+            const u8 cmd = buf[0];
+            const u8 ack[13] = {
+                0x01, 0x20, seq, 0x09,
+                0x00, cmd,  0x20, 0x02,
+                0x00, 0x00, 0x00, 0x00, 0x00
+            };
+            memcpy(s_cmdBuf, ack, sizeof(ack));
+            USB_WriteIntrMsgAsync(s_dev.fd, s_dev.epOut, sizeof(ack), s_cmdBuf, writeDummyCb, nullptr);
+        }
+    }
+
+    /* Xbox One: Announcement packet (re-send power-on sequence if needed) */
+    if (buf[0] == 0x02) {
+        if (s_cmdBuf && s_dev.epOut) {
+            const u8 xboxone_init[5] = { 0x05, 0x20, 0x00, 0x01, 0x00 };
+            memcpy(s_cmdBuf, xboxone_init, sizeof(xboxone_init));
+            USB_WriteIntrMsgAsync(s_dev.fd, s_dev.epOut, sizeof(xboxone_init), s_cmdBuf, writeDummyCb, nullptr);
+            const u8 xboxone_s_init[5] = { 0x05, 0x20, 0x01, 0x0f, 0x06 };
+            memcpy(s_cmdBuf, xboxone_s_init, sizeof(xboxone_s_init));
+            USB_WriteIntrMsgAsync(s_dev.fd, s_dev.epOut, sizeof(xboxone_s_init), s_cmdBuf, writeDummyCb, nullptr);
+        }
+        return;
+    }
 
     /* Xbox One: Virtual Key / Guide button report */
     if (buf[0] == 0x07 && len >= 4) {
