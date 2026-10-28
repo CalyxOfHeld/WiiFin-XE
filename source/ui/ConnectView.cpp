@@ -483,6 +483,7 @@ void ConnectView::openKeyboard() {
     int fi = (int)focusedField;
     if (fi <= 2) origField = fields[fi];
     kbActive = true;
+    showPassword = false;
     kb.reset();
 }
 
@@ -490,6 +491,7 @@ void ConnectView::cancelKeyboard() {
     int fi = (int)focusedField;
     if (fi <= 2) fields[fi] = origField;
     kbActive = false;
+    showPassword = false;
     SoundFX::play(SoundFX::FX::Back);
 }
 
@@ -502,8 +504,12 @@ void ConnectView::handleVKBInput(ir_t& ir) {
 
     const int PX = (int)((640 - kb.width()) * 0.5f) - 12, PW = (int)kb.width() + 24;
     const int PY = (int)(238 - kb.lift()) - 50;
-    const int fieldX = PX + 100, fieldY = PY + 7, fieldW = PW - 305, fieldH = 32;
-    const int btnLeftX = PX + PW - 200, btnRightX = PX + PW - 168;
+    const bool isPw = (fi == 2);
+    const int btnShowW = isPw ? 46 : 0;
+    const int btnShift = isPw ? (btnShowW + 6) : 0;
+    const int fieldX = PX + 100, fieldY = PY + 7, fieldW = PW - 305 - btnShift, fieldH = 32;
+    const int btnLeftX = PX + PW - 200 - btnShift, btnRightX = PX + PW - 168 - btnShift;
+    const int btnShowX = PX + PW - 136 - btnShift;
     const int btnClearX = PX + PW - 136, btnClearW = 46;
     const int btnCancelX = PX + PW - 86, btnCancelW = 76, btnH = 32;
 
@@ -522,6 +528,12 @@ void ConnectView::handleVKBInput(ir_t& ir) {
                 if (c < (int)fields[fi].size()) { c++; kb.setCursorPos(c); SoundFX::play(SoundFX::FX::Move); }
                 return;
             }
+            if (isPw && ir.x >= btnShowX && ir.x <= btnShowX + btnShowW) {
+                showPassword = !showPassword;
+                kb.setPasswordMode(true, showPassword);
+                SoundFX::play(SoundFX::FX::Start);
+                return;
+            }
             if (ir.x >= btnClearX && ir.x <= btnClearX + btnClearW) {
                 fields[fi].clear();
                 kb.setCursorPos(0);
@@ -538,10 +550,12 @@ void ConnectView::handleVKBInput(ir_t& ir) {
     kb.setOrigin((640 - kb.width()) * 0.5f, 238 - kb.lift());
     kb.setEnterLabel(fi < 2 ? N_("Next") : N_("Done"));
     kb.setUrlKeys(fi == 0);   /* the server's address: http:// and https:// keys */
+    kb.setPasswordMode(fi == 2, showPassword);
     kb.setTextField(fieldX, fieldY, fieldW, fieldH);
     switch (kb.update(ir, fields[fi], 255)) {
     case Keyboard::Result::Enter:
         /* OK walks through the fields, then lands on Connect */
+        showPassword = false;
         if (fi < 2) { focusedField = (Field)(fi + 1); openKeyboard(); }
         else        { kbActive = false; focusedField = Field::SubmitBtn; }
         break;
@@ -550,6 +564,7 @@ void ConnectView::handleVKBInput(ir_t& ir) {
         break;
     default: break;
     }
+    if (fi == 2) showPassword = kb.isPasswordShown();
 }
 
 // ---------------------------------------------------------------
@@ -644,7 +659,7 @@ void ConnectView::renderCredentials(ir_t& ir) {
     drawField(N_("Username"),   fx, 180, fw, fields[1],
               focusedField == Field::Username && !kbActive, false);
     drawField(N_("Password"),   fx, 250, fw, fields[2],
-              focusedField == Field::Password && !kbActive, true);
+              focusedField == Field::Password && !kbActive, !showPassword);
 
     // Submit button
     drawButton(320, 330, 200, 48, editing ? N_("Save") : N_("Connect"),
@@ -675,12 +690,16 @@ void ConnectView::renderVKB(ir_t& ir) {
         int fi = (int)focusedField;
         const char* names[3] = { N_("Server URL"), N_("Username"), N_("Password") };
         if (fi <= 2) {
-            const int fieldX = PX + 100, fieldY = PY + 7, fieldW = PW - 305, fieldH = 32;
-            const int btnLeftX = PX + PW - 200, btnRightX = PX + PW - 168;
+            const bool isPw = (fi == 2);
+            const int btnShowW = isPw ? 46 : 0;
+            const int btnShift = isPw ? (btnShowW + 6) : 0;
+            const int fieldX = PX + 100, fieldY = PY + 7, fieldW = PW - 305 - btnShift, fieldH = 32;
+            const int btnLeftX = PX + PW - 200 - btnShift, btnRightX = PX + PW - 168 - btnShift;
+            const int btnShowX = PX + PW - 136 - btnShift;
             const int btnClearX = PX + PW - 136, btnClearW = 46;
             const int btnCancelX = PX + PW - 86, btnCancelW = 76, btnH = 32;
 
-            std::string raw = fi == 2 ? std::string(fields[fi].size(), '*') : fields[fi];
+            std::string raw = (fi == 2 && !showPassword) ? std::string(fields[fi].size(), '*') : fields[fi];
             int cPos = kb.cursorPos();
             if (cPos < 0 || cPos > (int)raw.size()) cPos = (int)raw.size();
 
@@ -724,6 +743,13 @@ void ConnectView::renderVKB(ir_t& ir) {
             bool hovRight = ir.valid && ir.x >= btnRightX && ir.x <= btnRightX + 28 &&
                             ir.y >= fieldY && ir.y <= fieldY + btnH;
             Ui::button(btnRightX, fieldY, 28, btnH, ">", 16, hovRight ? 0.35f : 0.0f);
+
+            // [ Show / Hide ] Button (password only)
+            if (isPw) {
+                bool hovShow = ir.valid && ir.x >= btnShowX && ir.x <= btnShowX + btnShowW &&
+                               ir.y >= fieldY && ir.y <= fieldY + btnH;
+                Ui::button(btnShowX, fieldY, btnShowW, btnH, showPassword ? N_("Hide") : N_("Show"), 13, hovShow ? 0.35f : 0.0f);
+            }
 
             // [ Clear ] Button
             bool hovClear = ir.valid && ir.x >= btnClearX && ir.x <= btnClearX + btnClearW &&

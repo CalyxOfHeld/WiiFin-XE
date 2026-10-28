@@ -30,6 +30,13 @@ static const BottomKey BOTTOM[] = {
     { 5, 2, 3 /* K_SPACE */ }, { 7, 2, 4 /* K_DEL */ },
     { 9, 2, 5 /* K_ENTER */ }, { 0, 0, 0 },
 };
+static const BottomKey BOTTOM_PASSWORD[] = {
+    { 0, 2, 1 /* K_SHIFT */ }, { 2, 1, 2 /* K_SYM */ },
+    { 3, 1, 8 /* K_LEFT */ },  { 4, 1, 9 /* K_RIGHT */ },
+    { 5, 2, 3 /* K_SPACE */ }, { 7, 1, 10 /* K_PW_TOGGLE */ },
+    { 8, 1, 4 /* K_DEL */ },   { 9, 2, 5 /* K_ENTER */ },
+    { 0, 0, 0 },
+};
 static const BottomKey BOTTOM_URL[] = {
     { 0, 2, 1 /* K_SHIFT */ }, { 2, 1, 2 /* K_SYM */ },
     { 3, 1, 8 /* K_LEFT */ },  { 4, 1, 9 /* K_RIGHT */ },
@@ -76,6 +83,7 @@ void Keyboard::reset()
     selRow = 1; selCol = 0;
     cursor = -1;
     flashMs = 0;
+    pwShown = false;
 }
 
 void Keyboard::setCursorPos(int pos)
@@ -116,7 +124,8 @@ Keyboard::Key Keyboard::keyAt(int row, int col) const
         if (r && col < (int)strlen(r)) k.ch = r[col];
         return k;
     }
-    for (const BottomKey* b = urlKeys ? BOTTOM_URL : BOTTOM; b->span; ++b)
+    const BottomKey* bList = urlKeys ? BOTTOM_URL : (passwordMode ? BOTTOM_PASSWORD : BOTTOM);
+    for (const BottomKey* b = bList; b->span; ++b)
         if (col >= b->col && col < b->col + b->span) {
             k.col = b->col; k.span = b->span; k.sp = (Special)b->sp;
             return k;
@@ -126,7 +135,8 @@ Keyboard::Key Keyboard::keyAt(int row, int col) const
 
 Keyboard::Key Keyboard::bottomKey(Special sp) const
 {
-    for (const BottomKey* b = urlKeys ? BOTTOM_URL : BOTTOM; b->span; ++b)
+    const BottomKey* bList = urlKeys ? BOTTOM_URL : (passwordMode ? BOTTOM_PASSWORD : BOTTOM);
+    for (const BottomKey* b = bList; b->span; ++b)
         if (b->sp == sp) return Key{ ROWS - 1, b->col, b->span, 0, sp };
     return Key{ ROWS - 1, 0, 1, 0, K_NONE };
 }
@@ -197,6 +207,10 @@ Keyboard::Result Keyboard::press(const Key& k, std::string& text, size_t maxLen)
         SoundFX::play(SoundFX::FX::PressKey);
         return Result::None;
     }
+    case K_PW_TOGGLE:
+        pwShown = !pwShown;
+        SoundFX::play(SoundFX::FX::Start);
+        return Result::None;
     default: break;
     }
     if (!k.ch || text.size() >= maxLen) return Result::None;
@@ -356,6 +370,7 @@ const char* Keyboard::label(const Key& k, char* buf) const
     case K_HTTPS: return "https://";
     case K_LEFT:  return "<";
     case K_RIGHT: return ">";
+    case K_PW_TOGGLE: return pwShown ? N_("Hide") : N_("Show");
     default: break;
     }
     buf[0] = (shift && k.ch >= 'a' && k.ch <= 'z') ? (char)(k.ch - 32) : k.ch;

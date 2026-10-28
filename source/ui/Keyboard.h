@@ -35,6 +35,9 @@ public:
     void setOrigin(float x, float y)    { x0 = x; y0 = y; }
     void setEnterLabel(const char* s)   { enterLabel = s; }
     void setUrlKeys(bool on)            { urlKeys = on; }   /* http:// and https:// for Space */
+    void setPasswordMode(bool on, bool show = false) { passwordMode = on; pwShown = show; }
+    bool isPasswordShown() const        { return pwShown; }
+    void togglePasswordShown()          { pwShown = !pwShown; }
     void reset();
 
     /* Text field bounds (screen coords) so Keyboard can handle clicks on it */
@@ -69,12 +72,14 @@ public:
     float lift()   const { return height() - ROWS * 40.0f; }
 
 private:
-    enum Special { K_NONE = 0, K_SHIFT, K_SYM, K_SPACE, K_DEL, K_ENTER, K_HTTP, K_HTTPS, K_LEFT, K_RIGHT };
+    enum Special { K_NONE = 0, K_SHIFT, K_SYM, K_SPACE, K_DEL, K_ENTER, K_HTTP, K_HTTPS, K_LEFT, K_RIGHT, K_PW_TOGGLE };
     struct Key { int row, col, span; char ch; Special sp; };
 
     float       x0 = 67, y0 = 140;
     const char* enterLabel = "OK";
     bool  urlKeys = false;
+    bool  passwordMode = false;
+    bool  pwShown = false;
     int   page  = 0;          /* 0 letters, 1 symbols         */
     int   shift = 0;          /* 0 off, 1 next letter, 2 lock */
     int   selRow = 1, selCol = 0;
