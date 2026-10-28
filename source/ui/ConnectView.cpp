@@ -484,6 +484,7 @@ void ConnectView::openKeyboard() {
     if (fi <= 2) origField = fields[fi];
     kbActive = true;
     showPassword = false;
+    headerNav = HeaderNav::Field;
     kb.reset();
 }
 
@@ -492,6 +493,7 @@ void ConnectView::cancelKeyboard() {
     if (fi <= 2) fields[fi] = origField;
     kbActive = false;
     showPassword = false;
+    headerNav = HeaderNav::Field;
     SoundFX::play(SoundFX::FX::Back);
 }
 
@@ -513,30 +515,47 @@ void ConnectView::handleVKBInput(ir_t& ir) {
     const int btnClearX = PX + PW - 136, btnClearW = 46;
     const int btnCancelX = PX + PW - 86, btnCancelW = 76, btnH = 32;
 
-    // Check header button clicks
+    kb.setOrigin((640 - kb.width()) * 0.5f, 238 - kb.lift());
+    kb.setEnterLabel(fi < 2 ? N_("Next") : N_("Done"));
+    kb.setUrlKeys(fi == 0);   /* the server's address: http:// and https:// keys */
+    kb.setPasswordMode(isPw, showPassword);
+    kb.setTextField(fieldX, fieldY, fieldW, fieldH);
+    kb.setCustomHeaderNav(true);
+
+    int prevRow = kb.selectedRow();
+
+    // Check header button clicks with pointer
     if (ir.valid && Input::isAJustPressed()) {
         if (ir.y >= fieldY && ir.y <= fieldY + btnH) {
             if (ir.x >= btnLeftX && ir.x <= btnLeftX + 28) {
                 int c = kb.cursorPos();
                 if (c < 0 || c > (int)fields[fi].size()) c = (int)fields[fi].size();
                 if (c > 0) { c--; kb.setCursorPos(c); SoundFX::play(SoundFX::FX::Move); }
+                headerNav = HeaderNav::Left;
+                kb.setSelectedRow(-1);
                 return;
             }
             if (ir.x >= btnRightX && ir.x <= btnRightX + 28) {
                 int c = kb.cursorPos();
                 if (c < 0 || c > (int)fields[fi].size()) c = (int)fields[fi].size();
                 if (c < (int)fields[fi].size()) { c++; kb.setCursorPos(c); SoundFX::play(SoundFX::FX::Move); }
+                headerNav = HeaderNav::Right;
+                kb.setSelectedRow(-1);
                 return;
             }
             if (isPw && ir.x >= btnShowX && ir.x <= btnShowX + btnShowW) {
                 showPassword = !showPassword;
                 kb.setPasswordMode(true, showPassword);
+                headerNav = HeaderNav::Show;
+                kb.setSelectedRow(-1);
                 SoundFX::play(SoundFX::FX::Start);
                 return;
             }
             if (ir.x >= btnClearX && ir.x <= btnClearX + btnClearW) {
                 fields[fi].clear();
                 kb.setCursorPos(0);
+                headerNav = HeaderNav::Clear;
+                kb.setSelectedRow(-1);
                 SoundFX::play(SoundFX::FX::Backspace);
                 return;
             }
@@ -544,27 +563,175 @@ void ConnectView::handleVKBInput(ir_t& ir) {
                 cancelKeyboard();
                 return;
             }
+            if (ir.x >= fieldX && ir.x <= fieldX + fieldW) {
+                headerNav = HeaderNav::Field;
+            }
         }
     }
 
-    kb.setOrigin((640 - kb.width()) * 0.5f, 238 - kb.lift());
-    kb.setEnterLabel(fi < 2 ? N_("Next") : N_("Done"));
-    kb.setUrlKeys(fi == 0);   /* the server's address: http:// and https:// keys */
-    kb.setPasswordMode(fi == 2, showPassword);
-    kb.setTextField(fieldX, fieldY, fieldW, fieldH);
-    switch (kb.update(ir, fields[fi], 255)) {
-    case Keyboard::Result::Enter:
-        /* OK walks through the fields, then lands on Connect */
+    // Process keyboard keys / USB keyboard input
+    Keyboard::Result res = kb.update(ir, fields[fi], 255);
+    if (res == Keyboard::Result::Enter) {
         showPassword = false;
         if (fi < 2) { focusedField = (Field)(fi + 1); openKeyboard(); }
         else        { kbActive = false; focusedField = Field::SubmitBtn; }
-        break;
-    case Keyboard::Result::Cancel:
+        return;
+    } else if (res == Keyboard::Result::Cancel) {
         cancelKeyboard();
-        break;
-    default: break;
+        return;
     }
-    if (fi == 2) showPassword = kb.isPasswordShown();
+
+    if (isPw) showPassword = kb.isPasswordShown();
+
+    int curRow = kb.selectedRow();
+
+    // Check if we just transitioned into the header row from the keyboard keys
+    if (prevRow >= 0 && curRow < 0) {
+        int col = kb.selectedCol();
+        if (col <= 5) headerNav = HeaderNav::Field;
+        else if (col == 6) headerNav = HeaderNav::Left;
+        else if (col == 7) headerNav = HeaderNav::Right;
+        else if (col == 8) headerNav = isPw ? HeaderNav::Show : HeaderNav::Clear;
+        else if (col == 9) headerNav = HeaderNav::Clear;
+        else headerNav = HeaderNav::Cancel;
+    }
+
+    // D-Pad and A-button handling while in the header row
+    if (curRow < 0) {
+        if (Input::isDownPressed()) {
+            int targetCol = 0;
+            switch (headerNav) {
+            case HeaderNav::Left:   targetCol = 6; break;
+            case HeaderNav::Right:  targetCol = 7; break;
+            case HeaderNav::Show:   targetCol = 8; break;
+            case HeaderNav::Clear:  targetCol = 9; break;
+            case HeaderNav::Cancel: targetCol = 10; break;
+            default:
+                targetCol = std::min(5, (int)fields[fi].size());
+                break;
+            }
+            kb.setSelectedRow(0);
+            kb.setSelectedCol(targetCol);
+            SoundFX::play(SoundFX::FX::Move);
+            return;
+        }
+
+        if (Input::isUpPressed()) {
+            int targetCol = 0;
+            switch (headerNav) {
+            case HeaderNav::Left:   targetCol = 3; break;
+            case HeaderNav::Right:  targetCol = 4; break;
+            case HeaderNav::Show:   targetCol = 7; break;
+            case HeaderNav::Clear:  targetCol = 8; break;
+            case HeaderNav::Cancel: targetCol = 9; break;
+            default:                targetCol = 5; break;
+            }
+            kb.setSelectedRow(Keyboard::ROWS - 1);
+            kb.setSelectedCol(targetCol);
+            SoundFX::play(SoundFX::FX::Move);
+            return;
+        }
+
+        if (Input::isLeftPressed()) {
+            switch (headerNav) {
+            case HeaderNav::Field: {
+                int c = kb.cursorPos();
+                if (c < 0 || c > (int)fields[fi].size()) c = (int)fields[fi].size();
+                if (c > 0) { c--; kb.setCursorPos(c); SoundFX::play(SoundFX::FX::Move); }
+                break;
+            }
+            case HeaderNav::Left:
+                headerNav = HeaderNav::Field;
+                SoundFX::play(SoundFX::FX::Move);
+                break;
+            case HeaderNav::Right:
+                headerNav = HeaderNav::Left;
+                SoundFX::play(SoundFX::FX::Move);
+                break;
+            case HeaderNav::Show:
+                headerNav = HeaderNav::Right;
+                SoundFX::play(SoundFX::FX::Move);
+                break;
+            case HeaderNav::Clear:
+                headerNav = isPw ? HeaderNav::Show : HeaderNav::Right;
+                SoundFX::play(SoundFX::FX::Move);
+                break;
+            case HeaderNav::Cancel:
+                headerNav = HeaderNav::Clear;
+                SoundFX::play(SoundFX::FX::Move);
+                break;
+            }
+        }
+
+        if (Input::isRightPressed()) {
+            switch (headerNav) {
+            case HeaderNav::Field: {
+                int c = kb.cursorPos();
+                if (c < 0 || c > (int)fields[fi].size()) c = (int)fields[fi].size();
+                if (c < (int)fields[fi].size()) {
+                    c++; kb.setCursorPos(c);
+                    SoundFX::play(SoundFX::FX::Move);
+                } else {
+                    headerNav = HeaderNav::Left;
+                    SoundFX::play(SoundFX::FX::Move);
+                }
+                break;
+            }
+            case HeaderNav::Left:
+                headerNav = HeaderNav::Right;
+                SoundFX::play(SoundFX::FX::Move);
+                break;
+            case HeaderNav::Right:
+                headerNav = isPw ? HeaderNav::Show : HeaderNav::Clear;
+                SoundFX::play(SoundFX::FX::Move);
+                break;
+            case HeaderNav::Show:
+                headerNav = HeaderNav::Clear;
+                SoundFX::play(SoundFX::FX::Move);
+                break;
+            case HeaderNav::Clear:
+                headerNav = HeaderNav::Cancel;
+                SoundFX::play(SoundFX::FX::Move);
+                break;
+            case HeaderNav::Cancel:
+                break;
+            }
+        }
+
+        if (Input::isAJustPressed() && !ir.valid) {
+            switch (headerNav) {
+            case HeaderNav::Left: {
+                int c = kb.cursorPos();
+                if (c < 0 || c > (int)fields[fi].size()) c = (int)fields[fi].size();
+                if (c > 0) { c--; kb.setCursorPos(c); SoundFX::play(SoundFX::FX::Move); }
+                break;
+            }
+            case HeaderNav::Right: {
+                int c = kb.cursorPos();
+                if (c < 0 || c > (int)fields[fi].size()) c = (int)fields[fi].size();
+                if (c < (int)fields[fi].size()) { c++; kb.setCursorPos(c); SoundFX::play(SoundFX::FX::Move); }
+                break;
+            }
+            case HeaderNav::Show:
+                if (isPw) {
+                    showPassword = !showPassword;
+                    kb.setPasswordMode(true, showPassword);
+                    SoundFX::play(SoundFX::FX::Start);
+                }
+                break;
+            case HeaderNav::Clear:
+                fields[fi].clear();
+                kb.setCursorPos(0);
+                SoundFX::play(SoundFX::FX::Backspace);
+                break;
+            case HeaderNav::Cancel:
+                cancelKeyboard();
+                break;
+            case HeaderNav::Field:
+                break;
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------
@@ -682,6 +849,7 @@ void ConnectView::renderVKB(ir_t& ir) {
     // field is shown in the panel's title row)
     kb.setOrigin((640 - kb.width()) * 0.5f, 238 - kb.lift());
     kb.setUrlKeys(focusedField == Field::Server);
+    kb.setPasswordMode(focusedField == Field::Password, showPassword);
     const int PX = (int)((640 - kb.width()) * 0.5f) - 12, PW = (int)kb.width() + 24;
     const int PY = (int)(238 - kb.lift()) - 50, PH = (int)kb.height() + 62;
     GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, Ui::alpha(Ui::pal().dim, 0.5f), 1);
@@ -720,15 +888,22 @@ void ConnectView::renderVKB(ir_t& ir) {
 
             Ui::text(PX + 12, PY + 14, tr(names[fi]), 14, Ui::pal().textDim);
 
-            bool tfFocus = kb.isTextFieldFocused();
+            bool inHeader  = kb.isTextFieldFocused();
+            bool selField  = inHeader && (headerNav == HeaderNav::Field);
+            bool selLeft   = inHeader && (headerNav == HeaderNav::Left);
+            bool selRight  = inHeader && (headerNav == HeaderNav::Right);
+            bool selShow   = inHeader && (headerNav == HeaderNav::Show);
+            bool selClear  = inHeader && (headerNav == HeaderNav::Clear);
+            bool selCancel = inHeader && (headerNav == HeaderNav::Cancel);
+
             Ui::field(fieldX, fieldY, fieldW, fieldH, vis.c_str(), FONT_SZ, true);
-            if (tfFocus) {
+            if (selField) {
                 Ui::roundBorder(fieldX, fieldY, fieldW, fieldH, fieldH * 0.5f, 2.5f, Ui::pal().accent);
             }
 
             // Blinking caret vertical bar (3px wide, high contrast)
             bool caretOn = (ticks_to_millisecs(gettime()) / 400) % 2 == 0;
-            if (caretOn) {
+            if (caretOn && (!inHeader || selField)) {
                 float prefixW = (relCaret > 0) ? Ui::textWidth(vis.substr(0, relCaret).c_str(), FONT_SZ) : 0.0f;
                 float caretX = textStartX + prefixW;
                 Ui::roundRect(caretX, fieldY + 5, 3, fieldH - 10, 1.0f, Ui::pal().accent);
@@ -737,29 +912,34 @@ void ConnectView::renderVKB(ir_t& ir) {
             // [ < ] Button
             bool hovLeft = ir.valid && ir.x >= btnLeftX && ir.x <= btnLeftX + 28 &&
                            ir.y >= fieldY && ir.y <= fieldY + btnH;
-            Ui::button(btnLeftX, fieldY, 28, btnH, "<", 16, hovLeft ? 0.35f : 0.0f);
+            Ui::button(btnLeftX, fieldY, 28, btnH, "<", 16, (hovLeft || selLeft) ? 1.0f : 0.0f);
+            if (selLeft) Ui::roundBorder(btnLeftX, fieldY, 28, btnH, btnH * 0.5f, 2.0f, Ui::pal().accent);
 
             // [ > ] Button
             bool hovRight = ir.valid && ir.x >= btnRightX && ir.x <= btnRightX + 28 &&
                             ir.y >= fieldY && ir.y <= fieldY + btnH;
-            Ui::button(btnRightX, fieldY, 28, btnH, ">", 16, hovRight ? 0.35f : 0.0f);
+            Ui::button(btnRightX, fieldY, 28, btnH, ">", 16, (hovRight || selRight) ? 1.0f : 0.0f);
+            if (selRight) Ui::roundBorder(btnRightX, fieldY, 28, btnH, btnH * 0.5f, 2.0f, Ui::pal().accent);
 
             // [ Show / Hide ] Button (password only)
             if (isPw) {
                 bool hovShow = ir.valid && ir.x >= btnShowX && ir.x <= btnShowX + btnShowW &&
                                ir.y >= fieldY && ir.y <= fieldY + btnH;
-                Ui::button(btnShowX, fieldY, btnShowW, btnH, showPassword ? N_("Hide") : N_("Show"), 13, hovShow ? 0.35f : 0.0f);
+                Ui::button(btnShowX, fieldY, btnShowW, btnH, showPassword ? N_("Hide") : N_("Show"), 13, (hovShow || selShow) ? 1.0f : 0.0f);
+                if (selShow) Ui::roundBorder(btnShowX, fieldY, btnShowW, btnH, btnH * 0.5f, 2.0f, Ui::pal().accent);
             }
 
             // [ Clear ] Button
             bool hovClear = ir.valid && ir.x >= btnClearX && ir.x <= btnClearX + btnClearW &&
                             ir.y >= fieldY && ir.y <= fieldY + btnH;
-            Ui::button(btnClearX, fieldY, btnClearW, btnH, N_("Clear"), 13, hovClear ? 0.35f : 0.0f);
+            Ui::button(btnClearX, fieldY, btnClearW, btnH, N_("Clear"), 13, (hovClear || selClear) ? 1.0f : 0.0f);
+            if (selClear) Ui::roundBorder(btnClearX, fieldY, btnClearW, btnH, btnH * 0.5f, 2.0f, Ui::pal().accent);
 
             // [ Cancel ] Button
             bool hovCancel = ir.valid && ir.x >= btnCancelX && ir.x <= btnCancelX + btnCancelW &&
                              ir.y >= fieldY && ir.y <= fieldY + btnH;
-            Ui::button(btnCancelX, fieldY, btnCancelW, btnH, N_("Cancel"), 14, hovCancel ? 0.35f : 0.0f);
+            Ui::button(btnCancelX, fieldY, btnCancelW, btnH, N_("Cancel"), 14, (hovCancel || selCancel) ? 1.0f : 0.0f);
+            if (selCancel) Ui::roundBorder(btnCancelX, fieldY, btnCancelW, btnH, btnH * 0.5f, 2.0f, Ui::pal().accent);
         }
     }
 

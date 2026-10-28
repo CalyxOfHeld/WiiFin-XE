@@ -1118,16 +1118,12 @@ int JellyfinClient::request(bool tls, const std::string& host, int port,
         "Connection: keep-alive\r\n"
         "Authorization: MediaBrowser Client=\"WiiFin\", Device=\"Nintendo Wii\", "
         "DeviceId=\"%s\", Version=\"" WIIFIN_VERSION "\"%s\r\n"
-        "X-Emby-Authorization: MediaBrowser Client=\"WiiFin\", Device=\"Nintendo Wii\", "
-        "DeviceId=\"%s\", Version=\"" WIIFIN_VERSION "\"%s\r\n"
         "%s"
         "Content-Length: %zu\r\n"
         "\r\n",
         method.c_str(),
         path.empty() ? "/" : path.c_str(),
         hostHdr.c_str(),
-        s_deviceId.c_str(),
-        authHdr.c_str(),
         s_deviceId.c_str(),
         authHdr.c_str(),
         ctHdr.c_str(),

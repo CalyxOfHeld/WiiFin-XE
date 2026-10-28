@@ -84,6 +84,7 @@ void Keyboard::reset()
     cursor = -1;
     flashMs = 0;
     pwShown = false;
+    customHeaderNav = false;
 }
 
 void Keyboard::setCursorPos(int pos)
@@ -282,21 +283,23 @@ Keyboard::Result Keyboard::update(const ir_t& ir, std::string& text, size_t maxL
 
     /* D-pad */
     if (selRow < 0) {
-        if (Input::isLeftPressed()) {
-            moveCursorLeft(text, cursor);
-            SoundFX::play(SoundFX::FX::Move);
-        }
-        if (Input::isRightPressed()) {
-            moveCursorRight(text, cursor);
-            SoundFX::play(SoundFX::FX::Move);
-        }
-        if (Input::isDownPressed()) {
-            selRow = 0;
-            SoundFX::play(SoundFX::FX::Move);
-        }
-        if (Input::isUpPressed()) {
-            selRow = ROWS - 1;
-            SoundFX::play(SoundFX::FX::Move);
+        if (!customHeaderNav) {
+            if (Input::isLeftPressed()) {
+                moveCursorLeft(text, cursor);
+                SoundFX::play(SoundFX::FX::Move);
+            }
+            if (Input::isRightPressed()) {
+                moveCursorRight(text, cursor);
+                SoundFX::play(SoundFX::FX::Move);
+            }
+            if (Input::isDownPressed()) {
+                selRow = 0;
+                SoundFX::play(SoundFX::FX::Move);
+            }
+            if (Input::isUpPressed()) {
+                selRow = ROWS - 1;
+                SoundFX::play(SoundFX::FX::Move);
+            }
         }
     } else {
         if (Input::isUpPressed()) {

@@ -47,6 +47,12 @@ public:
     void clearTextField() { hasTextField = false; }
     bool isTextFieldFocused() const { return selRow == -1; }
     void setTextFieldFocused(bool f) { selRow = f ? -1 : 0; }
+    int  selectedRow() const { return selRow; }
+    int  selectedCol() const { return selCol; }
+    void setSelectedRow(int r) { selRow = r; }
+    void setSelectedCol(int c) { selCol = c; }
+    void setCustomHeaderNav(bool on) { customHeaderNav = on; }
+    bool isCustomHeaderNav() const { return customHeaderNav; }
 
     int  cursorPos() const { return cursor; }
     void setCursorPos(int pos);
@@ -80,6 +86,7 @@ private:
     bool  urlKeys = false;
     bool  passwordMode = false;
     bool  pwShown = false;
+    bool  customHeaderNav = false;
     int   page  = 0;          /* 0 letters, 1 symbols         */
     int   shift = 0;          /* 0 off, 1 next letter, 2 lock */
     int   selRow = 1, selCol = 0;

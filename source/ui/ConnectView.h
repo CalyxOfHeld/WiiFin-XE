@@ -64,6 +64,8 @@ private:
     int qcPollTimer = 0; // frames between polls
 
     // --- Virtual keyboard ---
+    enum class HeaderNav { Field = 0, Left, Right, Show, Clear, Cancel };
+    HeaderNav headerNav = HeaderNav::Field;
     bool kbActive = false;
     std::string origField;       // snapshot before editing (restored on Cancel)
     Keyboard kb;                 // on-screen keyboard (shared with search)
