@@ -549,8 +549,12 @@ void App::loop() {
     };
 
     /* Thin wrapper so existing call sites don't need to change. */
+    static u64 lastHomeClose = 0;
     auto showHomeOverlay = [&]() -> bool {
-        return doShowHomeOverlay(font, btnTex, cursorPointerTex, musicEnabled);
+        if (ticks_to_millisecs(gettime()) - lastHomeClose < 400) return false;
+        bool ret = doShowHomeOverlay(font, btnTex, cursorPointerTex, musicEnabled);
+        lastHomeClose = ticks_to_millisecs(gettime());
+        return ret;
     };
 
     /* ---- Helper: wait for the network (started at boot), offering a retry

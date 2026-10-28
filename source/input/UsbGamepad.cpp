@@ -83,8 +83,16 @@ PadType identifyPad(u16 vid, u16 pid)
 {
     if (vid == 0x054C) {
         /* Sony Interactive Entertainment */
-        if (pid == 0x05C4 || pid == 0x09CC || pid == 0x0BA0) return PadType::DualShock4;
+        if (pid == 0x05C4 || pid == 0x09CC || pid == 0x0BA0 || pid == 0x0CE6 || pid == 0x0DF2)
+            return PadType::DualShock4;
         if (pid == 0x0268) return PadType::DualShock3;
+    }
+    /* Third-party / Clone PlayStation controllers */
+    if (vid == 0x0F0D || vid == 0x146B || vid == 0x0C12 || vid == 0x2C22 || vid == 0x0738 || vid == 0x1532) {
+        return PadType::DualShock4;
+    }
+    if (vid == 0x2563 || vid == 0x0888) {
+        if (pid == 0x0575 || pid == 0x0268) return PadType::DualShock3;
     }
     return PadType::GenericHID;
 }
@@ -185,8 +193,19 @@ bool openCandidate(const Candidate& c)
 void decodeDualShock4(const u8* buf, int len)
 {
     if (len < 8) return;
-    /* buf[0] is Report ID (usually 0x01) */
-    const int offset = (buf[0] == 0x01 && len >= 9) ? 1 : 0;
+
+    /* Detect report structure accurately:
+     * When Report ID 0x01 is included, buf[0] is 0x01, sticks are buf[1..4],
+     * and D-pad hat switch is buf[5] & 0x0F (neutral value 8, 0..7 when pressed).
+     * If Report ID is stripped by host/adapter, sticks are buf[0..3] and hat is buf[4] & 0x0F. */
+    int offset = 0;
+    if (len >= 9 && buf[0] == 0x01 && (buf[5] & 0x0F) <= 8) {
+        offset = 1;
+    } else if (len >= 8 && (buf[4] & 0x0F) <= 8) {
+        offset = 0;
+    } else if (len >= 9 && buf[0] == 0x01) {
+        offset = 1;
+    }
 
     const int rawLx = buf[offset + 0];
     const int rawLy = buf[offset + 1];
@@ -224,19 +243,22 @@ void decodeDualShock4(const u8* buf, int len)
 
     /* Shoulder, Options, Stick clicks */
     const u8 b6 = buf[offset + 5];
-    if (b6 & (1 << 0)) held |= WPAD_BUTTON_MINUS;    /* L1 */
-    if (b6 & (1 << 1)) held |= WPAD_BUTTON_PLUS;     /* R1 */
-    if (b6 & (1 << 2)) held |= Input::BTN_ZOOM;      /* L2 */
-    if (b6 & (1 << 3)) held |= Input::BTN_ZOOM;      /* R2 */
-    if (b6 & (1 << 4)) held |= (WPAD_CLASSIC_BUTTON_MINUS | WPAD_BUTTON_MINUS); /* Share */
-    if (b6 & (1 << 5)) held |= (WPAD_CLASSIC_BUTTON_PLUS  | WPAD_BUTTON_PLUS);  /* Options */
-    if (b6 & (1 << 6)) held |= Input::BTN_ZOOM;      /* L3 */
-    if (b6 & (1 << 7)) held |= Input::BTN_ZOOM;      /* R3 */
+    if (b6 & (1 << 0)) held |= WPAD_BUTTON_MINUS;    /* L1 -> Prev page / L */
+    if (b6 & (1 << 1)) held |= WPAD_BUTTON_PLUS;     /* R1 -> Next page / R */
+    if (b6 & (1 << 2)) held |= WPAD_BUTTON_MINUS;    /* L2 -> Prev page / L */
+    if (b6 & (1 << 3)) held |= WPAD_BUTTON_PLUS;     /* R2 -> Next page / R */
+    if (b6 & (1 << 4)) held |= (WPAD_CLASSIC_BUTTON_MINUS | WPAD_BUTTON_MINUS); /* Share / Select */
+    if (b6 & (1 << 5)) held |= (WPAD_CLASSIC_BUTTON_PLUS  | WPAD_BUTTON_PLUS);  /* Options / Start */
+    if (b6 & (1 << 6)) held |= 0;                    /* L3 */
+    if (b6 & (1 << 7)) held |= Input::BTN_ZOOM;      /* R3 -> Zoom */
 
-    /* PS Home button & Touchpad click */
-    const u8 b7 = buf[offset + 6];
-    if (b7 & (1 << 0)) held |= WPAD_BUTTON_HOME;     /* PS Button */
-    if (b7 & (1 << 1)) held |= Input::BTN_ZOOM;      /* Touchpad click */
+    /* PS Home button (bit 0 of next byte) */
+    if (len >= offset + 7) {
+        const u8 b7 = buf[offset + 6];
+        if (b7 & (1 << 0)) held |= WPAD_BUTTON_HOME;     /* PS Button */
+    }
+    /* Share + Options combo as fallback Home */
+    if ((b6 & (1 << 4)) && (b6 & (1 << 5))) held |= WPAD_BUTTON_HOME;
 
     LWP_MutexLock(s_lock);
     const u32 pressed = held & ~s_held;
@@ -257,8 +279,8 @@ void decodeDualShock3(const u8* buf, int len)
     u32 held = 0;
     const u8 b2 = buf[2];
     if (b2 & (1 << 0)) held |= (WPAD_CLASSIC_BUTTON_MINUS | WPAD_BUTTON_MINUS); /* Select */
-    if (b2 & (1 << 1)) held |= Input::BTN_ZOOM;      /* L3 */
-    if (b2 & (1 << 2)) held |= Input::BTN_ZOOM;      /* R3 */
+    if (b2 & (1 << 1)) held |= 0;                     /* L3 */
+    if (b2 & (1 << 2)) held |= Input::BTN_ZOOM;       /* R3 -> Zoom */
     if (b2 & (1 << 3)) held |= (WPAD_CLASSIC_BUTTON_PLUS  | WPAD_BUTTON_PLUS);  /* Start */
     if (b2 & (1 << 4)) held |= (WPAD_BUTTON_UP | Input::BTN_DPAD_UP);
     if (b2 & (1 << 5)) held |= (WPAD_BUTTON_RIGHT | Input::BTN_DPAD_RIGHT);
@@ -267,18 +289,22 @@ void decodeDualShock3(const u8* buf, int len)
 
     /* Triggers & face buttons in buf[3] */
     const u8 b3 = buf[3];
-    if (b3 & (1 << 0)) held |= Input::BTN_ZOOM;      /* L2 */
-    if (b3 & (1 << 1)) held |= Input::BTN_ZOOM;      /* R2 */
-    if (b3 & (1 << 2)) held |= WPAD_BUTTON_MINUS;    /* L1 */
-    if (b3 & (1 << 3)) held |= WPAD_BUTTON_PLUS;     /* R1 */
+    if (b3 & (1 << 0)) held |= WPAD_BUTTON_MINUS;    /* L2 -> Prev page / L */
+    if (b3 & (1 << 1)) held |= WPAD_BUTTON_PLUS;     /* R2 -> Next page / R */
+    if (b3 & (1 << 2)) held |= WPAD_BUTTON_MINUS;    /* L1 -> Prev page / L */
+    if (b3 & (1 << 3)) held |= WPAD_BUTTON_PLUS;     /* R1 -> Next page / R */
     if (b3 & (1 << 4)) held |= WPAD_BUTTON_2;        /* Triangle -> X */
     if (b3 & (1 << 5)) held |= WPAD_BUTTON_B;        /* Circle -> B */
     if (b3 & (1 << 6)) held |= WPAD_BUTTON_A;        /* Cross -> A */
     if (b3 & (1 << 7)) held |= WPAD_BUTTON_1;        /* Square -> Y */
 
     /* PS Button in buf[4] */
-    const u8 b4 = buf[4];
-    if (b4 & (1 << 0)) held |= WPAD_BUTTON_HOME;     /* PS Button */
+    if (len >= 5) {
+        const u8 b4 = buf[4];
+        if (b4 & (1 << 0)) held |= WPAD_BUTTON_HOME;     /* PS Button */
+    }
+    /* Select + Start combo as fallback Home */
+    if ((b2 & (1 << 0)) && (b2 & (1 << 3))) held |= WPAD_BUTTON_HOME;
 
     /* Analog sticks */
     const int rawLx = buf[6];
@@ -304,26 +330,44 @@ void decodeDualShock3(const u8* buf, int len)
 
 void decodeGenericHID(const u8* buf, int len)
 {
-    if (len < 4) return;
+    if (len < 5) return;
 
-    /* Analog sticks: X/Y on buf[0]/buf[1], Z/Rz on buf[2]/buf[3] */
-    const s8 sx = (s8)((int)buf[0] - 128);
-    const s8 sy = (s8)(128 - (int)buf[1]);
+    /* If this report actually matches a DualShock 4 report (e.g. clone / third-party), route to DS4 parser */
+    if (len >= 64 && buf[0] == 0x01 && (buf[5] & 0x0F) <= 8) {
+        s_dev.type = PadType::DualShock4;
+        decodeDualShock4(buf, len);
+        return;
+    }
+    /* If matches DualShock 3 report */
+    if (len >= 49 && buf[0] == 0x01 && buf[1] == 0x00) {
+        s_dev.type = PadType::DualShock3;
+        decodeDualShock3(buf, len);
+        return;
+    }
+
+    /* Check for report ID offset (0x01) */
+    const int offset = (buf[0] == 0x01 && len >= 6) ? 1 : 0;
+
+    /* Analog sticks: X/Y on buf[offset+0]/buf[offset+1], Z/Rz on buf[offset+2]/buf[offset+3] */
+    const s8 sx = (s8)((int)buf[offset + 0] - 128);
+    const s8 sy = (s8)(128 - (int)buf[offset + 1]);
     s8 rx = 0, ry = 0;
-    if (len >= 4) {
-        rx = (s8)((int)buf[2] - 128);
-        ry = (s8)(128 - (int)buf[3]);
+    if (len >= offset + 4) {
+        rx = (s8)((int)buf[offset + 2] - 128);
+        ry = (s8)(128 - (int)buf[offset + 3]);
     }
 
     u32 held = 0;
 
+    /* Identify DragonRise / Shanwan-like layout vs DirectInput */
     const bool isDragonRiseLike = (s_dev.vid == 0x0079 || s_dev.vid == 0x2563 ||
                                    s_dev.vid == 0x0810 || s_dev.vid == 0x11ff ||
-                                   s_dev.vid == 0x0e8f || (len >= 5 && (buf[4] & 0x0F) >= 8));
+                                   s_dev.vid == 0x0e8f ||
+                                   (len >= offset + 5 && ((buf[offset + 4] & 0x0F) == 8 || (buf[offset + 4] & 0x0F) == 15)));
 
-    if (isDragonRiseLike && len >= 5) {
-        /* Hat switch in lower 4 bits of buf[4] */
-        const u8 hat = buf[4] & 0x0F;
+    if (isDragonRiseLike && len >= offset + 5) {
+        /* Hat switch in lower 4 bits of buf[offset + 4] */
+        const u8 hat = buf[offset + 4] & 0x0F;
         if (hat <= 7) {
             switch (hat) {
             case 0: held |= (WPAD_BUTTON_UP | Input::BTN_DPAD_UP); break;
@@ -338,52 +382,53 @@ void decodeGenericHID(const u8* buf, int len)
             }
         }
 
-        /* Face buttons in upper 4 bits of buf[4] */
-        const u8 b4 = (buf[4] >> 4) & 0x0F;
-        if (b4 & (1 << 0)) held |= WPAD_BUTTON_2;      /* Button 1 (Triangle) */
-        if (b4 & (1 << 1)) held |= WPAD_BUTTON_B;      /* Button 2 (Circle) */
-        if (b4 & (1 << 2)) held |= WPAD_BUTTON_A;      /* Button 3 (Cross) */
-        if (b4 & (1 << 3)) held |= WPAD_BUTTON_1;      /* Button 4 (Square) */
+        /* Face buttons in upper 4 bits of buf[offset + 4] */
+        const u8 b4 = (buf[offset + 4] >> 4) & 0x0F;
+        if (b4 & (1 << 0)) held |= WPAD_BUTTON_2;      /* Button 1 (Triangle / X) */
+        if (b4 & (1 << 1)) held |= WPAD_BUTTON_B;      /* Button 2 (Circle / B) */
+        if (b4 & (1 << 2)) held |= WPAD_BUTTON_A;      /* Button 3 (Cross / A) */
+        if (b4 & (1 << 3)) held |= WPAD_BUTTON_1;      /* Button 4 (Square / Y) */
 
-        /* Shoulders & extra buttons in buf[5] */
-        if (len >= 6) {
-            const u8 b5 = buf[5];
-            if (b5 & (1 << 0)) held |= WPAD_BUTTON_MINUS; /* Button 5 (L1) */
-            if (b5 & (1 << 1)) held |= WPAD_BUTTON_PLUS;  /* Button 6 (R1) */
-            if (b5 & (1 << 2)) held |= Input::BTN_ZOOM;   /* Button 7 (L2) */
-            if (b5 & (1 << 3)) held |= Input::BTN_ZOOM;   /* Button 8 (R2) */
+        /* Shoulders & extra buttons in buf[offset + 5] */
+        if (len >= offset + 6) {
+            const u8 b5 = buf[offset + 5];
+            if (b5 & (1 << 0)) held |= WPAD_BUTTON_MINUS; /* Button 5 (L1) -> Prev page / L */
+            if (b5 & (1 << 1)) held |= WPAD_BUTTON_PLUS;  /* Button 6 (R1) -> Next page / R */
+            if (b5 & (1 << 2)) held |= WPAD_BUTTON_MINUS; /* Button 7 (L2) -> Prev page / L */
+            if (b5 & (1 << 3)) held |= WPAD_BUTTON_PLUS;  /* Button 8 (R2) -> Next page / R */
             if (b5 & (1 << 4)) held |= (WPAD_CLASSIC_BUTTON_MINUS | WPAD_BUTTON_MINUS); /* Button 9 (Select) */
             if (b5 & (1 << 5)) held |= (WPAD_CLASSIC_BUTTON_PLUS  | WPAD_BUTTON_PLUS);  /* Button 10 (Start) */
-            if (b5 & (1 << 6)) held |= Input::BTN_ZOOM;   /* Button 11 (L3) */
-            if (b5 & (1 << 7)) held |= Input::BTN_ZOOM;   /* Button 12 (R3) */
-        }
-        if (len >= 7) {
-            const u8 b6 = buf[6];
-            if (b6 & (1 << 0)) held |= WPAD_BUTTON_HOME;  /* Button 13 (Home / Mode) */
+            if (b5 & (1 << 6)) held |= 0;                 /* Button 11 (L3) */
+            if (b5 & (1 << 7)) held |= Input::BTN_ZOOM;   /* Button 12 (R3) -> Zoom */
+
+            /* Select + Start together triggers Home */
+            if ((b5 & (1 << 4)) && (b5 & (1 << 5))) held |= WPAD_BUTTON_HOME;
         }
     } else {
         /* Standard DirectInput gamepad layout */
-        if (len >= 5) {
-            const u8 b4 = buf[4];
+        if (len >= offset + 5) {
+            const u8 b4 = buf[offset + 4];
             if (b4 & (1 << 0)) held |= WPAD_BUTTON_A;      /* Button 1 (A) */
             if (b4 & (1 << 1)) held |= WPAD_BUTTON_B;      /* Button 2 (B) */
             if (b4 & (1 << 2)) held |= WPAD_BUTTON_1;      /* Button 3 (X) */
             if (b4 & (1 << 3)) held |= WPAD_BUTTON_2;      /* Button 4 (Y) */
-            if (b4 & (1 << 4)) held |= WPAD_BUTTON_MINUS;  /* Button 5 (L1) */
-            if (b4 & (1 << 5)) held |= WPAD_BUTTON_PLUS;   /* Button 6 (R1) */
-            if (b4 & (1 << 6)) held |= Input::BTN_ZOOM;    /* Button 7 (L2) */
-            if (b4 & (1 << 7)) held |= Input::BTN_ZOOM;    /* Button 8 (R2) */
+            if (b4 & (1 << 4)) held |= WPAD_BUTTON_MINUS;  /* Button 5 (L1) -> Prev page / L */
+            if (b4 & (1 << 5)) held |= WPAD_BUTTON_PLUS;   /* Button 6 (R1) -> Next page / R */
+            if (b4 & (1 << 6)) held |= WPAD_BUTTON_MINUS;  /* Button 7 (L2) -> Prev page / L */
+            if (b4 & (1 << 7)) held |= WPAD_BUTTON_PLUS;   /* Button 8 (R2) -> Next page / R */
         }
-        if (len >= 6) {
-            const u8 b5 = buf[5];
+        if (len >= offset + 6) {
+            const u8 b5 = buf[offset + 5];
             if (b5 & (1 << 0)) held |= (WPAD_CLASSIC_BUTTON_MINUS | WPAD_BUTTON_MINUS); /* Button 9 (Select) */
             if (b5 & (1 << 1)) held |= (WPAD_CLASSIC_BUTTON_PLUS  | WPAD_BUTTON_PLUS);  /* Button 10 (Start) */
-            if (b5 & (1 << 2)) held |= Input::BTN_ZOOM;   /* Button 11 (L3) */
-            if (b5 & (1 << 3)) held |= Input::BTN_ZOOM;   /* Button 12 (R3) */
-            if (b5 & (1 << 4)) held |= WPAD_BUTTON_HOME;  /* Button 13 (Home/Mode) */
+            if (b5 & (1 << 2)) held |= 0;                 /* Button 11 (L3) */
+            if (b5 & (1 << 3)) held |= Input::BTN_ZOOM;   /* Button 12 (R3) -> Zoom */
+
+            /* Select + Start together triggers Home */
+            if ((b5 & (1 << 0)) && (b5 & (1 << 1))) held |= WPAD_BUTTON_HOME;
         }
-        if (len >= 7) {
-            const u8 hat = buf[6] & 0x0F;
+        if (len >= offset + 7) {
+            const u8 hat = buf[offset + 6] & 0x0F;
             if (hat <= 7) {
                 switch (hat) {
                 case 0: held |= (WPAD_BUTTON_UP | Input::BTN_DPAD_UP); break;
