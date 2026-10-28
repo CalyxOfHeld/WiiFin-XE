@@ -22,6 +22,16 @@ def publish_dist():
         print(f"Error: {dol_path} does not exist. Build WiiFin first (run make).", file=sys.stderr)
         return 1
 
+    # 0. Copy ready-to-run boot.dol directly into apps/WiiFin for ease of use
+    shutil.copy2(dol_path, os.path.join(src_dir, 'apps', 'WiiFin', 'boot.dol'))
+    parent_apps = os.path.join(parent_dir, 'apps', 'WiiFin')
+    os.makedirs(parent_apps, exist_ok=True)
+    shutil.copy2(dol_path, os.path.join(parent_apps, 'boot.dol'))
+    if os.path.exists(meta_path):
+        shutil.copy2(meta_path, os.path.join(parent_apps, 'meta.xml'))
+    if os.path.exists(icon_path):
+        shutil.copy2(icon_path, os.path.join(parent_apps, 'icon.png'))
+
     dist_dirs = [
         os.path.join(src_dir, 'dist'),
         os.path.join(parent_dir, 'dist')
