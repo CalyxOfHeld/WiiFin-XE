@@ -33,7 +33,7 @@ REPO_URL = "https://github.com/CalyxOfHeld/WiiFin-XE"
 # slug, source (from the repository's root), title, group, icon, description
 PAGES = [
     ("index", None, "Home", "Start", "i-home",
-     "WiiFin-XE plays your Jellyfin films, series and music on the Nintendo Wii."),
+     "Your media collection running with Jellyfin on the Wii and vWii."),
     ("getting-started", "docs/GETTING_STARTED.md", "Getting started", "Start", "i-server",
      "From a Jellyfin server on your PC to a film on your TV."),
     ("whats-new", "docs/XE_FEATURES.md", "What's new in XE", "Start", "i-star",

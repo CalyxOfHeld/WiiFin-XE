@@ -35,7 +35,7 @@ You don't need to convert any files. The server converts what the Wii can't play
 
 Download the latest WiiFin-XE release, then pick one:
 
-- **Homebrew Channel:** unzip `WiiFin-hbc.zip` at the root of the SD card. It puts everything in `apps/WiiFin/`, including the Chinese and Korean font.
+- **Homebrew Channel:** unzip `WiiFin-hbc.zip` at the root of the SD card (or transfer it over your network using ftpii). It puts everything in `apps/WiiFin/`, including the Chinese and Korean font.
 - **A channel on the Wii Menu:** install `WiiFin.wad` with a WAD manager (Wii and vWii). For Chinese or Korean, also copy `apps/WiiFin/fonts/` from the zip to the SD card.
 - **Dolphin:** open `WiiFin.dol`.
 
@@ -58,7 +58,7 @@ The Connect screen has three tabs (−/+ moves between them):
 |---|---|
 | **Discover** | Finds Jellyfin servers on your network and fills in the address. This uses UDP port 7359; if it finds nothing, type the address instead. |
 | **Credentials** | The server's address (`http://<the computer's IP>:8096`), your username and your password. |
-| **Quick Connect** | Shows a code. Enter it in Jellyfin on your phone or computer, and the Wii signs in without your password. |
+| **Quick Connect** | Shows a code. Enter it in your Jellyfin dashboard (on your computer or phone), and the Wii signs in without your password. |
 
 Signing in makes a **profile**. A new profile asks three things, shown on small pictures:
 - **How it signs in:** at once, with a four-digit passcode, or with the password every time.
