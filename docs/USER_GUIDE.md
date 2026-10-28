@@ -102,7 +102,7 @@ On-screen hints show the buttons of the controller used last (GameCube: A green,
 - **Wii Remote & Nunchuk:** use the IR pointer or D-pad; the Nunchuk's stick acts as the D-pad, C is − and Z is +.
 - **Wii U Pro Controller:** syncs wirelessly over Bluetooth. Supports dual analog sticks, rumble, and uses Classic Controller button hints.
 - **GameCube Controllers:** dual-analog sticks are fully utilized. By default, C-Stick scrubs playback (left/right ±10 s, held seeks continuously) and D-Pad controls volume (up/down). Roles can be customized in `Settings > Playback > Controller`.
-- **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons directly with a pulsing ring, and **A** executes the button. Press **B** to hide the overlay.
+- **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons directly with a pulsing ring, and **A** executes the button. When controls are hidden, Left / Right instantly skips backward / forward 10 seconds (holding performs continuous scrub). Press **B** to hide the overlay.
 - **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right go round the buttons.
 - **On-screen keyboard:** − deletes, 1 types a space and 2 switches to symbols (Classic: −, y, x; GameCube: X, Y, R, and L for Shift). B deletes too, and leaves when the text is empty.
 

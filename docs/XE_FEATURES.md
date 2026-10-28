@@ -94,7 +94,7 @@ The **profile menu** has an icon on each entry. It also has **Local Media (WiiMC
 - **Configurable Playback Controls:** in `Settings > Playback > Controller`, configure whether the GameCube C-Stick or D-Pad handles scrubbing versus volume:
   - **Scrub Control:** C-Stick (default) or D-Pad. Left/right nudges playback by ±10 seconds; holding seeks continuously.
   - **Volume Control:** D-Pad (default) or C-Stick. Up/down adjusts volume in 5% increments.
-- **In-Player Overlay Navigation:** on GameCube and Classic Controllers, when the player controls are visible, the D-Pad or Left Stick navigates the on-screen buttons (Play/Pause, Skip Prev/Next Chapter, Tracks, Aspect Ratio, Stop, etc.). The focused button pulses with an animated selection glow, and pressing **A** executes the action. Pressing **B** dismisses the overlay back to clean video playback.
+- **In-Player Overlay Navigation:** on GameCube, Classic, and Wii U Pro Controllers, when the player controls are visible, the D-Pad or Left Stick navigates the on-screen buttons (Play/Pause, Skip Prev/Next Chapter, Tracks, Aspect Ratio, Stop, etc.). The focused button pulses with an animated selection glow, and pressing **A** executes the action. When controls are hidden, D-Pad Left/Right provides immediate ±10 second seeking (holding scrubs continuously). Pressing **B** dismisses the overlay back to clean video playback.
 - **Live Volume HUD:** adjusting volume or muting displays a floating on-screen card showing the exact volume percentage (0–100%) and mute indicator (`×`), mirrored by a live volume badge on the transport bar.
 - **Nunchuk:** the stick works as the D-pad, C is − and Z is +.
 - **C-Stick** (GameCube) works as the D-pad everywhere in menus.
