@@ -24,4 +24,5 @@ namespace UsbGamepad {
     /* Collects state updates since last call */
     State take();
     bool  connected();
+    bool  isPlayStation();
 }

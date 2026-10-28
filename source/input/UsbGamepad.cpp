@@ -19,7 +19,8 @@ const int MAX_REPORT  = 64;
 enum class PadType {
     None,
     DualShock4,
-    DualShock3
+    DualShock3,
+    GenericHID
 };
 
 struct Candidate {
@@ -36,6 +37,8 @@ struct GamepadDevice {
     u8      ep = 0;
     u16     len = 64;
     PadType type = PadType::None;
+    u16     vid = 0;
+    u16     pid = 0;
 };
 
 s32           s_heap = -1;
@@ -82,11 +85,8 @@ PadType identifyPad(u16 vid, u16 pid)
         /* Sony Interactive Entertainment */
         if (pid == 0x05C4 || pid == 0x09CC || pid == 0x0BA0) return PadType::DualShock4;
         if (pid == 0x0268) return PadType::DualShock3;
-    } else if (vid == 0x0888 || vid == 0x2563) {
-        /* Shanwan / clone PS3 controllers */
-        if (pid == 0x0268 || pid == 0x0575) return PadType::DualShock3;
     }
-    return PadType::None;
+    return PadType::GenericHID;
 }
 
 const usb_endpointdesc* inEndpoint(const usb_interfacedesc* id)
@@ -109,8 +109,7 @@ int scanCandidates(Candidate* c, int max)
     int nc = 0;
     for (int i = 0; i < count && nc < max; ++i) {
         const usb_device_entry& e = list[i];
-        PadType pt = identifyPad(e.vid, e.pid);
-        if (pt == PadType::None) continue;
+        if (!e.vid || !e.pid) continue;
 
         usb_devdesc dd;
         memset(&dd, 0, sizeof(dd));
@@ -130,6 +129,11 @@ int scanCandidates(Candidate* c, int max)
                 const usb_interfacedesc* id = &cd.interfaces[f];
                 const usb_endpointdesc* ed = inEndpoint(id);
                 if (id->bInterfaceClass != USB_CLASS_HID || !ed) continue;
+                /* Skip mice and keyboards */
+                if (id->bInterfaceProtocol == USB_PROTOCOL_KEYBOARD || id->bInterfaceProtocol == USB_PROTOCOL_MOUSE)
+                    continue;
+
+                PadType pt = identifyPad(e.vid, e.pid);
                 c[nc++] = Candidate{ e, (u8)id->bInterfaceNumber, (u8)ed->bEndpointAddress, (u16)ed->wMaxPacketSize, pt };
             }
         }
@@ -168,10 +172,12 @@ bool openCandidate(const Candidate& c)
     s_dev.ep        = c.ep;
     s_dev.len       = c.len > 0 && c.len <= MAX_REPORT ? c.len : (c.type == PadType::DualShock3 ? 49 : 64);
     s_dev.type      = c.type;
+    s_dev.vid       = c.dev.vid;
+    s_dev.pid       = c.dev.pid;
     s_dev.connected = true;
 
     SYS_Report("[Gamepad] Connected %s (VID 0x%04x PID 0x%04x, len %d)\n",
-               c.type == PadType::DualShock4 ? "DualShock 4" : "DualShock 3",
+               c.type == PadType::DualShock4 ? "DualShock 4" : c.type == PadType::DualShock3 ? "DualShock 3" : "Generic USB Gamepad",
                c.dev.vid, c.dev.pid, (int)s_dev.len);
     return true;
 }
@@ -220,10 +226,10 @@ void decodeDualShock4(const u8* buf, int len)
     const u8 b6 = buf[offset + 5];
     if (b6 & (1 << 0)) held |= WPAD_BUTTON_MINUS;    /* L1 */
     if (b6 & (1 << 1)) held |= WPAD_BUTTON_PLUS;     /* R1 */
-    if (b6 & (1 << 2)) held |= WPAD_BUTTON_MINUS;    /* L2 */
-    if (b6 & (1 << 3)) held |= WPAD_BUTTON_PLUS;     /* R2 */
-    if (b6 & (1 << 4)) held |= WPAD_BUTTON_MINUS;    /* Share */
-    if (b6 & (1 << 5)) held |= WPAD_BUTTON_PLUS;     /* Options */
+    if (b6 & (1 << 2)) held |= Input::BTN_ZOOM;      /* L2 */
+    if (b6 & (1 << 3)) held |= Input::BTN_ZOOM;      /* R2 */
+    if (b6 & (1 << 4)) held |= (WPAD_CLASSIC_BUTTON_MINUS | WPAD_BUTTON_MINUS); /* Share */
+    if (b6 & (1 << 5)) held |= (WPAD_CLASSIC_BUTTON_PLUS  | WPAD_BUTTON_PLUS);  /* Options */
     if (b6 & (1 << 6)) held |= Input::BTN_ZOOM;      /* L3 */
     if (b6 & (1 << 7)) held |= Input::BTN_ZOOM;      /* R3 */
 
@@ -250,10 +256,10 @@ void decodeDualShock3(const u8* buf, int len)
     /* D-pad & standard buttons in buf[2] */
     u32 held = 0;
     const u8 b2 = buf[2];
-    if (b2 & (1 << 0)) held |= WPAD_BUTTON_MINUS;    /* Select */
+    if (b2 & (1 << 0)) held |= (WPAD_CLASSIC_BUTTON_MINUS | WPAD_BUTTON_MINUS); /* Select */
     if (b2 & (1 << 1)) held |= Input::BTN_ZOOM;      /* L3 */
     if (b2 & (1 << 2)) held |= Input::BTN_ZOOM;      /* R3 */
-    if (b2 & (1 << 3)) held |= WPAD_BUTTON_PLUS;     /* Start */
+    if (b2 & (1 << 3)) held |= (WPAD_CLASSIC_BUTTON_PLUS  | WPAD_BUTTON_PLUS);  /* Start */
     if (b2 & (1 << 4)) held |= (WPAD_BUTTON_UP | Input::BTN_DPAD_UP);
     if (b2 & (1 << 5)) held |= (WPAD_BUTTON_RIGHT | Input::BTN_DPAD_RIGHT);
     if (b2 & (1 << 6)) held |= (WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN);
@@ -261,8 +267,8 @@ void decodeDualShock3(const u8* buf, int len)
 
     /* Triggers & face buttons in buf[3] */
     const u8 b3 = buf[3];
-    if (b3 & (1 << 0)) held |= WPAD_BUTTON_MINUS;    /* L2 */
-    if (b3 & (1 << 1)) held |= WPAD_BUTTON_PLUS;     /* R2 */
+    if (b3 & (1 << 0)) held |= Input::BTN_ZOOM;      /* L2 */
+    if (b3 & (1 << 1)) held |= Input::BTN_ZOOM;      /* R2 */
     if (b3 & (1 << 2)) held |= WPAD_BUTTON_MINUS;    /* L1 */
     if (b3 & (1 << 3)) held |= WPAD_BUTTON_PLUS;     /* R1 */
     if (b3 & (1 << 4)) held |= WPAD_BUTTON_2;        /* Triangle -> X */
@@ -284,6 +290,115 @@ void decodeDualShock3(const u8* buf, int len)
     const s8 sy = (s8)(128 - rawLy);
     const s8 rx = (s8)(rawRx - 128);
     const s8 ry = (s8)(128 - rawRy);
+
+    LWP_MutexLock(s_lock);
+    const u32 pressed = held & ~s_held;
+    s_pressedAccum |= pressed;
+    s_held   = held;
+    s_stickX = sx;
+    s_stickY = sy;
+    s_subX   = rx;
+    s_subY   = ry;
+    LWP_MutexUnlock(s_lock);
+}
+
+void decodeGenericHID(const u8* buf, int len)
+{
+    if (len < 4) return;
+
+    /* Analog sticks: X/Y on buf[0]/buf[1], Z/Rz on buf[2]/buf[3] */
+    const s8 sx = (s8)((int)buf[0] - 128);
+    const s8 sy = (s8)(128 - (int)buf[1]);
+    s8 rx = 0, ry = 0;
+    if (len >= 4) {
+        rx = (s8)((int)buf[2] - 128);
+        ry = (s8)(128 - (int)buf[3]);
+    }
+
+    u32 held = 0;
+
+    const bool isDragonRiseLike = (s_dev.vid == 0x0079 || s_dev.vid == 0x2563 ||
+                                   s_dev.vid == 0x0810 || s_dev.vid == 0x11ff ||
+                                   s_dev.vid == 0x0e8f || (len >= 5 && (buf[4] & 0x0F) >= 8));
+
+    if (isDragonRiseLike && len >= 5) {
+        /* Hat switch in lower 4 bits of buf[4] */
+        const u8 hat = buf[4] & 0x0F;
+        if (hat <= 7) {
+            switch (hat) {
+            case 0: held |= (WPAD_BUTTON_UP | Input::BTN_DPAD_UP); break;
+            case 1: held |= (WPAD_BUTTON_UP | Input::BTN_DPAD_UP | WPAD_BUTTON_RIGHT | Input::BTN_DPAD_RIGHT); break;
+            case 2: held |= (WPAD_BUTTON_RIGHT | Input::BTN_DPAD_RIGHT); break;
+            case 3: held |= (WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN | WPAD_BUTTON_RIGHT | Input::BTN_DPAD_RIGHT); break;
+            case 4: held |= (WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN); break;
+            case 5: held |= (WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN | WPAD_BUTTON_LEFT | Input::BTN_DPAD_LEFT); break;
+            case 6: held |= (WPAD_BUTTON_LEFT | Input::BTN_DPAD_LEFT); break;
+            case 7: held |= (WPAD_BUTTON_UP | Input::BTN_DPAD_UP | WPAD_BUTTON_LEFT | Input::BTN_DPAD_LEFT); break;
+            default: break;
+            }
+        }
+
+        /* Face buttons in upper 4 bits of buf[4] */
+        const u8 b4 = (buf[4] >> 4) & 0x0F;
+        if (b4 & (1 << 0)) held |= WPAD_BUTTON_2;      /* Button 1 (Triangle) */
+        if (b4 & (1 << 1)) held |= WPAD_BUTTON_B;      /* Button 2 (Circle) */
+        if (b4 & (1 << 2)) held |= WPAD_BUTTON_A;      /* Button 3 (Cross) */
+        if (b4 & (1 << 3)) held |= WPAD_BUTTON_1;      /* Button 4 (Square) */
+
+        /* Shoulders & extra buttons in buf[5] */
+        if (len >= 6) {
+            const u8 b5 = buf[5];
+            if (b5 & (1 << 0)) held |= WPAD_BUTTON_MINUS; /* Button 5 (L1) */
+            if (b5 & (1 << 1)) held |= WPAD_BUTTON_PLUS;  /* Button 6 (R1) */
+            if (b5 & (1 << 2)) held |= Input::BTN_ZOOM;   /* Button 7 (L2) */
+            if (b5 & (1 << 3)) held |= Input::BTN_ZOOM;   /* Button 8 (R2) */
+            if (b5 & (1 << 4)) held |= (WPAD_CLASSIC_BUTTON_MINUS | WPAD_BUTTON_MINUS); /* Button 9 (Select) */
+            if (b5 & (1 << 5)) held |= (WPAD_CLASSIC_BUTTON_PLUS  | WPAD_BUTTON_PLUS);  /* Button 10 (Start) */
+            if (b5 & (1 << 6)) held |= Input::BTN_ZOOM;   /* Button 11 (L3) */
+            if (b5 & (1 << 7)) held |= Input::BTN_ZOOM;   /* Button 12 (R3) */
+        }
+        if (len >= 7) {
+            const u8 b6 = buf[6];
+            if (b6 & (1 << 0)) held |= WPAD_BUTTON_HOME;  /* Button 13 (Home / Mode) */
+        }
+    } else {
+        /* Standard DirectInput gamepad layout */
+        if (len >= 5) {
+            const u8 b4 = buf[4];
+            if (b4 & (1 << 0)) held |= WPAD_BUTTON_A;      /* Button 1 (A) */
+            if (b4 & (1 << 1)) held |= WPAD_BUTTON_B;      /* Button 2 (B) */
+            if (b4 & (1 << 2)) held |= WPAD_BUTTON_1;      /* Button 3 (X) */
+            if (b4 & (1 << 3)) held |= WPAD_BUTTON_2;      /* Button 4 (Y) */
+            if (b4 & (1 << 4)) held |= WPAD_BUTTON_MINUS;  /* Button 5 (L1) */
+            if (b4 & (1 << 5)) held |= WPAD_BUTTON_PLUS;   /* Button 6 (R1) */
+            if (b4 & (1 << 6)) held |= Input::BTN_ZOOM;    /* Button 7 (L2) */
+            if (b4 & (1 << 7)) held |= Input::BTN_ZOOM;    /* Button 8 (R2) */
+        }
+        if (len >= 6) {
+            const u8 b5 = buf[5];
+            if (b5 & (1 << 0)) held |= (WPAD_CLASSIC_BUTTON_MINUS | WPAD_BUTTON_MINUS); /* Button 9 (Select) */
+            if (b5 & (1 << 1)) held |= (WPAD_CLASSIC_BUTTON_PLUS  | WPAD_BUTTON_PLUS);  /* Button 10 (Start) */
+            if (b5 & (1 << 2)) held |= Input::BTN_ZOOM;   /* Button 11 (L3) */
+            if (b5 & (1 << 3)) held |= Input::BTN_ZOOM;   /* Button 12 (R3) */
+            if (b5 & (1 << 4)) held |= WPAD_BUTTON_HOME;  /* Button 13 (Home/Mode) */
+        }
+        if (len >= 7) {
+            const u8 hat = buf[6] & 0x0F;
+            if (hat <= 7) {
+                switch (hat) {
+                case 0: held |= (WPAD_BUTTON_UP | Input::BTN_DPAD_UP); break;
+                case 1: held |= (WPAD_BUTTON_UP | Input::BTN_DPAD_UP | WPAD_BUTTON_RIGHT | Input::BTN_DPAD_RIGHT); break;
+                case 2: held |= (WPAD_BUTTON_RIGHT | Input::BTN_DPAD_RIGHT); break;
+                case 3: held |= (WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN | WPAD_BUTTON_RIGHT | Input::BTN_DPAD_RIGHT); break;
+                case 4: held |= (WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN); break;
+                case 5: held |= (WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN | WPAD_BUTTON_LEFT | Input::BTN_DPAD_LEFT); break;
+                case 6: held |= (WPAD_BUTTON_LEFT | Input::BTN_DPAD_LEFT); break;
+                case 7: held |= (WPAD_BUTTON_UP | Input::BTN_DPAD_UP | WPAD_BUTTON_LEFT | Input::BTN_DPAD_LEFT); break;
+                default: break;
+                }
+            }
+        }
+    }
 
     LWP_MutexLock(s_lock);
     const u32 pressed = held & ~s_held;
@@ -333,6 +448,8 @@ void* threadMain(void*)
                 decodeDualShock4(s_buf, s_result);
             } else if (s_dev.type == PadType::DualShock3) {
                 decodeDualShock3(s_buf, s_result);
+            } else if (s_dev.type == PadType::GenericHID) {
+                decodeGenericHID(s_buf, s_result);
             }
         } else if (s_result < 0) {
             SYS_Report("[Gamepad] Controller disconnected (%d)\n", (int)s_result);
@@ -405,4 +522,9 @@ UsbGamepad::State UsbGamepad::take()
 bool UsbGamepad::connected()
 {
     return s_dev.connected;
+}
+
+bool UsbGamepad::isPlayStation()
+{
+    return s_dev.connected && (s_dev.type == PadType::DualShock4 || s_dev.type == PadType::DualShock3);
 }

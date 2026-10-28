@@ -435,7 +435,7 @@ void Input::update() {
     prevUsbMain = usbMain;
     prevUsbSub  = usbSub;
     if ((usbPadDown || usbNew) && classicChan < 0) classicChan = 0;
-    if (usbPadDown & (WPAD_BUTTON_PLUS | WPAD_CLASSIC_BUTTON_PLUS)) plusDown = true;
+    if (usbPadDown & WPAD_CLASSIC_BUTTON_PLUS) plusDown = true;
 
     /* sticks: a new push counts as a press of that controller */
     static u32 prevGcMain[PORTS] = {};
@@ -492,6 +492,8 @@ void Input::update() {
     /* the hints follow the controller used last; the pointer, the Wii
      * Remote used last */
     if (gcPort >= 0)           Ui::setButtonStyle(Ui::ButtonStyle::GameCube);
+    else if ((usbPadDown || usbNew) && UsbGamepad::isPlayStation())
+        Ui::setButtonStyle(Ui::ButtonStyle::PlayStation);
     else if (classicChan >= 0) Ui::setButtonStyle(Ui::ButtonStyle::Classic);
     else if (remoteChan >= 0)  Ui::setButtonStyle(Ui::ButtonStyle::WiiRemote);
     else if (kbUsed)           Ui::setButtonStyle(Ui::ButtonStyle::Keyboard);
