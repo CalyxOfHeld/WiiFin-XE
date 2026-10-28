@@ -1209,15 +1209,25 @@ bool JellyfinClient::authenticate(const std::string& serverUrl,
                                    const std::string& username,
                                    const std::string& password,
                                    JellyfinAuth& out) {
-    std::string body = "{\"Username\":\"" + jsonEscapeString(username) + "\",\"Pw\":\"" + jsonEscapeString(password) + "\"}";
+    std::string body = "{\"Username\":\"" + jsonEscapeString(username) +
+                       "\",\"Pw\":\"" + jsonEscapeString(password) +
+                       "\",\"Password\":\"" + jsonEscapeString(password) + "\"}";
     std::string url  = serverUrl + "/Users/AuthenticateByName";
     std::string resp;
     int status = httpRequest(url, "POST", "application/json", body, "", resp);
     if (status != 200) {
         SYS_Report("[Auth] /Users/AuthenticateByName HTTP %d: %s\n", status, resp.c_str());
         if (status >= 0) {
-            char buf[128];
-            snprintf(buf, sizeof(buf), tr("Auth failed (HTTP %d)"), status);
+            std::string serverMsg = jsonGetString(resp, "Message");
+            if (serverMsg.empty()) serverMsg = jsonGetString(resp, "CustomMessage");
+            char buf[160];
+            if (!serverMsg.empty()) {
+                snprintf(buf, sizeof(buf), "HTTP %d: %s", status, serverMsg.c_str());
+            } else if (!resp.empty() && resp[0] != '<' && resp.size() <= 80) {
+                snprintf(buf, sizeof(buf), "HTTP %d: %s", status, resp.c_str());
+            } else {
+                snprintf(buf, sizeof(buf), tr("Auth failed (HTTP %d)"), status);
+            }
             errMsg = buf;
         }
         // status == -1 : errMsg already set by request()

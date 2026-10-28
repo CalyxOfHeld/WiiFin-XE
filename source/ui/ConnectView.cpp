@@ -108,6 +108,8 @@ void ConnectView::startLogin() {
     struct Out { bool ok = false; JellyfinAuth auth; std::string err; };
     auto out = std::make_shared<Out>();
     std::string url = fields[0], user = fields[1], pass = fields[2];
+    while (!user.empty() && (user.front() == ' ' || user.front() == '\t')) user.erase(user.begin());
+    while (!user.empty() && (user.back() == ' ' || user.back() == '\t')) user.pop_back();
     bool isEditing = editing;
     JellyfinAuth exAuth = existingAuth;
     std::string origUser = origUsername;
