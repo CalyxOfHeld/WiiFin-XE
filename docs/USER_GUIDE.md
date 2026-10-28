@@ -82,29 +82,31 @@ From the Jellyfin dashboard or apps:
 
 ## 🎮 Controls
 
-WiiFin-XE supports all standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the wireless **Wii U Pro Controller**, wired **Sony DualShock 4 & DualShock 3** (USB), the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**.
+WiiFin-XE supports all standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the wireless **Wii U Pro Controller**, wired **Sony PlayStation controllers** (DualShock 4, DualShock 3, DualSense over USB), **Generic USB HID gamepads** (DragonRise, retro SNES/arcade USB pads, PC gamepads), the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**.
 
-The pointer is optional: every screen works completely with the D-pad and analog sticks.
+The pointer is optional: every screen works completely with the D-pad and analog sticks. On-screen button hints automatically adapt to show the exact glyphs of the controller used last (Wii Remote, Classic, GameCube, PlayStation vector glyphs, or Keyboard caps).
 
-| Wii Remote (Wiimote) | Classic / Wii U Pro / DualShock / GamePad | GameCube controller | Action |
-|---|---|---|---|
-| A / B | A / B (DualShock: ✕ / ○) | A / B | Select / Back |
-| D-pad | D-pad or left stick | D-pad or stick | Move (hold to repeat); left / right: A-Z in lists, −10 / +10 s in the player (held: on seeking) |
-| − / + | − / + or L / R (DualShock: Share / Options) | L / R | Tabs, pages, previous / next episode or track; + : watched / not watched (a film, an episode); − : the whole synopsis (a page) |
-| 1 | Y (DualShock: □) | Y | Search (home), favourite (a film, a series), audio track (player), Up Next (music) |
-| 2 | X (DualShock: △) | X | Sort & filter (lists, music albums), special features (a film), shuffle (series, music), subtitles (player) |
-| HOME | HOME (DualShock: PS) | START | HOME menu |
-| pointer | ZL / ZR (DualShock: Touchpad / L3 / R3) | Z | Video zoom (fit / fill); in the menus, what + does on its own: watched / not watched, the browse page, the keyboard's Enter |
+| Wii Remote (Wiimote) | Classic / Wii U Pro / GamePad | Sony PlayStation (DS3 / DS4 / DualSense) | Generic USB Gamepad | GameCube Controller | Action |
+|---|---|---|---|---|---|
+| A / B | A / B | ✕ / ○ | Button 1 (A) / Button 2 (B) | A / B | Select / Back |
+| D-pad | D-pad or Left Stick | D-pad or Left Stick | D-pad or Left Stick | D-pad or Stick | Move (hold to repeat); left / right: A-Z in lists, −10 / +10 s in player |
+| − / + | − / + or L / R | L1 / R1 or L2 / R2 | L1 / R1 (Btn 5/6) or L2 / R2 (Btn 7/8) | L / R | Tabs, pages, previous / next episode or track; + : mark watched; − : full synopsis |
+| 1 | Y | □ | Button 4 (Y / X) | Y | Search (home), favourite (film/series), audio track (player), Up Next (music) |
+| 2 | X | △ | Button 3 (X / Y) | X | Sort & filter, special features, shuffle, subtitles (player) |
+| HOME | HOME | PS Button (or Share + Options) | Select + Start | START | HOME menu overlay |
+| pointer | ZL / ZR | R3 (Right Stick Click) | R3 (Button 12) | Z | Video zoom (fit / fill); in menus: toggle browse page, Enter |
 
-On-screen hints show the buttons of the controller used last (GameCube: A green, B red, X / Y beans, L / R, Z, START).
-
-- **Several controllers:** all four Wii Remotes, Wii U Pro Controllers, and all four GameCube ports work at once.
+- **Several controllers:** all four Wii Remotes, Wii U Pro Controllers, all four GameCube ports, and USB gamepads work simultaneously.
 - **Wii Remote & Nunchuk:** use the IR pointer or D-pad; the Nunchuk's stick acts as the D-pad, C is − and Z is +.
 - **Wii U Pro Controller:** syncs wirelessly over Bluetooth. Supports dual analog sticks, rumble, and uses Classic Controller button hints.
 - **GameCube Controllers:** dual-analog sticks are fully utilized. By default, C-Stick scrubs playback (left/right ±10 s, held seeks continuously) and D-Pad controls volume (up/down). Roles can be customized in `Settings > Playback > Controller`.
 - **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons directly with a pulsing ring, and **A** executes the button. When controls are hidden, Left / Right instantly skips backward / forward 10 seconds (holding performs continuous scrub). Press **B** to hide the overlay.
-- **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right go round the buttons.
-- **On-screen keyboard:** − deletes, 1 types a space and 2 switches to symbols (Classic: −, y, x; GameCube: X, Y, R, and L for Shift). B deletes too, and leaves when the text is empty.
+- **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right cycle through the header buttons.
+- **On-screen keyboard shortcuts:**
+  - **Delete:** − on Wii Remote / Classic, Square (□) or L1 on PlayStation, Button 5 on Generic, X on GameCube. B also deletes (leaves when empty).
+  - **Space:** 1 on Wii Remote, Y on Classic, Triangle (△) on PlayStation, Button 4 on Generic, Y on GameCube.
+  - **Symbols:** 2 on Wii Remote, X on Classic, Circle (○) on PlayStation, Button 3 on Generic, R on GameCube.
+  - **Shift:** L on GameCube, or select the Shift key directly.
 
 ### USB Mouse and Keyboard
 
@@ -117,12 +119,13 @@ Standard USB mice and keyboards plugged into the Wii's rear USB ports work out o
 |---|---|---|---|---|---|---|---|
 | Does | D-pad | A | B | 1 / 2 | − / + | HOME | Zoom |
 
-### USB Gamepads (PlayStation DualShock 4 & DualShock 3)
+### USB Gamepads (PlayStation DualShock 4, DualShock 3 & Generic HID)
 
-Standard wired Sony PlayStation controllers connect directly to the Wii's USB ports (or via a USB hub):
-- **DualShock 4 (PS4):** Plug into either rear USB port. Features full dual analog sticks, D-pad, ✕ (Select), ○ (Back), □ (Y/Search), △ (X/Subtitles), L1/R1, Share/Options, Touchpad click (Zoom), and PS button (Home menu).
-- **DualShock 3 (PS3):** Supports official and clone DualShock 3 controllers over USB with automatic operational wake-up.
-- **Controls & Prompts:** DualShock controllers use the Classic Controller button hints and fully support in-player overlay navigation, C-stick scrubbing, and volume adjustment.
+Standard wired USB controllers connect directly to the Wii's USB ports (or via an unpowered/powered USB hub):
+- **DualShock 4 & DualSense (PS4 / PS5):** Plug in over USB. Automatically displays native procedural vector PlayStation glyphs (blue ✕, red ○, pink □, green △, L1/R1, L2/R2, Share/Options, PS). Supports dual analog sticks, in-player overlay navigation, C-stick scrubbing, and volume adjustment.
+- **DualShock 3 (PS3):** Supports official and clone PS3 controllers over USB with automatic operational feature report wake-up.
+- **Generic USB HID Gamepads:** Supports standard DirectInput controllers, DragonRise USB gamepads, PC USB controllers, and retro USB pads (SNES/NES style). Pressing **Select + Start** together acts as the HOME menu button.
+- **Triggers & Bumpers:** L1 and L2 comfortably navigate backward (previous tab/page); R1 and R2 navigate forward (next tab/page). Zoom is mapped cleanly to R3 (stick click) to prevent unintended trigger zooming.
 
 ## ⚙️ Settings
 

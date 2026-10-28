@@ -252,6 +252,10 @@ section.block > .wrap > h2 { font-size: var(--step-3); margin: 0 0 6px; }
 .glyph.round { width: 1.9em; padding: 0; }
 .glyph.gc-a { background: var(--gc-a); border-color: var(--gc-a); color: #fff; }
 .glyph.gc-b { background: var(--gc-b); border-color: var(--gc-b); color: #fff; min-width: 1.6em; height: 1.6em; }
+.glyph.ps-cross { border-color: #3882ff; color: #3882ff; font-weight: 900; }
+.glyph.ps-circle { border-color: #ff4d4d; color: #ff4d4d; font-weight: 900; }
+.glyph.ps-square { border-color: #ff60b0; color: #ff60b0; font-weight: 900; }
+.glyph.ps-triangle { border-color: #00e676; color: #00e676; font-weight: 900; }
 .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .controls { border-collapse: collapse; width: 100%; min-width: 560px; }
 .controls th, .controls td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }

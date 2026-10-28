@@ -46,7 +46,7 @@ Then sign in to your Jellyfin server with your username and password, or with Qu
 - **Music** with a Now Playing screen, visualizers and synced lyrics. It keeps playing while you browse.
 - **Profiles** with pictures (yours, your Miis, or the jellyfish), nicknames, an optional passcode, and a theme each.
 - **Themes of your own:** edit every colour on the Wii, save it, and share the file.
-- **Every controller at once:** Wii Remote and Nunchuk, Classic Controller, GameCube controller, Wii U Pro Controller, wired Sony DualShock 4 & 3 (USB), Wii U GamePad, and a USB mouse or keyboard. No sensor bar needed.
+- **Every controller at once:** Wii Remote and Nunchuk, Classic Controller, GameCube controller, Wii U Pro Controller, wired Sony PlayStation controllers (DualShock 4, DualShock 3, DualSense) with native vector glyphs, Generic USB HID gamepads, Wii U GamePad, and a USB mouse or keyboard. No sensor bar needed.
 - **Screensaver & Screen Area:** a bouncing clock screensaver and custom screen area calibration snaps for TVs that crop overscan.
 - **Local Media (WiiMC)** opens WiiMC for the files on your SD card or USB drive. WiiMC-SS XE brings you back.
 - **Remote control** from Jellyfin's dashboard and apps: Play on... Nintendo Wii.
