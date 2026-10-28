@@ -82,9 +82,11 @@ From the Jellyfin dashboard or apps:
 
 ## 🎮 Controls
 
-The pointer is optional: every screen works with the D-pad.
+WiiFin-XE supports all standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**.
 
-| Wii Remote | Classic Controller / Wii U GamePad | GameCube controller | Action |
+The pointer is optional: every screen works completely with the D-pad and analog sticks.
+
+| Wii Remote (Wiimote) | Classic Controller / Wii U GamePad | GameCube controller | Action |
 |---|---|---|---|
 | A / B | A / B | A / B | Select / Back |
 | D-pad | D-pad or left stick | D-pad or stick | Move (hold to repeat); left / right: A-Z in lists, −10 / +10 s in the player (held: on seeking) |
@@ -97,13 +99,18 @@ The pointer is optional: every screen works with the D-pad.
 On-screen hints show the buttons of the controller used last (GameCube: A green, B red, X / Y beans, L / R, Z, START).
 
 - **Several controllers:** all four Wii Remotes and all four GameCube ports work at once.
-- **Nunchuk:** the stick is the D-pad, C is − and Z is +.
-- **C-Stick & D-Pad in Player:** by default, C-Stick scrubs playback (left/right ±10 s, held seeks continuously) and D-Pad controls volume (up/down). In menus, C-Stick works as the D-pad. Roles can be swapped in `Settings > Playback > Controller`.
+- **Wii Remote & Nunchuk:** use the IR pointer or D-pad; the Nunchuk's stick acts as the D-pad, C is − and Z is +.
+- **GameCube Controllers:** dual-analog sticks are fully utilized. By default, C-Stick scrubs playback (left/right ±10 s, held seeks continuously) and D-Pad controls volume (up/down). Roles can be customized in `Settings > Playback > Controller`.
 - **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons directly with a pulsing ring, and **A** executes the button. Press **B** to hide the overlay.
 - **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right go round the buttons.
 - **On-screen keyboard:** − deletes, 1 types a space and 2 switches to symbols (Classic: −, y, x; GameCube: X, Y, R, and L for Shift). B deletes too, and leaves when the text is empty.
 
-**USB mouse and keyboard.** A USB mouse moves the pointer: left click is A, right click is B, and the wheel scrolls. Point or press a Wii Remote to take the pointer back. A USB keyboard types into text fields and works the menus:
+### USB Mouse and Keyboard
+
+Standard USB mice and keyboards plugged into the Wii's rear USB ports work out of the box:
+
+- **USB Mouse:** moves the on-screen pointer; left-click is A (select), right-click is B (back), and the scroll wheel navigates lists or seeks playback. Moving or clicking the mouse displays an arrow cursor; pointing a Wii Remote switches back to the hand pointer.
+- **USB Keyboard:** allows direct typing into search bars, profile names, and server address fields. The keyboard also fully operates the interface:
 
 | Key | Arrows | Enter | Esc | F1 / F2 | Page Up / Down | Home | F3 |
 |---|---|---|---|---|---|---|---|
