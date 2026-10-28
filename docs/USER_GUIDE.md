@@ -14,7 +14,7 @@ Everything WiiFin-XE does, its controls, its settings and how to give it your ow
 
 Download the files from the latest WiiFin-XE release.
 
-- **Homebrew Channel**: unzip `WiiFin-hbc.zip` at the root of the SD card (it holds `apps/WiiFin/`, fonts included) and start WiiFin from the Homebrew Channel
+- **Homebrew Channel**: unzip `WiiFin-apps.zip` (or `WiiFin-hbc.zip`) at the root of the SD card (it holds `apps/WiiFin/`, fonts included) and start WiiFin from the Homebrew Channel
 - **Wii Menu channel**: install `WiiFin.wad` with a WAD manager (Wii and vWii); for Chinese or Korean, also copy `apps/WiiFin/fonts/` from the zip to the SD card
 - **Dolphin**: open `WiiFin.dol` (`dolphin-emu -e WiiFin.dol`)
 
@@ -49,6 +49,9 @@ WiiFin-XE uses the same folder as WiiFin and replaces it. It keeps its settings,
 
 - Played by the integrated MPlayer CE engine: **direct play** of what the Wii decodes in real time (SD DivX/Xvid, MPEG-1/2, H.264 up to 480p, VP8; AVI, MKV, MP4, MPEG-TS/PS; seeks in the file itself), server-side transcoding for the rest, and back to transcoding when a file does not play smoothly (see [DIRECT_PLAY.md](../DIRECT_PLAY.md))
 - **Player**: seek bar with the server's trickplay thumbnails (Jellyfin 10.9+), left / right held to seek on, |◀ ▶| from chapter to chapter, volume, audio and subtitle tracks (text subtitles drawn by WiiFin, so the video can still play as it is), zoom (fit / fill)
+- **Overlay Navigation**: on GameCube and Classic Controllers, D-Pad or Left Stick navigates the on-screen controls with an animated pulsing focus ring, and **A** triggers the selected action. Press **B** to hide the overlay.
+- **Live Volume HUD**: real-time floating volume card (0–100% and mute cross) and transport bar volume badge during adjustments.
+- **Subtitles**: OFF by default, with automatic preferred language matching against media tracks.
 - **Skip intro / recap / credits** buttons from the server's media segments (Jellyfin 10.10+ with a plugin such as Intro Skipper), and **Next episode** during the credits
 - **Resume** where you left off; progress, pauses and the play method (direct or transcoded) reported to the server, each console a device of its own
 - A slow connection lowers the quality by itself; a picture that gets stuck is retried another way, with a message that says what happens
@@ -95,7 +98,8 @@ On-screen hints show the buttons of the controller used last (GameCube: A green,
 
 - **Several controllers:** all four Wii Remotes and all four GameCube ports work at once.
 - **Nunchuk:** the stick is the D-pad, C is − and Z is +.
-- **C-Stick:** the D-pad, everywhere.
+- **C-Stick & D-Pad in Player:** by default, C-Stick scrubs playback (left/right ±10 s, held seeks continuously) and D-Pad controls volume (up/down). In menus, C-Stick works as the D-pad. Roles can be swapped in `Settings > Playback > Controller`.
+- **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons directly with a pulsing ring, and **A** executes the button. Press **B** to hide the overlay.
 - **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right go round the buttons.
 - **On-screen keyboard:** − deletes, 1 types a space and 2 switches to symbols (Classic: −, y, x; GameCube: X, Y, R, and L for Shift). B deletes too, and leaves when the text is empty.
 
@@ -140,6 +144,10 @@ From a profile's menu, View holds that profile's own look. From WiiFin's main me
 | Video | Video Quality | The transcoding bitrate, from Low (1.5 Mb/s) to Max (5 Mb/s, for a wired adapter); WiiFin also measures the connection and stays under it |
 | | Direct Play | Play the files the Wii can decode as they are, without the server converting them |
 | | Smooth Motion | Blend frames on picture changes, so 24 fps films move evenly on 60 Hz TVs |
+| Controller | Scrub Control | Choose which control scrubs playback on GameCube controllers: C-Stick (default) or D-Pad |
+| | Volume Control | Choose which control adjusts volume on GameCube controllers: D-Pad (default) or C-Stick |
+| Subtitles | Subtitles Default | Whether subtitles are Off (default) or On when playback begins |
+| | Preferred Subtitle Language | Preferred language to match against stream subtitle tracks (Any, English, French, Spanish, German, Italian, etc.) |
 | Speaker and Disc Light | Wii Remote Speaker | Off, Wii Remote only, or TV + Remote |
 | | Disc Slot Light | The light pulsing with the sound during playback, or off |
 

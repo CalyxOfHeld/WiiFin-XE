@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <app version="1">
   <name>WiiFin-XE</name>
-  <coder>fabienmillet</coder>
+  <coder>fabienmillet, CalyxOfHeld</coder>
   <version>1.0.0-rc3</version>
   <release_date>20260410000000</release_date>
-  <short_description>Jellyfin client for Nintendo Wii (XE)</short_description>
-  <long_description>WiiFin is an open-source Jellyfin client for the Nintendo Wii, built with GRRLIB. Browse and stream your Jellyfin media library directly from your console. WiiFin-XE is a modified version of WiiFin by fabienmillet.</long_description>
+  <short_description>Jellyfin client for Nintendo Wii (XE edition)</short_description>
+  <long_description>WiiFin-XE is an enhanced Jellyfin media client for the Nintendo Wii. Features Netflix-style home rows, full GameCube and Classic controller navigation with on-screen transport overlay, configurable playback controls (C-Stick scrubbing &amp; D-Pad volume), live volume HUD, custom theme engine and in-app editor, clock screensaver, configurable subtitle defaults, and direct play support.</long_description>
 </app>

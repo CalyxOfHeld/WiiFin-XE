@@ -90,8 +90,13 @@ The **profile menu** has an icon on each entry. It also has **Local Media (WiiMC
 ## Controllers and input
 
 - **Every controller at once:** all four Wii Remotes (with their Nunchuks and Classic Controllers) and all four GameCube ports. The on-screen hints follow the controller you pressed last.
+- **Configurable Playback Controls:** in `Settings > Playback > Controller`, configure whether the GameCube C-Stick or D-Pad handles scrubbing versus volume:
+  - **Scrub Control:** C-Stick (default) or D-Pad. Left/right nudges playback by ±10 seconds; holding seeks continuously.
+  - **Volume Control:** D-Pad (default) or C-Stick. Up/down adjusts volume in 5% increments.
+- **In-Player Overlay Navigation:** on GameCube and Classic Controllers, when the player controls are visible, the D-Pad or Left Stick navigates the on-screen buttons (Play/Pause, Skip Prev/Next Chapter, Tracks, Aspect Ratio, Stop, etc.). The focused button pulses with an animated selection glow, and pressing **A** executes the action. Pressing **B** dismisses the overlay back to clean video playback.
+- **Live Volume HUD:** adjusting volume or muting displays a floating on-screen card showing the exact volume percentage (0–100%) and mute indicator (`×`), mirrored by a live volume badge on the transport bar.
 - **Nunchuk:** the stick works as the D-pad, C is − and Z is +.
-- **C-Stick** (GameCube) works as the D-pad everywhere.
+- **C-Stick** (GameCube) works as the D-pad everywhere in menus.
 - **Button pictures** match the controller: the GameCube's green A, red B and X/Y beans, the Classic's a/b/x/y and ZL/ZR, and a house for HOME.
 - **USB mouse:** it moves the pointer. The left button is A, the right button is B, and the wheel scrolls. Wired mice and many wireless receivers work. Point or press a Wii Remote to take the pointer back.
 - **USB keyboard:**
@@ -182,6 +187,8 @@ WiiFin plays what's on your Jellyfin server. For videos and music on the Wii's o
 ## Defaults
 
 A fresh install starts with settings that suit most TVs:
+- subtitles off by default, with automatic preferred language matching when enabled
+- playback controls default to C-Stick scrubbing and D-Pad volume on GameCube controllers
 - interface sounds and menu music off
 - Video Quality Max, held under what your connection measures
 - solid backgrounds, a 24-hour clock and the Larger keyboard

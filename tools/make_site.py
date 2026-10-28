@@ -28,7 +28,7 @@ from mdit_py_plugins.anchors import anchors_plugin
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SITE = os.path.join(ROOT, "docs", "site")
-REPO_URL = ""   # e.g. https://github.com/<user>/WiiFin-XE
+REPO_URL = "https://github.com/CalyxOfHeld/WiiFin-XE"
 
 # slug, source (from the repository's root), title, group, icon, description
 PAGES = [

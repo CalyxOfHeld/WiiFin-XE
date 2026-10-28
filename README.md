@@ -28,9 +28,9 @@ It's a modified version of <a href="https://github.com/fabienmillet/WiiFin">WiiF
 
 Download the files from the latest WiiFin-XE release:
 
-- **Homebrew Channel:** unzip `WiiFin-hbc.zip` at the root of your SD card. WiiFin-XE uses WiiFin's folder, `apps/WiiFin/`, and takes its place.
+- **Homebrew Channel:** unzip `WiiFin-apps.zip` (or `WiiFin-hbc.zip`) at the root of your SD card or USB drive. It extracts directly into `apps/WiiFin/` with `boot.dol`, `icon.png`, and `meta.xml`.
 - **Wii Menu channel:** install `WiiFin.wad` with a WAD manager (Wii and vWii). For Chinese or Korean, also copy `apps/WiiFin/fonts/` from the zip to the SD card.
-- **Dolphin:** open `WiiFin.dol`.
+- **Dolphin:** open `WiiFin.dol` directly in the emulator.
 
 Then sign in to your Jellyfin server with your username and password, or with Quick Connect.
 
@@ -39,16 +39,20 @@ Then sign in to your Jellyfin server with your username and password, or with Qu
 - **Films, series and music** from your Jellyfin server. Files the Wii can decode play as they are, and the server converts the rest.
 - A **rows home** in two pages, Home and Browse. Expand any row into a full page, and choose which libraries show.
 - A **player** with the server's thumbnails, scenes and chapters, skip intro and credits, next episode, audio and subtitle tracks, and resume.
+- **Full GameCube & Gamepad Navigation:** navigate the player overlay hands-free with the D-Pad or Stick; focused buttons pulse with visual feedback and trigger with `A`.
+- **Configurable Playback Controls:** customize whether the C-Stick or D-Pad handles scrubbing versus volume adjustment under `Settings > Playback > Controller`.
+- **Live Volume HUD:** floating on-screen volume card and transport bar badge provide immediate visual confirmation of volume adjustments and mute status.
+- **Smart Subtitles:** subtitles default to OFF with automatic preferred language matching against available audio and subtitle tracks.
 - **Music** with a Now Playing screen, visualizers and synced lyrics. It keeps playing while you browse.
 - **Profiles** with pictures (yours, your Miis, or the jellyfish), nicknames, an optional passcode, and a theme each.
 - **Themes of your own:** edit every colour on the Wii, save it, and share the file.
 - **Every controller at once:** Wii Remote and Nunchuk, Classic Controller, GameCube controller, Wii U GamePad, and a USB mouse or keyboard. No sensor bar needed.
-- A **screensaver** that really does hit the corners.
-- **Screen area** snaps and saved screens for TVs that crop the picture.
+- **Screensaver & Screen Area:** a bouncing clock screensaver and custom screen area calibration snaps for TVs that crop overscan.
 - **Local Media (WiiMC)** opens WiiMC for the files on your SD card or USB drive. WiiMC-SS XE brings you back.
 - **Remote control** from Jellyfin's dashboard and apps: Play on... Nintendo Wii.
 
-What XE adds to WiiFin, in detail: **[docs/XE_FEATURES.md](docs/XE_FEATURES.md)**. Everything else, including the controls, settings and custom sounds: the **[user guide](docs/USER_GUIDE.md)**.
+📖 **Documentation:** Read the online guide at **[calyxofheld.github.io/WiiFin-XE](https://calyxofheld.github.io/WiiFin-XE/)**.
+What XE adds to WiiFin, in detail: **[docs/XE_FEATURES.md](docs/XE_FEATURES.md)**. Everything else, including controls, settings and custom sounds: the **[user guide](docs/USER_GUIDE.md)**.
 
 ## ⚠️ Project status
 
