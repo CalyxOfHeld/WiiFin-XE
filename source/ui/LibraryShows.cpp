@@ -157,10 +157,10 @@ bool LibraryView::updateEpisodes(ir_t& ir, bool aPressed) {
     const int was = episodeSel;
     if (Input::isUpPressed())   { if (episodeSel > 0)   episodeSel--; irMode = false; }
     if (Input::isDownPressed()) { if (episodeSel < n-1) episodeSel++; irMode = false; }
-    if (Input::isLeftPressed() || Input::isLPressed()) {   /* a page up */
+    if (Input::isLeftPressed()) {   /* a page up */
         episodeSel -= ITEMS_VISIBLE; episodeTop -= ITEMS_VISIBLE; irMode = false;
     }
-    if (Input::isRightPressed() || Input::isRPressed()) {  /* a page down */
+    if (Input::isRightPressed()) {  /* a page down */
         episodeSel += ITEMS_VISIBLE; episodeTop += ITEMS_VISIBLE; irMode = false;
         if (episodeTop > n - ITEMS_VISIBLE) episodeTop = n - ITEMS_VISIBLE;
     }
@@ -184,7 +184,7 @@ bool LibraryView::updateEpisodes(ir_t& ir, bool aPressed) {
         return false;
     }
     const int e = shownEpisode();
-    if (Input::is1Pressed() && e >= 0) {   /* watched or not */
+    if ((Input::is1Pressed() || Input::isActionPressed()) && e >= 0) {   /* watched or not */
         togglePlayed(episodes[e].id, episodes[e].played);
         if (episodes[e].played) episodes[e].playbackPositionTicks = 0;
     }

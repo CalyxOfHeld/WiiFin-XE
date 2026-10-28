@@ -133,7 +133,7 @@ const Subtitles::Cue* Subtitles::at(float secs)
 
 namespace {
 
-bool s_subtitlesDefaultEnabled = false;
+bool s_subtitlesDefaultEnabled = true;
 std::string s_subtitlesPreferredLang = "default";
 
 struct SubLangEntry {

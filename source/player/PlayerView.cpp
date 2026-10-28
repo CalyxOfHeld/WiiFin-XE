@@ -516,6 +516,7 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
                     } else {
                         float to = seg.end + 0.3f, dur = duration();
                         if (dur > 0.0f && to > dur - 2.0f) to = dur - 2.0f;
+                        SYS_Report("[Segments] %s: to %.1f s\n", segmentLabel(i), (double)to);
                         seekInFlight = true;
                         seekTo = to;
                         act = Action::SeekTo;
@@ -546,11 +547,18 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         scrubRightBits = Input::BTN_STICK_RIGHT;
         break;
     case Input::PadScrub::DPad:
-        scrubLeftBits = Input::BTN_DPAD_LEFT;
-        scrubRightBits = Input::BTN_DPAD_RIGHT;
+        scrubLeftBits = Input::BTN_DPAD_LEFT | WPAD_BUTTON_LEFT;
+        scrubRightBits = Input::BTN_DPAD_RIGHT | WPAD_BUTTON_RIGHT;
         break;
     case Input::PadScrub::Off:
         break;
+    }
+
+    /* A Wii Remote or non-visible overlay uses D-Pad Left/Right for seek */
+    const bool isWiiRemote = (Ui::buttonStyle() == Ui::ButtonStyle::WiiRemote);
+    if (isWiiRemote || !visible) {
+        scrubLeftBits  |= (Input::BTN_DPAD_LEFT | WPAD_BUTTON_LEFT);
+        scrubRightBits |= (Input::BTN_DPAD_RIGHT | WPAD_BUTTON_RIGHT);
     }
 
     /* Volume configuration */
