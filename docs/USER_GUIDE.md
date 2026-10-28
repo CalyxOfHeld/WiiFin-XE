@@ -82,19 +82,19 @@ From the Jellyfin dashboard or apps:
 
 ## 🎮 Controls
 
-WiiFin-XE supports all standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the wireless **Wii U Pro Controller**, the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**.
+WiiFin-XE supports all standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the wireless **Wii U Pro Controller**, wired **Sony DualShock 4 & DualShock 3** (USB), the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**.
 
 The pointer is optional: every screen works completely with the D-pad and analog sticks.
 
-| Wii Remote (Wiimote) | Classic / Wii U Pro / GamePad | GameCube controller | Action |
+| Wii Remote (Wiimote) | Classic / Wii U Pro / DualShock / GamePad | GameCube controller | Action |
 |---|---|---|---|
-| A / B | A / B | A / B | Select / Back |
+| A / B | A / B (DualShock: ✕ / ○) | A / B | Select / Back |
 | D-pad | D-pad or left stick | D-pad or stick | Move (hold to repeat); left / right: A-Z in lists, −10 / +10 s in the player (held: on seeking) |
-| − / + | − / + or L / R | L / R | Tabs, pages, previous / next episode or track; + : watched / not watched (a film, an episode); − : the whole synopsis (a page) |
-| 1 | Y | Y | Search (home), favourite (a film, a series), audio track (player), Up Next (music) |
-| 2 | X | X | Sort & filter (lists, music albums), special features (a film), shuffle (series, music), subtitles (player) |
-| HOME | HOME | START | HOME menu |
-| pointer | ZL / ZR | Z | Video zoom (fit / fill); in the menus, what + does on its own: watched / not watched, the browse page, the keyboard's Enter |
+| − / + | − / + or L / R (DualShock: Share / Options) | L / R | Tabs, pages, previous / next episode or track; + : watched / not watched (a film, an episode); − : the whole synopsis (a page) |
+| 1 | Y (DualShock: □) | Y | Search (home), favourite (a film, a series), audio track (player), Up Next (music) |
+| 2 | X (DualShock: △) | X | Sort & filter (lists, music albums), special features (a film), shuffle (series, music), subtitles (player) |
+| HOME | HOME (DualShock: PS) | START | HOME menu |
+| pointer | ZL / ZR (DualShock: Touchpad / L3 / R3) | Z | Video zoom (fit / fill); in the menus, what + does on its own: watched / not watched, the browse page, the keyboard's Enter |
 
 On-screen hints show the buttons of the controller used last (GameCube: A green, B red, X / Y beans, L / R, Z, START).
 
@@ -116,6 +116,13 @@ Standard USB mice and keyboards plugged into the Wii's rear USB ports work out o
 | Key | Arrows | Enter | Esc | F1 / F2 | Page Up / Down | Home | F3 |
 |---|---|---|---|---|---|---|---|
 | Does | D-pad | A | B | 1 / 2 | − / + | HOME | Zoom |
+
+### USB Gamepads (PlayStation DualShock 4 & DualShock 3)
+
+Standard wired Sony PlayStation controllers connect directly to the Wii's USB ports (or via a USB hub):
+- **DualShock 4 (PS4):** Plug into either rear USB port. Features full dual analog sticks, D-pad, ✕ (Select), ○ (Back), □ (Y/Search), △ (X/Subtitles), L1/R1, Share/Options, Touchpad click (Zoom), and PS button (Home menu).
+- **DualShock 3 (PS3):** Supports official and clone DualShock 3 controllers over USB with automatic operational wake-up.
+- **Controls & Prompts:** DualShock controllers use the Classic Controller button hints and fully support in-player overlay navigation, C-stick scrubbing, and volume adjustment.
 
 ## ⚙️ Settings
 

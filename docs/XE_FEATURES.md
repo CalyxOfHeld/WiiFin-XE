@@ -89,8 +89,9 @@ The **profile menu** has an icon on each entry. It also has **Local Media (WiiMC
 
 ## Controllers and input
 
-- **Every controller at once:** all four Wii Remotes (with their Nunchuks and Classic Controllers), Wii U Pro Controllers, and all four GameCube ports. The on-screen hints follow the controller you pressed last.
+- **Every controller at once:** all four Wii Remotes (with their Nunchuks and Classic Controllers), Wii U Pro Controllers, Sony DualShock 4 / DualShock 3 controllers over USB, and all four GameCube ports. The on-screen hints follow the controller you pressed last.
 - **Wii U Pro Controller:** syncs wirelessly to the Wii via Bluetooth. Features dual analog sticks, rumble support, and seamless Classic Controller button mapping.
+- **Sony DualShock 4 & DualShock 3 (USB):** plug into either rear USB port. Dual analog sticks, D-pad, face buttons, shoulder triggers, options, and PS home button are fully mapped. Automatic feature report activation wakes DualShock 3 upon connection.
 - **Configurable Playback Controls:** in `Settings > Playback > Controller`, configure whether the GameCube C-Stick or D-Pad handles scrubbing versus volume:
   - **Scrub Control:** C-Stick (default) or D-Pad. Left/right nudges playback by ±10 seconds; holding seeks continuously.
   - **Volume Control:** D-Pad (default) or C-Stick. Up/down adjusts volume in 5% increments.

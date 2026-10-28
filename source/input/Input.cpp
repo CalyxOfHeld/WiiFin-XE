@@ -2,6 +2,7 @@
 #include "../ui/Ui.h"
 #include <wiiuse/wpad.h>
 #include "wupc.h"
+#include "UsbGamepad.h"
 #include <ogc/pad.h>
 #include <ogc/lwp_watchdog.h>
 #include <ogc/system.h>
@@ -120,6 +121,7 @@ static const float MOUSE_SPEED = 1.25f;
 /* A USB keyboard (libwiikeyboard): fixed keys, as Wii Remote buttons; and
  * what is typed, for text fields (typedChar) */
 static int  s_kb = 0;                         /* 0 not tried, 1 driver up, -1 none */
+static int  s_gamepad = 0;                    /* 0 not tried, 1 driver up, -1 none */
 static char s_typed[32];
 static int  s_typedLen = 0, s_typedPos = 0;
 
@@ -414,6 +416,27 @@ void Input::update() {
         if (m.held & 2)    mouseHeld |= WPAD_BUTTON_B;
     }
 
+    /* USB gamepad (Sony DualShock 4 / DualShock 3) */
+    if (s_gamepad == 0) {
+        s_gamepad = UsbGamepad::init() ? 1 : -1;
+        SYS_Report("[Input] USB gamepad driver %s\n", s_gamepad > 0 ? "up" : "unavailable");
+    }
+    u32 usbPadDown = 0, usbPadHeld = 0;
+    static u32 prevUsbMain = 0, prevUsbSub = 0;
+    u32 usbMain = 0, usbSub = 0;
+    if (s_gamepad > 0 && UsbGamepad::connected()) {
+        const UsbGamepad::State gp = UsbGamepad::take();
+        usbPadDown = gp.pressed;
+        usbPadHeld = gp.held;
+        usbMain = toStickBits(padStickDir(gp.stickX, gp.stickY));
+        usbSub  = toCStickBits(padStickDir(gp.subX, gp.subY));
+    }
+    const u32 usbNew = (usbMain & ~prevUsbMain) | (usbSub & ~prevUsbSub);
+    prevUsbMain = usbMain;
+    prevUsbSub  = usbSub;
+    if ((usbPadDown || usbNew) && classicChan < 0) classicChan = 0;
+    if (usbPadDown & (WPAD_BUTTON_PLUS | WPAD_CLASSIC_BUTTON_PLUS)) plusDown = true;
+
     /* sticks: a new push counts as a press of that controller */
     static u32 prevGcMain[PORTS] = {};
     static u32 prevGcSub[PORTS] = {};
@@ -454,14 +477,17 @@ void Input::update() {
         prevWupcSub[i]     = ws;
     }
 
+    stickDown |= usbNew;
+    stick     |= usbMain | usbSub;
+
     /* any other controller's button or stick, or a key: the screen's own
      * highlight again (with the mouse's pointer up, A only acts on what it
      * points at) */
-    if (remoteChan >= 0 || classicChan >= 0 || gcPort >= 0 || kbDown) s_mouseOn = false;
+    if (remoteChan >= 0 || classicChan >= 0 || gcPort >= 0 || kbDown || usbPadDown || usbNew) s_mouseOn = false;
 
     u32 stickDirsDown = stickDirs(stickDown);
     u32 stickDirsHeld = stickDirs(stick);
-    u32 down = wiiDown | gcDown | stickDown | stickDirsDown | mouseDown | kbDown;
+    u32 down = wiiDown | gcDown | stickDown | stickDirsDown | mouseDown | kbDown | usbPadDown;
     if (kbDown & WPAD_BUTTON_PLUS) plusDown = true;   /* Page Down, as + */
     /* the hints follow the controller used last; the pointer, the Wii
      * Remote used last */
@@ -473,10 +499,10 @@ void Input::update() {
     else if (classicChan >= 0) s_pointerChan = classicChan;
     /* which controller sent what: for controller bug reports */
     if (down & ~DIRS)
-        SYS_Report("[Input] pressed 0x%x (remote 0x%x ch %d, gamecube 0x%x port %d, stick 0x%x, mouse 0x%x, keys 0x%x)\n",
+        SYS_Report("[Input] pressed 0x%x (remote 0x%x ch %d, gamecube 0x%x port %d, stick 0x%x, mouse 0x%x, keys 0x%x, usbpad 0x%x)\n",
                    (unsigned)down, (unsigned)wiiDown, remoteChan >= 0 ? remoteChan + 1 : classicChan + 1,
-                   (unsigned)gcDown, gcPort + 1, (unsigned)stickDown, (unsigned)mouseDown, (unsigned)kbDown);
-    u32 held = wiiHeld | gcHeld | stick | stickDirsHeld | mouseHeld | kbHeld;
+                   (unsigned)gcDown, gcPort + 1, (unsigned)stickDown, (unsigned)mouseDown, (unsigned)kbDown, (unsigned)usbPadDown);
+    u32 held = wiiHeld | gcHeld | stick | stickDirsHeld | mouseHeld | kbHeld | usbPadHeld;
 
     /* A held direction repeats: after 400 ms, then every 90 ms */
     static u64 heldSince[4], lastRepeat[4];
@@ -551,6 +577,8 @@ void Input::shutdown()
     if (s_mouse > 0) UsbMouse::shutdown();
     s_mouse = -1;
     s_mouseOn = false;
+    if (s_gamepad > 0) UsbGamepad::shutdown();
+    s_gamepad = -1;
 }
 
 /* the pointer of the Wii Remote used last; another one pointing at the
