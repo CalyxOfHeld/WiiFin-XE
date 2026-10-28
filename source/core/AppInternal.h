@@ -10,7 +10,6 @@ class LibraryView;
 extern volatile bool g_app_powerOff;   // power button
 extern volatile bool g_app_reset;      // reset button
 extern volatile bool g_restartApp;     // "Reset" chosen in the HOME menu
-extern bool          g_app_shuttingDown; // app is in teardown phase
 
 /* Where leaving WiiFin goes (the main menu's Exit, the HOME menu): back to
  * the loader that launched it (the Homebrew Channel) when true, else the

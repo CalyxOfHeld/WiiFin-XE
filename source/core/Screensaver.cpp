@@ -373,13 +373,3 @@ void Screensaver::draw()
     const float kx = s_w / tex->w, ky = s_h / tex->h;
     GRRLIB_DrawImg(x, y, tex, 0, kx, ky, (c & 0xFFFFFF00) | (mark || s_effect == EffectNone ? 0xFF : 0xC8));
 }
-
-void Screensaver::stop()
-{
-    s_on = false;
-    s_flash = 0;
-    freePicture();
-    if (s_wiifin) { GRRLIB_FreeTexture(s_wiifin); s_wiifin = nullptr; }
-    if (s_vhs)    { GRRLIB_FreeTexture(s_vhs);    s_vhs = nullptr; }
-    if (s_cd)     { GRRLIB_FreeTexture(s_cd);     s_cd = nullptr; }
-}

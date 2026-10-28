@@ -52,7 +52,6 @@ extern unsigned int  data_ring_png_len;
 volatile bool g_app_powerOff = false;
 volatile bool g_app_reset    = false;
 volatile bool g_restartApp = false;
-bool g_app_shuttingDown = false;
 bool g_app_exitToLoader = true;
 int  g_app_powerAction = BTN_POWER_OFF;
 int  g_app_resetAction = BTN_HBC;
@@ -85,11 +84,9 @@ static void onReset(u32, void*) { g_app_reset = true; }
  * won't stop on the way out.  The way out normally takes a moment (the
  * position sent to the server...); 5 s after the button, this does it. */
 static u8 s_powerWatchStack[8192] ATTRIBUTE_ALIGN(32);
-static lwp_t s_powerWatchThread = LWP_THREAD_NULL;
 static void* powerWatch(void*)
 {
-    while (!g_app_powerOff && !g_app_shuttingDown) usleep(100 * 1000);
-    if (g_app_shuttingDown) return nullptr;
+    while (!g_app_powerOff) usleep(100 * 1000);
     SYS_Report("[WiiFin] power button: %s\n", buttonActionName(g_app_powerAction));
     /* set to go elsewhere (the Homebrew Channel...): WiiFin is left as
      * usual, starting what comes next can take longer; if it is stuck,
@@ -228,7 +225,8 @@ void App::init(const char* argv0) {
     SYS_SetPowerCallback(onPower);
     SYS_SetResetCallback(onReset);
     {   /* above the main thread: it runs even if that one spins */
-        LWP_CreateThread(&s_powerWatchThread, powerWatch, nullptr, s_powerWatchStack, sizeof(s_powerWatchStack), 100);
+        lwp_t t;
+        LWP_CreateThread(&t, powerWatch, nullptr, s_powerWatchStack, sizeof(s_powerWatchStack), 100);
     }
 
     SYS_Report("[WiiFin] init start\n");
@@ -998,12 +996,6 @@ void App::loop() {
     }
 
     // --- Cleanup ---
-    g_app_shuttingDown = true;
-    Screensaver::stop();
-    if (s_powerWatchThread != LWP_THREAD_NULL) {
-        LWP_JoinThread(s_powerWatchThread, nullptr);
-        s_powerWatchThread = LWP_THREAD_NULL;
-    }
     saveSettings();
     Log::close();        // its writer thread must not touch the card past here
     MusicSession::stop(false);
@@ -1073,24 +1065,16 @@ void App::loop() {
     }
     else if (loader && (button == BTN_HBC || (button < 0 && g_app_exitToLoader))) {
         /* Exit To the loader: back to the one that launched WiiFin, its
-         * stub at 0x80001800. Unblank the video so the loader's interface is
-         * visible, shut down the system cleanly, and jump directly to the
-         * reload stub with memory and instruction pipelines synchronized. */
-        VIDEO_SetBlack(false);
-        VIDEO_Flush();
+         * stub at 0x80001800.  Not by exit(): libogc 3.2's jumps there with
+         * the interrupts still on (3.1 stopped the threads first), and
+         * WiiFin's own (video, sound, IPC) broke into the loader: a black
+         * screen on a tester's Wii.  As Reload does: the system shut down,
+         * the interrupts off, then the stub */
         SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
         u32 level;
         _CPU_ISR_Disable(level);
         (void)level;
-        __asm__ __volatile__(
-            "sync\n"
-            "isync\n"
-            "lis 9, 0x8000\n"
-            "ori 9, 9, 0x1800\n"
-            "mtctr 9\n"
-            "bctr\n"
-            ::: "r9"
-        );
+        ((void (*)(void))0x80001800)();
     }
     else {
         /* Restore the NAND-loader stub bytes at their installed VA (0x80804000)

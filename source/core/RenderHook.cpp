@@ -8,7 +8,6 @@
 #include "Text.h"
 #include "MusicSession.h"
 #include "Screensaver.h"
-#include "AppInternal.h"
 
 extern "C" {
 void (*g_wiifin_before_render)(void) = nullptr;
@@ -16,10 +15,6 @@ void __real_GRRLIB_Render(void);
 
 void __wrap_GRRLIB_Render(void)
 {
-    if (g_app_shuttingDown) {
-        __real_GRRLIB_Render();
-        return;
-    }
     Remote::pump();
     MusicSession::pump();
     Ui::drawNotice();

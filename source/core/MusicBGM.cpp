@@ -70,37 +70,6 @@ static void mp3PlayerStopSafe() {
     }
 }
 
-/* --- ASND_End with timeout ---
- * ASND_End() can hang indefinitely waiting for the DSP mailbox acknowledgment
- * (dsp_done loop in libasnd) if the DSP processor stalled. Run it in a disposable
- * thread and timeout after 500 ms so app shutdown or transition never freezes. */
-static volatile bool s_asndEndDone = false;
-static u8 s_asndEndStack[4 * 1024] ATTRIBUTE_ALIGN(32);
-
-static void* asndEndThreadFunc(void*) {
-    ASND_End();
-    s_asndEndDone = true;
-    return nullptr;
-}
-
-static void asndEndSafe() {
-    s_asndEndDone = false;
-    lwp_t t = LWP_THREAD_NULL;
-    if (LWP_CreateThread(&t, asndEndThreadFunc, nullptr,
-                         s_asndEndStack, sizeof(s_asndEndStack), 80) != 0) {
-        ASND_End();
-        return;
-    }
-    for (int i = 0; i < 25 && !s_asndEndDone; ++i)
-        usleep(20000);
-    if (s_asndEndDone) {
-        LWP_JoinThread(t, nullptr);
-        SYS_Report("[Sound] ASND_End completed normally\n");
-    } else {
-        SYS_Report("[Sound] ASND_End timed out (DSP unresponsive), continuing\n");
-    }
-}
-
 static void* musicLoop(void*) {
     SYS_Report("[DBG] musicLoop: started, s_running=%d\n", (int)s_running);
     while (s_running) {
@@ -148,7 +117,7 @@ void MusicBGM::stop() {
     }
     mp3PlayerStopSafe();
     if (s_asndRunning) {
-        asndEndSafe();
+        ASND_End();
         s_asndRunning = false;
     }
     SYS_Report("[DBG] MusicBGM::stop EXIT\n");
@@ -167,7 +136,7 @@ void MusicBGM::pause() {
         if (s_asndRunning) {
             SYS_Report("[DBG] MusicBGM::pause early path: ASND_End...\n");
             SoundFX::fadeOut();
-            asndEndSafe();
+            ASND_End();
             SYS_Report("[DBG] MusicBGM::pause early path: ASND_End done\n");
             s_asndRunning = false;
         }
@@ -187,7 +156,7 @@ void MusicBGM::pause() {
     if (s_asndRunning) {
         SYS_Report("[DBG] MusicBGM::pause: ASND_End...\n");
         SoundFX::fadeOut();
-        asndEndSafe();          /* Fully shut down ASND's internal DSP thread and its
+        ASND_End();          /* Fully shut down ASND's internal DSP thread and its
                               * AI DMA callback so ao_gekko can take over DMA
                               * without conflict.  resume() re-calls ASND_Init(). */
         SYS_Report("[DBG] MusicBGM::pause: ASND_End done\n");
@@ -202,7 +171,7 @@ void MusicBGM::resume() {
                (int)s_asndRunning, (int)s_running, (void*)s_thread,
                (void*)(uintptr_t)LWP_GetSelf());
     if (s_asndRunning) {   /* pause() normally ended it: never end ASND twice */
-        asndEndSafe();
+        ASND_End();
         s_asndRunning = false;
     }
     ASND_Init();
