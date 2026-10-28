@@ -198,7 +198,7 @@ void drawNotice();
 struct Hint { const char* button; const char* label; };
 /* Hints name Wii Remote buttons ("A", "1", "-/+", "HOME", ...); they are
  * shown as the buttons of the controller used last (Input sets it). */
-enum class ButtonStyle { WiiRemote, Classic, GameCube, Keyboard, PlayStation };
+enum class ButtonStyle { WiiRemote, Classic, GameCube, Keyboard, PlayStation, Xbox };
 void        setButtonStyle(ButtonStyle s);
 ButtonStyle buttonStyle();
 const char* buttonName(const char* wiiRemoteButton);

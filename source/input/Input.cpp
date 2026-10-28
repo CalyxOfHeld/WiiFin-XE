@@ -494,6 +494,8 @@ void Input::update() {
     if (gcPort >= 0)           Ui::setButtonStyle(Ui::ButtonStyle::GameCube);
     else if ((usbPadDown || usbNew) && UsbGamepad::isPlayStation())
         Ui::setButtonStyle(Ui::ButtonStyle::PlayStation);
+    else if ((usbPadDown || usbNew) && UsbGamepad::isXbox())
+        Ui::setButtonStyle(Ui::ButtonStyle::Xbox);
     else if (classicChan >= 0) Ui::setButtonStyle(Ui::ButtonStyle::Classic);
     else if (remoteChan >= 0)  Ui::setButtonStyle(Ui::ButtonStyle::WiiRemote);
     else if (kbUsed)           Ui::setButtonStyle(Ui::ButtonStyle::Keyboard);

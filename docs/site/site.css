@@ -256,6 +256,11 @@ section.block > .wrap > h2 { font-size: var(--step-3); margin: 0 0 6px; }
 .glyph.ps-circle { border-color: #ff4d4d; color: #ff4d4d; font-weight: 900; }
 .glyph.ps-square { border-color: #ff60b0; color: #ff60b0; font-weight: 900; }
 .glyph.ps-triangle { border-color: #00e676; color: #00e676; font-weight: 900; }
+.glyph.xbox-a { background: #107c10; border-color: #0d610d; color: #fff; }
+.glyph.xbox-b { background: #d8463c; border-color: #9a2e27; color: #fff; }
+.glyph.xbox-x { background: #0078d7; border-color: #005aa0; color: #fff; }
+.glyph.xbox-y { background: #ffa000; border-color: #c77d00; color: #1a1c1f; }
+.glyph.xbox-guide { background: #107c10; border-color: #0d610d; color: #fff; font-weight: 900; }
 .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .controls { border-collapse: collapse; width: 100%; min-width: 560px; }
 .controls th, .controls td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }

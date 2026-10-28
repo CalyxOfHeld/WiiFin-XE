@@ -702,37 +702,42 @@ const char* buttonName(const char* b)
     /* "+!": + as an action of its own (Input::isActionPressed), Z on a
      * GameCube controller (its R, the page turner, is a trigger) */
     if (strcmp(b, "+!") == 0)
-        return s_buttonStyle == ButtonStyle::GameCube ? "Z" : s_buttonStyle == ButtonStyle::Keyboard ? "PgDn" : s_buttonStyle == ButtonStyle::PlayStation ? "Options" : "+";
+        return s_buttonStyle == ButtonStyle::GameCube ? "Z"
+             : s_buttonStyle == ButtonStyle::Keyboard ? "PgDn"
+             : s_buttonStyle == ButtonStyle::PlayStation ? "Options"
+             : s_buttonStyle == ButtonStyle::Xbox ? "Menu" : "+";
     /* the on-screen keyboard's shortcuts (Keyboard.h): the GameCube
      * controller's are its own */
-    static const struct { const char* id; const char* wii; const char* classic; const char* gc; const char* key; const char* ps; } KB[] = {
-        { "kbdel",   "-", "-", "X", "Bksp",  "L1" },
-        { "kbspace", "1", "y", "Y", "Space", "ps_square" },
-        { "kbsym",   "2", "x", "R", "F2",    "ps_triangle" },
+    static const struct { const char* id; const char* wii; const char* classic; const char* gc; const char* key; const char* ps; const char* xbox; } KB[] = {
+        { "kbdel",   "-", "-", "X", "Bksp",  "L1",          "LB" },
+        { "kbspace", "1", "y", "Y", "Space", "ps_square",   "X" },
+        { "kbsym",   "2", "x", "R", "F2",    "ps_triangle", "Y" },
     };
     for (const auto& k : KB)
         if (strcmp(b, k.id) == 0)
             return s_buttonStyle == ButtonStyle::WiiRemote ? k.wii : s_buttonStyle == ButtonStyle::Classic ? k.classic
-                 : s_buttonStyle == ButtonStyle::GameCube ? k.gc : s_buttonStyle == ButtonStyle::PlayStation ? k.ps : k.key;
+                 : s_buttonStyle == ButtonStyle::GameCube ? k.gc : s_buttonStyle == ButtonStyle::PlayStation ? k.ps
+                 : s_buttonStyle == ButtonStyle::Xbox ? k.xbox : k.key;
     if (s_buttonStyle == ButtonStyle::WiiRemote) return b;
     /* the Classic Controller's face buttons are written in lower case; a
-     * USB keyboard's keys (Input.h) are shown as key caps; PlayStation shows iconic glyphs */
-    static const struct { const char* wii; const char* classic; const char* gc; const char* key; const char* ps; } MAP[] = {
-        { "A",    "a",    "A",     "Enter",   "ps_cross" },
-        { "B",    "b",    "B",     "Esc",     "ps_circle" },
-        { "1",    "y",    "Y",     "F1",      "ps_square" },
-        { "2",    "x",    "X",     "F2",      "ps_triangle" },
-        { "-",    "-",    "L",     "PgUp",    "L1" },
-        { "+",    "+",    "R",     "PgDn",    "R1" },
-        { "-/+",  "-/+",  "L/R",   "PgUp/Dn", "L1/R1" },
-        { "HOME", "HOME", "START", "Home",    "PS" },
-        { "ZR",   "ZR",   "Z",     "F3",      "L2" },
+     * USB keyboard's keys (Input.h) are shown as key caps; PlayStation and Xbox show iconic glyphs */
+    static const struct { const char* wii; const char* classic; const char* gc; const char* key; const char* ps; const char* xbox; } MAP[] = {
+        { "A",    "a",    "A",     "Enter",   "ps_cross",    "A" },
+        { "B",    "b",    "B",     "Esc",     "ps_circle",   "B" },
+        { "1",    "y",    "Y",     "F1",      "ps_square",   "X" },
+        { "2",    "x",    "X",     "F2",      "ps_triangle", "Y" },
+        { "-",    "-",    "L",     "PgUp",    "L1",          "LB" },
+        { "+",    "+",    "R",     "PgDn",    "R1",          "RB" },
+        { "-/+",  "-/+",  "L/R",   "PgUp/Dn", "L1/R1",       "LB/RB" },
+        { "HOME", "HOME", "START", "Home",    "PS",          "Xbox" },
+        { "ZR",   "ZR",   "Z",     "F3",      "L2",          "LT" },
     };
     for (const auto& m : MAP)
         if (strcmp(b, m.wii) == 0)
             return s_buttonStyle == ButtonStyle::Classic ? m.classic
                  : s_buttonStyle == ButtonStyle::GameCube ? m.gc
-                 : s_buttonStyle == ButtonStyle::PlayStation ? m.ps : m.key;
+                 : s_buttonStyle == ButtonStyle::PlayStation ? m.ps
+                 : s_buttonStyle == ButtonStyle::Xbox ? m.xbox : m.key;
     return b;
 }
 
@@ -760,6 +765,16 @@ static Glyph glyphOf(const char* b)
     if (strcmp(b, "PS") == 0)          return Glyph{ Shape::Disc, 18, 18, p.cardTop, p.cardBorder, p.text, false };
     if (strcmp(b, "L1") == 0 || strcmp(b, "R1") == 0 || strcmp(b, "L2") == 0 || strcmp(b, "R2") == 0) {
         return Glyph{ Shape::Trigger, 22, 15, p.cardTop, p.cardBorder, p.text, false };
+    }
+    if (s_buttonStyle == ButtonStyle::Xbox) {
+        if (one && b[0] == 'A') { g.w = g.h = 18; g.fill = 0x107C10FF; g.edge = 0x0D610DFF; g.ink = 0xFFFFFFFF; return g; }
+        if (one && b[0] == 'B') { g.w = g.h = 18; g.fill = 0xD8463CFF; g.edge = 0x9A2E27FF; g.ink = 0xFFFFFFFF; return g; }
+        if (one && b[0] == 'X') { g.w = g.h = 18; g.fill = 0x0078D7FF; g.edge = 0x005AA0FF; g.ink = 0xFFFFFFFF; return g; }
+        if (one && b[0] == 'Y') { g.w = g.h = 18; g.fill = 0xFFA000FF; g.edge = 0xC77D00FF; g.ink = 0x1A1C1FFF; return g; }
+        if (strcmp(b, "Xbox") == 0) { g.w = g.h = 18; g.fill = 0x107C10FF; g.edge = 0x0D610DFF; g.ink = 0xFFFFFFFF; return g; }
+        if (strcmp(b, "LB") == 0 || strcmp(b, "RB") == 0 || strcmp(b, "LT") == 0 || strcmp(b, "RT") == 0) {
+            return Glyph{ Shape::Trigger, 22, 15, p.cardTop, p.cardBorder, p.text, false };
+        }
     }
     if (s_buttonStyle == ButtonStyle::GameCube) {
         const u32 grey = 0xC9CDD2FF, greyEdge = 0x8A9097FF, dark = 0x2E3237FF;
@@ -851,8 +866,9 @@ static float glyphWidth(const char* b)
     if (strcmp(b, "-/+") == 0) return 40;
     if (strcmp(b, "L/R") == 0) return 44;
     if (strcmp(b, "L1/R1") == 0) return 48;
+    if (strcmp(b, "LB/RB") == 0) return 48;
     const Glyph g = glyphOf(b);
-    if (strncmp(b, "ps_", 3) == 0 || strcmp(b, "PS") == 0) return 18;
+    if (strncmp(b, "ps_", 3) == 0 || strcmp(b, "PS") == 0 || strcmp(b, "Xbox") == 0) return 18;
     if (g.shape == Shape::Disc && strlen(b) > 1 && !g.house) return textWidth(b, 10) + 16;   /* START ... */
     return g.w;
 }
@@ -894,12 +910,23 @@ static void psTriangleGlyph(float cx, float cy, u32 c, u32 bg)
     triangle(cx, cy - 2.6f, cx + 2.8f, cy + 2.4f, cx - 2.8f, cy + 2.4f, bg);
 }
 
+/* Xbox Guide button: stylized X inside a green disc */
+static void xboxGlyph(float cx, float cy, u32 c)
+{
+    const float r = 3.6f;
+    for (float d = -r; d <= r; d += 0.8f) {
+        circle(cx + d * 0.85f, cy + d, 0.9f, c);
+        circle(cx - d * 0.85f, cy + d, 0.9f, c);
+    }
+}
+
 /* one button: its shape and what is written on it */
 static void buttonGlyph(float cx, float cy, const char* b)
 {
     const Glyph g = glyphOf(b);
     drawShape(g, cx, cy);
     if (g.house)                         houseGlyph(cx, cy, g.ink);
+    else if (strcmp(b, "Xbox") == 0)     xboxGlyph(cx, cy, g.ink);
     else if (strcmp(b, "ps_cross") == 0) psCrossGlyph(cx, cy, g.ink);
     else if (strcmp(b, "ps_circle") == 0) psCircleGlyph(cx, cy, g.ink, g.fill);
     else if (strcmp(b, "ps_square") == 0) psSquareGlyph(cx, cy, g.ink, g.fill);
@@ -933,8 +960,11 @@ float hint(float x, float y, const Hint& h)
     } else if (strcmp(b, "L1/R1") == 0) {
         buttonGlyph(x + 11, cy, "L1");
         buttonGlyph(x + 37, cy, "R1");
+    } else if (strcmp(b, "LB/RB") == 0) {
+        buttonGlyph(x + 11, cy, "LB");
+        buttonGlyph(x + 37, cy, "RB");
     } else if (strlen(b) > 1 && glyphOf(b).shape == Shape::Disc && !glyphOf(b).house
-               && strncmp(b, "ps_", 3) != 0 && strcmp(b, "PS") != 0) {
+               && strncmp(b, "ps_", 3) != 0 && strcmp(b, "PS") != 0 && strcmp(b, "Xbox") != 0) {
         roundRect(x, cy - 8, w, 16, 8, p.cardTop, p.cardBottom);
         roundBorder(x, cy - 8, w, 16, 8, 1.5f, p.cardBorder);
         textCentered(x + w * 0.5f, cy - 6, b, 10, p.textDim);

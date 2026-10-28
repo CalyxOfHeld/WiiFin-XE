@@ -82,19 +82,19 @@ From the Jellyfin dashboard or apps:
 
 ## 🎮 Controls
 
-WiiFin-XE supports all standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the wireless **Wii U Pro Controller**, wired **Sony PlayStation controllers** (DualShock 4, DualShock 3, DualSense over USB), **Generic USB HID gamepads** (DragonRise, retro SNES/arcade USB pads, PC gamepads), the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**.
+WiiFin-XE supports all standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the wireless **Wii U Pro Controller**, the **Nintendo Switch Pro Controller** (over USB), wired **Microsoft Xbox controllers** (Xbox One, Series X|S, 360 over USB), wired **Sony PlayStation controllers** (DualShock 4, DualShock 3, DualSense over USB), **Generic USB HID gamepads** (DragonRise, retro SNES/arcade USB pads, PC gamepads), the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**.
 
-The pointer is optional: every screen works completely with the D-pad and analog sticks. On-screen button hints automatically adapt to show the exact glyphs of the controller used last (Wii Remote, Classic, GameCube, PlayStation vector glyphs, or Keyboard caps).
+The pointer is optional: every screen works completely with the D-pad and analog sticks. On-screen button hints automatically adapt to show the exact glyphs of the controller used last (Wii Remote, Classic, GameCube, PlayStation vector glyphs, Xbox vector badges, or Keyboard caps).
 
-| Wii Remote (Wiimote) | Classic / Wii U Pro / GamePad | Sony PlayStation (DS3 / DS4 / DualSense) | Generic USB Gamepad | GameCube Controller | Action |
-|---|---|---|---|---|---|
-| A / B | A / B | ✕ / ○ | Button 1 (A) / Button 2 (B) | A / B | Select / Back |
-| D-pad | D-pad or Left Stick | D-pad or Left Stick | D-pad or Left Stick | D-pad or Stick | Move (hold to repeat); left / right: A-Z in lists, −10 / +10 s in player |
-| − / + | − / + or L / R | L1 / R1 or L2 / R2 | L1 / R1 (Btn 5/6) or L2 / R2 (Btn 7/8) | L / R | Tabs, pages, previous / next episode or track; + : mark watched; − : full synopsis |
-| 1 | Y | □ | Button 4 (Y / X) | Y | Search (home), favourite (film/series), audio track (player), Up Next (music) |
-| 2 | X | △ | Button 3 (X / Y) | X | Sort & filter, special features, shuffle, subtitles (player) |
-| HOME | HOME | PS Button (or Share + Options) | Select + Start | START | HOME menu overlay |
-| pointer | ZL / ZR | R3 (Right Stick Click) | R3 (Button 12) | Z | Video zoom (fit / fill); in menus: toggle browse page, Enter |
+| Wii Remote (Wiimote) | Classic / Wii U Pro / Switch Pro | Microsoft Xbox (One / Series / 360) | Sony PlayStation (DS3 / DS4 / DualSense) | Generic USB Gamepad | GameCube Controller | Action |
+|---|---|---|---|---|---|---|
+| A / B | A / B | A / B | ✕ / ○ | Button 1 (A) / Button 2 (B) | A / B | Select / Back |
+| D-pad | D-pad or Left Stick | D-pad or Left Stick | D-pad or Left Stick | D-pad or Left Stick | D-pad or Stick | Move (hold to repeat); left / right: A-Z in lists, −10 / +10 s in player |
+| − / + | − / + or L / R | LB / RB or LT / RT | L1 / R1 or L2 / R2 | L1 / R1 (Btn 5/6) or L2 / R2 (Btn 7/8) | L / R | Tabs, pages, previous / next episode or track; + : mark watched; − : full synopsis |
+| 1 | Y | X | □ | Button 4 (Y / X) | Y | Search (home), favourite (film/series), audio track (player), Up Next (music) |
+| 2 | X | Y | △ | Button 3 (X / Y) | X | Sort & filter, special features, shuffle, subtitles (player) |
+| HOME | HOME | Xbox Guide (or View + Menu) | PS Button (or Share + Options) | Select + Start | START | HOME menu overlay |
+| pointer | ZL / ZR | RS (Right Stick Click) | R3 (Right Stick Click) | R3 (Button 12) | Z | Video zoom (fit / fill); in menus: toggle browse page, Enter |
 
 - **Several controllers:** all four Wii Remotes, Wii U Pro Controllers, all four GameCube ports, and USB gamepads work simultaneously.
 - **Wii Remote & Nunchuk:** use the IR pointer or D-pad; the Nunchuk's stick acts as the D-pad, C is − and Z is +.
@@ -103,9 +103,9 @@ The pointer is optional: every screen works completely with the D-pad and analog
 - **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons directly with a pulsing ring, and **A** executes the button. When controls are hidden, Left / Right instantly skips backward / forward 10 seconds (holding performs continuous scrub). Press **B** to hide the overlay.
 - **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right cycle through the header buttons.
 - **On-screen keyboard shortcuts:**
-  - **Delete:** − on Wii Remote / Classic, Square (□) or L1 on PlayStation, Button 5 on Generic, X on GameCube. B also deletes (leaves when empty).
-  - **Space:** 1 on Wii Remote, Y on Classic, Triangle (△) on PlayStation, Button 4 on Generic, Y on GameCube.
-  - **Symbols:** 2 on Wii Remote, X on Classic, Circle (○) on PlayStation, Button 3 on Generic, R on GameCube.
+  - **Delete:** − on Wii Remote / Classic, LB on Xbox, Square (□) or L1 on PlayStation, Button 5 on Generic, X on GameCube. B also deletes (leaves when empty).
+  - **Space:** 1 on Wii Remote, Y on Classic, X on Xbox, Triangle (△) on PlayStation, Button 4 on Generic, Y on GameCube.
+  - **Symbols:** 2 on Wii Remote, X on Classic, Y on Xbox, Circle (○) on PlayStation, Button 3 on Generic, R on GameCube.
   - **Shift:** L on GameCube, or select the Shift key directly.
 
 ### USB Mouse and Keyboard
@@ -119,13 +119,15 @@ Standard USB mice and keyboards plugged into the Wii's rear USB ports work out o
 |---|---|---|---|---|---|---|---|
 | Does | D-pad | A | B | 1 / 2 | − / + | HOME | Zoom |
 
-### USB Gamepads (PlayStation DualShock 4, DualShock 3 & Generic HID)
+### USB Gamepads (Xbox, PlayStation, Switch Pro & Generic HID)
 
 Standard wired USB controllers connect directly to the Wii's USB ports (or via an unpowered/powered USB hub):
+- **Microsoft Xbox Controllers (Xbox One, Xbox Series X|S, Xbox 360):** Plug in over USB. Automatically sends GIP power-on initialization and displays native vector Xbox badges (green A, red B, blue X, yellow Y, LB/RB badges, Xbox Guide button). Supports dual analog sticks, in-player overlay navigation, C-stick scrubbing, and volume adjustment. Pressing **View + Menu** acts as a fallback HOME button.
+- **Nintendo Switch Pro Controller:** Plug in over USB. Automatically performs high-speed USB handshake and parses 60Hz input telemetry (both standard report 0x30/0x21 and simple report 0x3F). Uses familiar Nintendo Classic button layout (A on right, B on bottom, X on top, Y on left, +, −, and Home).
 - **DualShock 4 & DualSense (PS4 / PS5):** Plug in over USB. Automatically displays native procedural vector PlayStation glyphs (blue ✕, red ○, pink □, green △, L1/R1, L2/R2, Share/Options, PS). Supports dual analog sticks, in-player overlay navigation, C-stick scrubbing, and volume adjustment.
 - **DualShock 3 (PS3):** Supports official and clone PS3 controllers over USB with automatic operational feature report wake-up.
 - **Generic USB HID Gamepads:** Supports standard DirectInput controllers, DragonRise USB gamepads, PC USB controllers, and retro USB pads (SNES/NES style). Pressing **Select + Start** together acts as the HOME menu button.
-- **Triggers & Bumpers:** L1 and L2 comfortably navigate backward (previous tab/page); R1 and R2 navigate forward (next tab/page). Zoom is mapped cleanly to R3 (stick click) to prevent unintended trigger zooming.
+- **Triggers & Bumpers:** L1/LB and L2/LT comfortably navigate backward (previous tab/page); R1/RB and R2/RT navigate forward (next tab/page). Zoom is mapped cleanly to R3 / RS (stick click) to prevent unintended trigger zooming.
 
 ## ⚙️ Settings
 

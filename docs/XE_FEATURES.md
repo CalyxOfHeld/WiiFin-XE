@@ -89,20 +89,23 @@ The **profile menu** has an icon on each entry. It also has **Local Media (WiiMC
 
 ## Controllers and input
 
-- **Every controller at once:** all four Wii Remotes (with their Nunchuks and Classic Controllers), Wii U Pro Controllers, Sony PlayStation controllers (DualShock 4, DualShock 3, DualSense over USB), Generic USB HID gamepads, and all four GameCube ports. The on-screen hints follow the controller you pressed last.
+- **Every controller at once:** all four Wii Remotes (with their Nunchuks and Classic Controllers), Wii U Pro Controllers, Nintendo Switch Pro Controllers (USB), Microsoft Xbox controllers (Xbox One, Series X|S, 360 over USB), Sony PlayStation controllers (DualShock 4, DualShock 3, DualSense over USB), Generic USB HID gamepads, and all four GameCube ports. The on-screen hints follow the controller you pressed last.
 - **Wii U Pro Controller:** syncs wirelessly to the Wii via Bluetooth. Features dual analog sticks, rumble support, and seamless Classic Controller button mapping.
+- **Nintendo Switch Pro Controller (USB):** plug into either rear USB port. Automatically performs high-speed USB handshake and delivers 60Hz telemetry (Report 0x30/0x21 and Report 0x3F). Maps seamlessly to Nintendo Classic button hints (A, B, X, Y, +, −, and Home).
+- **Microsoft Xbox Controllers (Xbox One, Series X|S, 360 over USB):** plug into either rear USB port. Features automatic GIP wake-up initialization, dual analog sticks, D-pad, LT/RT analog triggers, LB/RB bumpers, and Xbox Guide home button. Pressing **View + Menu** acts as a fallback HOME button.
+- **Native Xbox Vector Badges:** dynamic on-screen prompt hints render authentic vector shapes and colors: green A, red B, blue X, yellow Y, LB/RB badges, LT/RT triggers, Menu/View, and the Xbox Guide button.
 - **Sony PlayStation Controllers (DualShock 4, DualShock 3, DualSense over USB):** plug into either rear USB port. Features full dual analog sticks, D-pad, face buttons, shoulder triggers, options, and PS home button. DualShock 3 activates automatically upon connection.
 - **Native PlayStation Vector Glyphs:** dynamic on-screen prompt hints render authentic vector shapes and colors: blue Cross (✕), red Circle (○), pink Square (□), green Triangle (△), L1/R1, L2/R2 badges, Options/Share, and PS Home.
 - **Generic USB HID Gamepads:** out-of-the-box support for PC USB gamepads, DragonRise arcade boards, and retro USB pads (SNES/NES style). Pressing **Select + Start** together acts as the HOME menu button.
-- **Comfortable Shoulder Navigation:** L1/L2 comfortably navigate backward (previous tab/page/scroll); R1/R2 navigate forward (next tab/page/scroll). Video zoom is mapped to R3 (stick click) to prevent accidental trigger zooming.
+- **Comfortable Shoulder Navigation:** L1/LB and L2/LT comfortably navigate backward (previous tab/page/scroll); R1/RB and R2/RT navigate forward (next tab/page/scroll). Video zoom is mapped to R3 / RS (stick click) to prevent accidental trigger zooming.
 - **Configurable Playback Controls:** in `Settings > Playback > Controller`, configure whether the GameCube / Gamepad right stick (C-Stick) or D-Pad handles scrubbing versus volume:
   - **Scrub Control:** C-Stick (default) or D-Pad. Left/right nudges playback by ±10 seconds; holding seeks continuously.
   - **Volume Control:** D-Pad (default) or C-Stick. Up/down adjusts volume in 5% increments.
-- **In-Player Overlay Navigation:** on GameCube, Classic, PlayStation, Generic Gamepad, and Wii U Pro Controllers, when the player controls are visible, the D-Pad or Left Stick navigates the on-screen buttons (Play/Pause, Skip Prev/Next Chapter, Tracks, Aspect Ratio, Stop, etc.). The focused button pulses with an animated selection glow, and pressing **A** (or ✕) executes the action. When controls are hidden, D-Pad Left/Right provides immediate ±10 second seeking (holding scrubs continuously). Pressing **B** (or ○) dismisses the overlay back to clean video playback.
+- **In-Player Overlay Navigation:** on GameCube, Classic, PlayStation, Xbox, Generic Gamepad, Switch Pro, and Wii U Pro Controllers, when the player controls are visible, the D-Pad or Left Stick navigates the on-screen buttons (Play/Pause, Skip Prev/Next Chapter, Tracks, Aspect Ratio, Stop, etc.). The focused button pulses with an animated selection glow, and pressing **A** (or ✕) executes the action. When controls are hidden, D-Pad Left/Right provides immediate ±10 second seeking (holding scrubs continuously). Pressing **B** (or ○) dismisses the overlay back to clean video playback.
 - **Live Volume HUD:** adjusting volume or muting displays a floating on-screen card showing the exact volume percentage (0–100%) and mute indicator (`×`), mirrored by a live volume badge on the transport bar.
 - **Nunchuk:** the stick works as the D-pad, C is − and Z is +.
 - **C-Stick** (GameCube / Gamepad Right Stick) works as the D-pad everywhere in menus.
-- **Button pictures** match the controller: the GameCube's green A, red B and X/Y beans, the Classic's a/b/x/y and ZL/ZR, PlayStation's ✕/○/□/△, and a house for HOME.
+- **Button pictures** match the controller: the GameCube's green A, red B and X/Y beans, the Classic's a/b/x/y and ZL/ZR, PlayStation's ✕/○/□/△, Xbox's green A / red B / blue X / yellow Y, and a house for HOME.
 - **USB mouse:** it moves the pointer. The left button is A, the right button is B, and the wheel scrolls. Wired mice and many wireless receivers work. Point or press a Wii Remote to take the pointer back.
 - **USB keyboard:**
 

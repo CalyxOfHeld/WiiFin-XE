@@ -3,7 +3,8 @@
 
 /* -----------------------------------------------------------------------
  * UsbGamepad — USB HID Gamepad driver for Nintendo Wii.
- * Supports wired Sony DualShock 4 (PS4) and DualShock 3 (PS3) controllers.
+ * Supports wired Sony DualShock 4/3, Microsoft Xbox One/360,
+ * Nintendo Switch Pro, and generic DirectInput USB gamepads.
  * ----------------------------------------------------------------------- */
 namespace UsbGamepad {
     /* Starts background worker thread; returns true if USB stack is up. */
@@ -25,4 +26,5 @@ namespace UsbGamepad {
     State take();
     bool  connected();
     bool  isPlayStation();
+    bool  isXbox();
 }
