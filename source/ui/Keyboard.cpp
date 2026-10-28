@@ -22,16 +22,41 @@ static const char* const SYMBOLS[4] = {
 };
 
 /* Bottom row: wide keys, as (first column, span); for an address, http://
- * and https:// in Space's place */
+ * and https:// in Space's place, plus cursor navigation keys */
 struct BottomKey { int col, span; int sp; };
 static const BottomKey BOTTOM[] = {
-    { 0, 2, 1 /* K_SHIFT */ }, { 2, 2, 2 /* K_SYM */ }, { 4, 3, 3 /* K_SPACE */ },
-    { 7, 2, 4 /* K_DEL */ },   { 9, 2, 5 /* K_ENTER */ }, { 0, 0, 0 },
+    { 0, 2, 1 /* K_SHIFT */ }, { 2, 1, 2 /* K_SYM */ },
+    { 3, 1, 8 /* K_LEFT */ },  { 4, 1, 9 /* K_RIGHT */ },
+    { 5, 2, 3 /* K_SPACE */ }, { 7, 2, 4 /* K_DEL */ },
+    { 9, 2, 5 /* K_ENTER */ }, { 0, 0, 0 },
 };
 static const BottomKey BOTTOM_URL[] = {
-    { 0, 2, 1 /* K_SHIFT */ }, { 2, 1, 2 /* K_SYM */ }, { 3, 2, 6 /* K_HTTP */ }, { 5, 2, 7 /* K_HTTPS */ },
-    { 7, 2, 4 /* K_DEL */ },   { 9, 2, 5 /* K_ENTER */ }, { 0, 0, 0 },
+    { 0, 2, 1 /* K_SHIFT */ }, { 2, 1, 2 /* K_SYM */ },
+    { 3, 1, 8 /* K_LEFT */ },  { 4, 1, 9 /* K_RIGHT */ },
+    { 5, 2, 6 /* K_HTTP */ },  { 7, 2, 7 /* K_HTTPS */ },
+    { 9, 1, 4 /* K_DEL */ },   { 10, 1, 5 /* K_ENTER */ },
+    { 0, 0, 0 },
 };
+
+static void moveCursorLeft(const std::string& text, int& pos) {
+    if (pos <= 0) { pos = 0; return; }
+    pos--;
+    while (pos > 0 && ((unsigned char)text[pos] & 0xC0) == 0x80) pos--;
+}
+
+static void moveCursorRight(const std::string& text, int& pos) {
+    if (pos >= (int)text.size()) { pos = (int)text.size(); return; }
+    pos++;
+    while (pos < (int)text.size() && ((unsigned char)text[pos] & 0xC0) == 0x80) pos++;
+}
+
+static void eraseBefore(std::string& text, int& pos) {
+    if (pos <= 0 || text.empty()) return;
+    int start = pos - 1;
+    while (start > 0 && ((unsigned char)text[start] & 0xC0) == 0x80) start--;
+    text.erase(start, pos - start);
+    pos = start;
+}
 
 static unsigned long long nowMs() { return ticks_to_millisecs(gettime()); }
 
@@ -49,7 +74,37 @@ void Keyboard::reset()
 {
     page = 0; shift = 0;
     selRow = 1; selCol = 0;
+    cursor = -1;
     flashMs = 0;
+}
+
+void Keyboard::setCursorPos(int pos)
+{
+    cursor = pos;
+}
+
+int Keyboard::calcScrollOffset(const std::string& text, int maxW, int fontSize) const
+{
+    int cPos = cursor;
+    if (cPos < 0 || cPos > (int)text.size()) cPos = (int)text.size();
+    int scroll = 0;
+    while (cPos > scroll && Ui::textWidth(text.substr(scroll, cPos - scroll).c_str(), fontSize) > maxW - 20)
+        scroll++;
+    return scroll;
+}
+
+int Keyboard::charIndexAt(const std::string& text, int fontSize, float clickX)
+{
+    if (clickX <= 0) return 0;
+    int len = (int)text.size();
+    float prevW = 0.0f;
+    for (int i = 1; i <= len; ++i) {
+        float curW = Ui::textWidth(text.substr(0, i).c_str(), fontSize);
+        float midW = (prevW + curW) * 0.5f;
+        if (clickX < midW) return i - 1;
+        prevW = curW;
+    }
+    return len;
 }
 
 Keyboard::Key Keyboard::keyAt(int row, int col) const
@@ -91,6 +146,7 @@ bool Keyboard::keyUnder(const ir_t& ir, int& row, int& col) const
 Keyboard::Result Keyboard::press(const Key& k, std::string& text, size_t maxLen)
 {
     flashRow = k.row; flashCol = k.col; flashMs = nowMs();
+    if (cursor < 0 || cursor > (int)text.size()) cursor = (int)text.size();
     switch (k.sp) {
     case K_SHIFT: {
         unsigned long long t = nowMs();
@@ -105,12 +161,23 @@ Keyboard::Result Keyboard::press(const Key& k, std::string& text, size_t maxLen)
         SoundFX::play(SoundFX::FX::PressKey);
         return Result::None;
     case K_SPACE:
-        if (text.size() < maxLen) text += ' ';
-        SoundFX::play(SoundFX::FX::PressKey);
+        if (text.size() < maxLen) {
+            text.insert(cursor, 1, ' ');
+            cursor++;
+            SoundFX::play(SoundFX::FX::PressKey);
+        }
         return Result::None;
     case K_DEL:
-        if (!text.empty()) text.pop_back();
+        eraseBefore(text, cursor);
         SoundFX::play(SoundFX::FX::Backspace);
+        return Result::None;
+    case K_LEFT:
+        moveCursorLeft(text, cursor);
+        SoundFX::play(SoundFX::FX::Move);
+        return Result::None;
+    case K_RIGHT:
+        moveCursorRight(text, cursor);
+        SoundFX::play(SoundFX::FX::Move);
         return Result::None;
     case K_ENTER:
         return Result::Enter;
@@ -119,8 +186,13 @@ Keyboard::Result Keyboard::press(const Key& k, std::string& text, size_t maxLen)
         size_t rest = 0;
         if (text.compare(0, 7, "http://") == 0) rest = 7;
         else if (text.compare(0, 8, "https://") == 0) rest = 8;
-        const std::string t = (k.sp == K_HTTPS ? "https://" : "http://") + text.substr(rest);
-        if (t.size() <= maxLen) text = t;
+        const std::string prefix = (k.sp == K_HTTPS ? "https://" : "http://");
+        const std::string t = prefix + text.substr(rest);
+        if (t.size() <= maxLen) {
+            int diff = (int)prefix.size() - (int)rest;
+            text = t;
+            cursor = std::max(0, std::min((int)text.size(), cursor + diff));
+        }
         SoundFX::play(SoundFX::FX::PressKey);
         return Result::None;
     }
@@ -129,7 +201,8 @@ Keyboard::Result Keyboard::press(const Key& k, std::string& text, size_t maxLen)
     if (!k.ch || text.size() >= maxLen) return Result::None;
     char c = k.ch;
     if (shift && c >= 'a' && c <= 'z') c = (char)(c - 32);
-    text += c;
+    text.insert(cursor, 1, c);
+    cursor++;
     if (shift == 1 && page == 0 && k.ch >= 'a' && k.ch <= 'z') shift = 0;   /* one-shot */
     SoundFX::play(SoundFX::FX::PressKey);
     return Result::None;
@@ -137,14 +210,53 @@ Keyboard::Result Keyboard::press(const Key& k, std::string& text, size_t maxLen)
 
 Keyboard::Result Keyboard::update(const ir_t& ir, std::string& text, size_t maxLen)
 {
+    if (cursor < 0 || cursor > (int)text.size()) cursor = (int)text.size();
+
     /* typed on a USB keyboard: straight into the text; Enter is done */
     while (int c = Input::typedChar()) {
         if (c == '\n') return Result::Enter;
         if (c == '\b') {
-            if (!text.empty()) { text.pop_back(); SoundFX::play(SoundFX::FX::Backspace); }
+            eraseBefore(text, cursor);
+            SoundFX::play(SoundFX::FX::Backspace);
+        } else if (c == 0x7F) { // Delete key
+            if (cursor < (int)text.size()) {
+                int next = cursor + 1;
+                while (next < (int)text.size() && ((unsigned char)text[next] & 0xC0) == 0x80) next++;
+                text.erase(cursor, next - cursor);
+                SoundFX::play(SoundFX::FX::Backspace);
+            }
+        } else if (c == 0x11) { // Left arrow
+            moveCursorLeft(text, cursor);
+            SoundFX::play(SoundFX::FX::Move);
+        } else if (c == 0x12) { // Right arrow
+            moveCursorRight(text, cursor);
+            SoundFX::play(SoundFX::FX::Move);
+        } else if (c == 0x01) { // Home
+            cursor = 0;
+            SoundFX::play(SoundFX::FX::Move);
+        } else if (c == 0x05) { // End
+            cursor = (int)text.size();
+            SoundFX::play(SoundFX::FX::Move);
         } else if (c >= 32 && c < 127 && text.size() < maxLen) {
-            text += (char)c;
+            text.insert(cursor, 1, (char)c);
+            cursor++;
             SoundFX::play(SoundFX::FX::PressKey);
+        }
+    }
+
+    /* Pointer: check text field click */
+    if (hasTextField && ir.valid) {
+        if (ir.x >= tfX && ir.x <= tfX + tfW && ir.y >= tfY && ir.y <= tfY + tfH) {
+            if (Input::isAJustPressed()) {
+                const float startX = tfX + tfH * 0.5f;
+                int scroll = calcScrollOffset(text, (int)(tfW - tfH), 18);
+                std::string vis = text.substr(scroll);
+                int rel = charIndexAt(vis, 18, ir.x - startX);
+                cursor = std::max(0, std::min((int)text.size(), scroll + rel));
+                selRow = -1;
+                SoundFX::play(SoundFX::FX::Move);
+                return Result::None;
+            }
         }
     }
 
@@ -154,15 +266,48 @@ Keyboard::Result Keyboard::update(const ir_t& ir, std::string& text, size_t maxL
     if (overKey) { Key k = keyAt(pr, pc); selRow = k.row; selCol = k.col; }
 
     /* D-pad */
-    if (Input::isUpPressed())   selRow = (selRow + ROWS - 1) % ROWS;
-    if (Input::isDownPressed()) selRow = (selRow + 1) % ROWS;
-    if (Input::isLeftPressed()) {
-        Key k = keyAt(selRow, selCol);
-        selCol = (k.col + COLS - 1) % COLS;
-    }
-    if (Input::isRightPressed()) {
-        Key k = keyAt(selRow, selCol);
-        selCol = (k.col + k.span) % COLS;
+    if (selRow == -1) {
+        if (Input::isLeftPressed()) {
+            moveCursorLeft(text, cursor);
+            SoundFX::play(SoundFX::FX::Move);
+        }
+        if (Input::isRightPressed()) {
+            moveCursorRight(text, cursor);
+            SoundFX::play(SoundFX::FX::Move);
+        }
+        if (Input::isDownPressed()) {
+            selRow = 0;
+            SoundFX::play(SoundFX::FX::Move);
+        }
+        if (Input::isUpPressed()) {
+            selRow = ROWS - 1;
+            SoundFX::play(SoundFX::FX::Move);
+        }
+    } else {
+        if (Input::isUpPressed()) {
+            if (selRow == 0 && hasTextField) {
+                selRow = -1;
+                SoundFX::play(SoundFX::FX::Move);
+            } else {
+                selRow = (selRow + ROWS - 1) % ROWS;
+            }
+        }
+        if (Input::isDownPressed()) {
+            if (selRow == ROWS - 1 && hasTextField) {
+                selRow = -1;
+                SoundFX::play(SoundFX::FX::Move);
+            } else {
+                selRow = (selRow + 1) % ROWS;
+            }
+        }
+        if (Input::isLeftPressed()) {
+            Key k = keyAt(selRow, selCol);
+            selCol = (k.col + COLS - 1) % COLS;
+        }
+        if (Input::isRightPressed()) {
+            Key k = keyAt(selRow, selCol);
+            selCol = (k.col + k.span) % COLS;
+        }
     }
 
     if (Input::isAJustPressed()) {
@@ -170,7 +315,7 @@ Keyboard::Result Keyboard::update(const ir_t& ir, std::string& text, size_t maxL
             /* with the pointer on screen, only the key under it counts */
             if (overKey) return press(keyAt(pr, pc), text, maxLen);
         } else {
-            return press(keyAt(selRow, selCol), text, maxLen);
+            if (selRow >= 0) return press(keyAt(selRow, selCol), text, maxLen);
         }
     }
     /* the shortcuts: - deletes, 1 a space, 2 the symbols; a GameCube
@@ -190,8 +335,8 @@ Keyboard::Result Keyboard::update(const ir_t& ir, std::string& text, size_t maxL
     if (sym)   press(bottomKey(K_SYM), text, maxLen);
     if (Input::isActionPressed()) return Result::Enter;                       /* + (GameCube Z) */
     if (Input::isBackPressed()) {
-        if (text.empty()) return Result::Cancel;
-        text.pop_back();
+        if (selRow == -1 || text.empty()) return Result::Cancel;
+        eraseBefore(text, cursor);
         SoundFX::play(SoundFX::FX::Backspace);
     }
     return Result::None;
@@ -204,10 +349,12 @@ const char* Keyboard::label(const Key& k, char* buf) const
     case K_SHIFT: return shift == 2 ? N_("\xe2\x87\xaa Caps") : N_("\xe2\x87\xa7 Shift");
     case K_SYM:   return page == 0 ? "#+=" : "ABC";
     case K_SPACE: return N_("Space");
-    case K_DEL:   return N_("\xe2\x86\x90 Delete");
+    case K_DEL:   return k.span == 1 ? N_("Del") : N_("\xe2\x86\x90 Delete");
     case K_ENTER: return enterLabel;
     case K_HTTP:  return "http://";
     case K_HTTPS: return "https://";
+    case K_LEFT:  return "<";
+    case K_RIGHT: return ">";
     default: break;
     }
     buf[0] = (shift && k.ch >= 'a' && k.ch <= 'z') ? (char)(k.ch - 32) : k.ch;

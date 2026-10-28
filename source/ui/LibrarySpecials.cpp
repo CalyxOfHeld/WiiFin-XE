@@ -73,10 +73,13 @@ void LibraryView::openSpecials(const std::string& id, const std::string& name, S
 void LibraryView::loadSpecials()
 {
     bool ok = false; std::string err;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         ok = client.getSpecialFeatures(serverUrl, auth, specialsOfId, specials);
         if (!ok) err = client.lastError();
-    });
+    })) {
+        state = specialsBack;
+        return;
+    }
     if (!ok || specials.empty()) { errMsg = ok ? N_("No special features") : err; state = State::Error; return; }
     std::stable_sort(specials.begin(), specials.end(), [](const JellyfinItem& a, const JellyfinItem& b) {
         return kindRank(a.extraType) < kindRank(b.extraType);

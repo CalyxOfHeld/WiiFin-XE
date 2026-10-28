@@ -58,6 +58,7 @@ struct Lock {
 
 lwp_t         s_thread = LWP_THREAD_NULL;
 volatile bool s_run    = false;
+static volatile int s_stopRequested = 0;
 u8            s_stack[64 * 1024] ATTRIBUTE_ALIGN(32);   /* a TLS handshake needs room */
 std::string   s_host, s_path, s_token;
 int           s_port   = 80;
@@ -68,7 +69,7 @@ u64 nowMs() { return ticks_to_millisecs(gettime()); }
 
 /* sleep up to ms, waking early when stopped */
 void nap(int ms) {
-    for (int t = 0; t < ms && s_run; t += 100) usleep(100 * 1000);
+    for (int t = 0; t < ms && s_run && !s_stopRequested; t += 100) usleep(100 * 1000);
 }
 
 struct Ws {
@@ -85,12 +86,19 @@ struct Ws {
 bool readable(Ws& w, int ms) {
     if (!w.in.empty()) return true;
     if (w.tls && mbedtls_ssl_get_bytes_avail(&w.ssl) > 0) return true;
-    fd_set fds; FD_ZERO(&fds); FD_SET(w.sock, &fds);
-    struct timeval tv = { ms / 1000, (ms % 1000) * 1000 };
-    return net_select(w.sock + 1, &fds, nullptr, nullptr, &tv) > 0;
+    for (int t = 0; t < ms; t += 100) {
+        if (!s_run || s_stopRequested) return false;
+        fd_set fds; FD_ZERO(&fds); FD_SET(w.sock, &fds);
+        struct timeval tv = { 0, 100000 };
+        int sel = net_select(w.sock + 1, &fds, nullptr, nullptr, &tv);
+        if (sel > 0) return true;
+        if (sel < 0) return false;
+    }
+    return false;
 }
 
 int bioSend(void* ctx, const unsigned char* buf, size_t len) {
+    if (!s_run || s_stopRequested) return MBEDTLS_ERR_NET_SEND_FAILED;
     s32 sock = *(s32*)ctx;
     int r = net_write(sock, (void*)buf, (u32)len);
     if (r == -EAGAIN || r == -EWOULDBLOCK) { usleep(5000); return MBEDTLS_ERR_SSL_WANT_WRITE; }
@@ -99,9 +107,16 @@ int bioSend(void* ctx, const unsigned char* buf, size_t len) {
 
 int bioRecv(void* ctx, unsigned char* buf, size_t len) {
     s32 sock = *(s32*)ctx;
-    fd_set fds; FD_ZERO(&fds); FD_SET(sock, &fds);
-    struct timeval tv = { 10, 0 };
-    if (net_select(sock + 1, &fds, nullptr, nullptr, &tv) <= 0) return MBEDTLS_ERR_NET_RECV_FAILED;
+    for (int ms = 0; ms < 10000; ms += 100) {
+        if (!s_run || s_stopRequested) return MBEDTLS_ERR_NET_RECV_FAILED;
+        fd_set fds; FD_ZERO(&fds); FD_SET(sock, &fds);
+        struct timeval tv = { 0, 100000 };
+        int sel = net_select(sock + 1, &fds, nullptr, nullptr, &tv);
+        if (sel > 0) break;
+        if (sel < 0) return MBEDTLS_ERR_NET_RECV_FAILED;
+        if (ms + 100 >= 10000) return MBEDTLS_ERR_NET_RECV_FAILED;
+    }
+    if (!s_run || s_stopRequested) return MBEDTLS_ERR_NET_RECV_FAILED;
     int r = net_read(sock, buf, (u32)len);
     if (r == -EAGAIN || r == -EWOULDBLOCK) return MBEDTLS_ERR_SSL_WANT_READ;
     return r < 0 ? MBEDTLS_ERR_NET_RECV_FAILED : r;
@@ -185,7 +200,7 @@ bool wsOpen(Ws& w, std::string& err) {
     w.sock = net_socket(AF_INET, SOCK_STREAM, 0);
     if (w.sock < 0) { err = "no socket (" + std::to_string(w.sock) + ")"; return false; }
     wii_player_keep_socket(0, w.sock);
-    int cr = connectWithTimeout(w.sock, &addr, 8);
+    int cr = connectWithTimeout(w.sock, &addr, 8, &s_stopRequested);
     if (cr < 0) { err = "connect " + std::to_string(cr); wsClose(w); return false; }
 
     w.tls = s_https;
@@ -247,6 +262,7 @@ bool wsOpen(Ws& w, std::string& err) {
     std::string head;
     unsigned char buf[512];
     while (head.find("\r\n\r\n") == std::string::npos) {
+        if (!s_run || s_stopRequested) { wsClose(w); return false; }
         if (head.size() > 8192) { err = "headers too long"; wsClose(w); return false; }
         int r = recvSome(w, buf, sizeof(buf));
         if (r <= 0) { err = "no answer"; wsClose(w); return false; }
@@ -502,6 +518,7 @@ void Remote::start(const std::string& serverUrl, const std::string& token, bool 
     s_token  = token;
     s_verify = verifyTls;
     s_rand   = (u32)gettime();
+    s_stopRequested = 0;
     s_run    = true;
     LWP_CreateThread(&s_thread, threadMain, nullptr, s_stack, sizeof(s_stack), 30);
 }
@@ -509,6 +526,7 @@ void Remote::start(const std::string& serverUrl, const std::string& token, bool 
 void Remote::stop() {
     if (s_thread == LWP_THREAD_NULL) return;
     s_run = false;
+    s_stopRequested = 1;
     LWP_JoinThread(s_thread, nullptr);
     s_thread = LWP_THREAD_NULL;
     s_connected = false;

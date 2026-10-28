@@ -42,11 +42,26 @@ const std::string& JellyfinClient::deviceId() { return s_deviceId; }
 // ---------------------------------------------------------------------------
 // mbedTLS BIO callbacks: wrap libogc net_read / net_write
 // ---------------------------------------------------------------------------
+static volatile int s_aborted = 0;
+
+void JellyfinClient::abort() {
+    s_aborted = 1;
+}
+
+void JellyfinClient::resetAbort() {
+    s_aborted = 0;
+}
+
+bool JellyfinClient::isAborted() const {
+    return s_aborted != 0;
+}
+
 namespace {
 
 void connLockInit();   /* below, with the kept-alive connection */
 
 int wii_tls_send(void* ctx, const unsigned char* buf, size_t len) {
+    if (s_aborted) return MBEDTLS_ERR_NET_SEND_FAILED;
     s32 fd = *(s32*)ctx;
     int ret = net_write(fd, (void*)buf, (u32)len);
     if (ret < 0) {
@@ -57,7 +72,7 @@ int wii_tls_send(void* ctx, const unsigned char* buf, size_t len) {
             FD_ZERO(&wfds); FD_SET(fd, &wfds);
             struct timeval tv = {0, 5000};
             net_select(fd + 1, nullptr, &wfds, nullptr, &tv);
-            return MBEDTLS_ERR_SSL_WANT_WRITE;
+            return s_aborted ? MBEDTLS_ERR_NET_SEND_FAILED : MBEDTLS_ERR_SSL_WANT_WRITE;
         }
         return MBEDTLS_ERR_NET_SEND_FAILED;
     }
@@ -65,15 +80,22 @@ int wii_tls_send(void* ctx, const unsigned char* buf, size_t len) {
 }
 
 int wii_tls_recv(void* ctx, unsigned char* buf, size_t len) {
+    if (s_aborted) return MBEDTLS_ERR_NET_RECV_FAILED;
     s32 fd = *(s32*)ctx;
-    /* 15 s per-read timeout — prevents a hung server from blocking forever.
+    /* 15 s per-read timeout — checked in 100ms slices to allow immediate abort.
      * net_select returns 0 on timeout, <0 on error; both mean no data. */
-    {
+    bool ready = false;
+    for (int slice = 0; slice < 150; ++slice) {
+        if (s_aborted) return MBEDTLS_ERR_NET_RECV_FAILED;
         fd_set rfds; FD_ZERO(&rfds); FD_SET(fd, &rfds);
-        struct timeval stv = {15, 0};
-        if (net_select(fd + 1, &rfds, nullptr, nullptr, &stv) <= 0)
-            return MBEDTLS_ERR_NET_RECV_FAILED; /* timeout */
+        struct timeval stv = {0, 100000};
+        int sel = net_select(fd + 1, &rfds, nullptr, nullptr, &stv);
+        if (sel > 0) { ready = true; break; }
+        if (sel < 0) return MBEDTLS_ERR_NET_RECV_FAILED;
     }
+    if (!ready || s_aborted)
+        return MBEDTLS_ERR_NET_RECV_FAILED; /* timeout or aborted */
+
     int ret = net_read(fd, buf, (u32)len);
     if (ret < 0) {
         if (ret == -EAGAIN || ret == -EWOULDBLOCK)
@@ -789,16 +811,18 @@ s32 s_lastSocketErr = 0;
 bool openConn(bool tls, const struct sockaddr_in& addr, const std::string& host, int port,
               bool verify, std::string& err, bool& transient) {
     transient = false;
+    if (s_aborted) { err = N_("Cancelled"); return false; }
     s32 sock = net_socket(AF_INET, SOCK_STREAM, 0);
     s_lastSocketErr = sock < 0 ? sock : 0;
     if (sock < 0) { err = "socket() failed (" + std::to_string(sock) + ")"; return false; }
 
     /* 8 s: a home server answers in milliseconds; past that it is down or
      * the address is wrong, and the user should hear about it */
-    int cr = connectWithTimeout(sock, const_cast<struct sockaddr_in*>(&addr), 8);
+    int cr = connectWithTimeout(sock, const_cast<struct sockaddr_in*>(&addr), 8, &s_aborted);
     if (cr < 0) {
-        err = cr == -ETIMEDOUT ? N_("Server not reachable (connection timed out)")
-                               : "connect() failed (" + std::to_string(cr) + ")";
+        err = s_aborted ? N_("Cancelled")
+            : cr == -ETIMEDOUT ? N_("Server not reachable (connection timed out)")
+            : "connect() failed (" + std::to_string(cr) + ")";
         net_close(sock);
         return false;
     }
@@ -812,6 +836,7 @@ bool openConn(bool tls, const struct sockaddr_in& addr, const std::string& host,
             mbedtls_ssl_set_hostname(&s_conn.ssl, host.c_str());
             mbedtls_ssl_set_bio(&s_conn.ssl, &s_conn.sock, wii_tls_send, wii_tls_recv, nullptr);
             do {
+                if (s_aborted) { ret = MBEDTLS_ERR_NET_RECV_FAILED; break; }
                 ret = mbedtls_ssl_handshake(&s_conn.ssl);
             } while (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE);
         }
@@ -868,6 +893,7 @@ bool connWrite(const unsigned char* p, int n) {
 /* Read some bytes: > 0 bytes read, <= 0 connection closed / error / timeout. */
 int connRead(unsigned char* buf, int n) {
     for (;;) {
+        if (s_aborted) return -1;
         int r = s_conn.tls ? mbedtls_ssl_read(&s_conn.ssl, buf, (size_t)n)
                            : wii_tls_recv(&s_conn.sock, buf, (size_t)n);
         if (r == MBEDTLS_ERR_SSL_WANT_READ) continue;
@@ -954,10 +980,12 @@ ExResult exchange(const char* req, int reqLen, const std::string& body, bool reu
 
     unsigned char buf[4096];
     while (!complete) {
+        if (s_aborted) { keepAlive = false; return ExResult::Failed; }
         int ret = connRead(buf, sizeof(buf));
         if (ret <= 0) {
             /* Connection ended (close_notify, EOF, error or timeout) */
             keepAlive = false;
+            if (s_aborted) return ExResult::Failed;
             if (rawLen == 0 && reused) return ExResult::Stale;
             break;
         }
@@ -1013,7 +1041,8 @@ ExResult exchange(const char* req, int reqLen, const std::string& body, bool reu
     if (!complete) keepAlive = false;
 
     if (status == 0) {
-        err = rawLen == 0 ? N_("No response from server (check server URL / port)")
+        err = s_aborted ? N_("Cancelled")
+            : rawLen == 0 ? N_("No response from server (check server URL / port)")
                           : N_("Invalid HTTP response (server may require HTTPS)");
         return ExResult::Failed;
     }
@@ -1107,15 +1136,19 @@ int JellyfinClient::request(bool tls, const std::string& host, int port,
      * (left behind by MPlayer's orphaned sockets) get a short cool-down. */
     bool recovered = false;
     for (int attempt = 0; attempt < 3; ++attempt) {
+        if (s_aborted) return fail(N_("Cancelled"));
         bool reused = s_conn.open && s_conn.tls == tls && s_conn.host == host &&
                       s_conn.port == port && (!tls || s_conn.verify == sslVerify) &&
                       nowMs() - s_conn.lastUseMs < IDLE_REUSE_MS;
         if (!reused) {
             closeConn();
+            if (s_aborted) return fail(N_("Cancelled"));
             struct sockaddr_in addr;
             if (!resolve(host, port, addr, err)) return fail(err);
+            if (s_aborted) return fail(N_("Cancelled"));
             bool transient = false;
             if (!openConn(tls, addr, host, port, sslVerify, err, transient)) {
+                if (s_aborted) return fail(N_("Cancelled"));
                 if ((s_lastSocketErr == -ENETRESET || s_lastSocketErr == -ENETDOWN ||
                      s_lastSocketErr == -ENXIO) && !recovered) {
                     SYS_Report("[Net] network lost (%d), restarting it\n", (int)s_lastSocketErr);
@@ -1125,17 +1158,19 @@ int JellyfinClient::request(bool tls, const std::string& host, int port,
                 }
                 if (!transient || attempt == 2) return fail(err);
                 errMsg = err;
-                usleep(500000);   // 500 ms cool-down before retry
+                for (int ms = 0; ms < 500 && !s_aborted; ms += 50) usleep(50 * 1000);
+                if (s_aborted) return fail(N_("Cancelled"));
                 continue;
             }
         }
+        if (s_aborted) { closeConn(); return fail(N_("Cancelled")); }
 
         int  status    = 0;
         bool keepAlive = false;
         ExResult r = exchange(req, reqLen, body, reused, status, responseBody,
                               keepAlive, err, maxResponse);
         if (r == ExResult::Stale) { closeConn(); continue; }
-        if (r == ExResult::Failed) { closeConn(); return fail(err); }
+        if (r == ExResult::Failed) { closeConn(); return fail(s_aborted ? N_("Cancelled") : err); }
         if (keepAlive) s_conn.lastUseMs = nowMs();
         else           closeConn();
         if (status >= 400 && !(status == 404 && path.find("/Images/") != std::string::npos))
@@ -1160,6 +1195,14 @@ static std::string jsonEscapeString(const std::string& s) {
         else                { out += (char)c; }
     }
     return out;
+}
+
+bool JellyfinClient::validateAuth(const std::string& serverUrl, const JellyfinAuth& auth) {
+    if (auth.accessToken.empty() || auth.userId.empty()) return false;
+    std::string url = serverUrl + "/Users/" + auth.userId;
+    std::string resp;
+    int status = httpRequest(url, "GET", "", "", auth.accessToken, resp);
+    return status == 200;
 }
 
 bool JellyfinClient::authenticate(const std::string& serverUrl,
@@ -3695,6 +3738,7 @@ bool JellyfinClient::searchItems(const std::string& serverUrl,
         item.seasonNumber  = jsonGetInt(obj, "ParentIndexNumber");
         item.episodeNumber = jsonGetInt(obj, "IndexNumber");
         item.runtimeTicks  = jsonGetLongLong(obj, "RunTimeTicks");
+        item.parentId      = jsonGetString(obj, "ParentId");
         if (!item.id.empty() && !item.name.empty())
             out.push_back(item);
     }

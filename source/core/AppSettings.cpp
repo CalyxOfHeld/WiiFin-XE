@@ -10,6 +10,8 @@
 #include "../player/vo_wiifin.h"
 #include "../player/WiiPlayer.h"
 #include "../player/RemoteSpeaker.h"
+#include "../player/Subtitles.h"
+#include "../input/Input.h"
 #include "Screensaver.h"
 #include "../ui/Keyboard.h"
 #include <stdio.h>
@@ -71,6 +73,28 @@ void App::loadSettings() {
             if (t >= 0) Ui::setCustomTheme(t);
         } else if (strcmp(key, "smooth_motion") == 0) {
             g_wiifin_smooth_motion = atoi(val) != 0;
+        } else if (strcmp(key, "subtitles") == 0) {
+            Subtitles::setDefaultEnabled(atoi(val) != 0);
+        } else if (strcmp(key, "subtitle_language") == 0 || strcmp(key, "subtitle_lang") == 0) {
+            Subtitles::setPreferredLanguage(val);
+        } else if (strcmp(key, "controller_scrub") == 0 || strcmp(key, "pad_scrub") == 0) {
+            if (strcmp(val, "main_stick") == 0 || strcmp(val, "main") == 0)
+                Input::setPadScrub(Input::PadScrub::MainStick);
+            else if (strcmp(val, "dpad") == 0)
+                Input::setPadScrub(Input::PadScrub::DPad);
+            else if (strcmp(val, "off") == 0)
+                Input::setPadScrub(Input::PadScrub::Off);
+            else
+                Input::setPadScrub(Input::PadScrub::CStick);
+        } else if (strcmp(key, "controller_volume") == 0 || strcmp(key, "pad_volume") == 0) {
+            if (strcmp(val, "main_stick") == 0 || strcmp(val, "main") == 0)
+                Input::setPadVolume(Input::PadVolume::MainStick);
+            else if (strcmp(val, "c_stick") == 0 || strcmp(val, "cstick") == 0)
+                Input::setPadVolume(Input::PadVolume::CStick);
+            else if (strcmp(val, "off") == 0)
+                Input::setPadVolume(Input::PadVolume::Off);
+            else
+                Input::setPadVolume(Input::PadVolume::DPad);
         } else if (strcmp(key, "disc_light") == 0) {
             g_wiifin_disc_light = atoi(val) != 0;
         } else if (strcmp(key, "video_zoom") == 0) {
@@ -233,14 +257,23 @@ static std::string sanitizeConfigValue(const std::string& s) {
 void App::logSettings() {
     int l, t, r, b;
     Ui::safeArea(l, t, r, b);
+    const char* scrubStr = Input::padScrub() == Input::PadScrub::CStick ? "c_stick" :
+                           Input::padScrub() == Input::PadScrub::MainStick ? "main_stick" :
+                           Input::padScrub() == Input::PadScrub::DPad ? "dpad" : "off";
+    const char* volStr   = Input::padVolume() == Input::PadVolume::DPad ? "dpad" :
+                           Input::padVolume() == Input::PadVolume::MainStick ? "main_stick" :
+                           Input::padVolume() == Input::PadVolume::CStick ? "c_stick" : "off";
     SYS_Report("[Settings] ssl %d, music %d, sounds %d, quality %s, direct %d, smooth %d, "
-               "theme %s, home %s, view %d, light %d, area %d,%d,%d,%d, solid %d, clock %s, language %s\n",
+               "theme %s, home %s, view %d, light %d, area %d,%d,%d,%d, solid %d, clock %s, language %s, "
+               "subtitles %d, sub_lang %s, pad_scrub %s, pad_vol %s\n",
                jellyfinClient.sslVerify, musicEnabled, SoundFX::enabled(),
                JellyfinClient::videoQualityName(jellyfinClient.videoQuality), jellyfinClient.directPlay,
                g_wiifin_smooth_motion, Ui::themeName(Ui::theme()),
                Ui::homeLayout() == Ui::HomeLayout::Rows ? "rows" : "grid", (int)Ui::libraryStyle(),
                (int)g_wiifin_disc_light, l, t, r, b, Ui::solidColors(), Ui::clock12h() ? "12h" : "24h",
-               Lang::code(Lang::current()));
+               Lang::code(Lang::current()),
+               Subtitles::defaultEnabled() ? 1 : 0, Subtitles::preferredLanguage().c_str(),
+               scrubStr, volStr);
 }
 
 void App::saveSettings() {
@@ -274,6 +307,16 @@ void App::saveSettings() {
     fprintf(f, "classic_header=%d\n",   Ui::classicHeader() ? 1 : 0);
     fprintf(f, "language=%s\n",         Lang::choiceKey());
     fprintf(f, "smooth_motion=%d\n",    g_wiifin_smooth_motion ? 1 : 0);
+    fprintf(f, "subtitles=%d\n",        Subtitles::defaultEnabled() ? 1 : 0);
+    fprintf(f, "subtitle_language=%s\n", Subtitles::preferredLanguage().c_str());
+    const char* scrubVal = Input::padScrub() == Input::PadScrub::CStick ? "c_stick" :
+                           Input::padScrub() == Input::PadScrub::MainStick ? "main_stick" :
+                           Input::padScrub() == Input::PadScrub::DPad ? "dpad" : "off";
+    const char* volVal   = Input::padVolume() == Input::PadVolume::DPad ? "dpad" :
+                           Input::padVolume() == Input::PadVolume::MainStick ? "main_stick" :
+                           Input::padVolume() == Input::PadVolume::CStick ? "c_stick" : "off";
+    fprintf(f, "controller_scrub=%s\n",  scrubVal);
+    fprintf(f, "controller_volume=%s\n", volVal);
     fprintf(f, "disc_light=%d\n",     g_wiifin_disc_light ? 1 : 0);
     fprintf(f, "video_zoom=%d\n",       (int)VideoSurface::zoom());
     fprintf(f, "exit_to_loader=%d\n",   g_app_exitToLoader ? 1 : 0);

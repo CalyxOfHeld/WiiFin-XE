@@ -16,16 +16,25 @@ static u32 buttonsDown = 0;   /* rawDownBits + repeated directions */
 static bool actionDown = false;   /* isActionPressed */
 static u16  s_gcRawDown = 0;      /* gcRawDown */
 
+static Input::PadScrub  s_padScrub  = Input::PadScrub::CStick;
+static Input::PadVolume s_padVolume = Input::PadVolume::DPad;
+
+Input::PadScrub Input::padScrub() { return s_padScrub; }
+void Input::setPadScrub(Input::PadScrub s) { s_padScrub = s; }
+
+Input::PadVolume Input::padVolume() { return s_padVolume; }
+void Input::setPadVolume(Input::PadVolume v) { s_padVolume = v; }
+
 static const u32 DIRS = WPAD_BUTTON_UP | WPAD_BUTTON_DOWN | WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT;
 
 /* Classic Controller bits (upper half of the WPAD word) -> Wii Remote bits */
 static u32 fromClassic(u32 c)
 {
     static const struct { u32 from, to; } MAP[] = {
-        { WPAD_CLASSIC_BUTTON_UP,    WPAD_BUTTON_UP },
-        { WPAD_CLASSIC_BUTTON_DOWN,  WPAD_BUTTON_DOWN },
-        { WPAD_CLASSIC_BUTTON_LEFT,  WPAD_BUTTON_LEFT },
-        { WPAD_CLASSIC_BUTTON_RIGHT, WPAD_BUTTON_RIGHT },
+        { WPAD_CLASSIC_BUTTON_UP,    WPAD_BUTTON_UP | Input::BTN_DPAD_UP },
+        { WPAD_CLASSIC_BUTTON_DOWN,  WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN },
+        { WPAD_CLASSIC_BUTTON_LEFT,  WPAD_BUTTON_LEFT | Input::BTN_DPAD_LEFT },
+        { WPAD_CLASSIC_BUTTON_RIGHT, WPAD_BUTTON_RIGHT | Input::BTN_DPAD_RIGHT },
         { WPAD_CLASSIC_BUTTON_A,     WPAD_BUTTON_A },
         { WPAD_CLASSIC_BUTTON_B,     WPAD_BUTTON_B },
         { WPAD_CLASSIC_BUTTON_Y,     WPAD_BUTTON_1 },
@@ -55,17 +64,24 @@ static u32 fromNunchuk(u32 n)
  * or the Nunchuk's (the same bits, read by what is plugged in). */
 static u32 fromWpad(u32 w, bool classic, bool nunchuk)
 {
-    return (w & 0xFFFF) | (classic ? fromClassic(w & 0xFFFF0000u) : 0)
-                        | (nunchuk ? fromNunchuk(w & 0xFFFF0000u) : 0);
+    u32 base = w & 0xFFFF;
+    u32 dpad = 0;
+    if (base & WPAD_BUTTON_UP)    dpad |= Input::BTN_DPAD_UP;
+    if (base & WPAD_BUTTON_DOWN)  dpad |= Input::BTN_DPAD_DOWN;
+    if (base & WPAD_BUTTON_LEFT)  dpad |= Input::BTN_DPAD_LEFT;
+    if (base & WPAD_BUTTON_RIGHT) dpad |= Input::BTN_DPAD_RIGHT;
+
+    return base | dpad | (classic ? fromClassic(w & 0xFFFF0000u) : 0)
+                       | (nunchuk ? fromNunchuk(w & 0xFFFF0000u) : 0);
 }
 
 static u32 fromGameCube(u16 p)
 {
     static const struct { u16 from; u32 to; } MAP[] = {
-        { PAD_BUTTON_UP,    WPAD_BUTTON_UP },
-        { PAD_BUTTON_DOWN,  WPAD_BUTTON_DOWN },
-        { PAD_BUTTON_LEFT,  WPAD_BUTTON_LEFT },
-        { PAD_BUTTON_RIGHT, WPAD_BUTTON_RIGHT },
+        { PAD_BUTTON_UP,    WPAD_BUTTON_UP | Input::BTN_DPAD_UP },
+        { PAD_BUTTON_DOWN,  WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN },
+        { PAD_BUTTON_LEFT,  WPAD_BUTTON_LEFT | Input::BTN_DPAD_LEFT },
+        { PAD_BUTTON_RIGHT, WPAD_BUTTON_RIGHT | Input::BTN_DPAD_RIGHT },
         { PAD_BUTTON_A,     WPAD_BUTTON_A },
         { PAD_BUTTON_B,     WPAD_BUTTON_B },
         { PAD_BUTTON_Y,     WPAD_BUTTON_1 },
@@ -137,12 +153,56 @@ static u32 padStickDir(int x, int y)
     return x > 0 ? WPAD_BUTTON_RIGHT : WPAD_BUTTON_LEFT;
 }
 
+static u32 toStickBits(u32 dir)
+{
+    u32 out = 0;
+    if (dir & WPAD_BUTTON_UP)    out |= Input::BTN_STICK_UP;
+    if (dir & WPAD_BUTTON_DOWN)  out |= Input::BTN_STICK_DOWN;
+    if (dir & WPAD_BUTTON_LEFT)  out |= Input::BTN_STICK_LEFT;
+    if (dir & WPAD_BUTTON_RIGHT) out |= Input::BTN_STICK_RIGHT;
+    return out;
+}
+
+static u32 toCStickBits(u32 dir)
+{
+    u32 out = 0;
+    if (dir & WPAD_BUTTON_UP)    out |= Input::BTN_C_UP;
+    if (dir & WPAD_BUTTON_DOWN)  out |= Input::BTN_C_DOWN;
+    if (dir & WPAD_BUTTON_LEFT)  out |= Input::BTN_C_LEFT;
+    if (dir & WPAD_BUTTON_RIGHT) out |= Input::BTN_C_RIGHT;
+    return out;
+}
+
+static u32 stickDirs(u32 s)
+{
+    u32 out = 0;
+    if (s & Input::BTN_STICK_UP)    out |= WPAD_BUTTON_UP;
+    if (s & Input::BTN_STICK_DOWN)  out |= WPAD_BUTTON_DOWN;
+    if (s & Input::BTN_STICK_LEFT)  out |= WPAD_BUTTON_LEFT;
+    if (s & Input::BTN_STICK_RIGHT) out |= WPAD_BUTTON_RIGHT;
+    return out;
+}
+
 /* A Classic Controller's left stick pushed past half way */
 static u32 classicStickDir(int ch)
 {
     WPADData* wd = WPAD_Data(ch);
     if (!wd || wd->exp.type != WPAD_EXP_CLASSIC) return 0;
     const joystick_t& js = wd->exp.classic.ljs;
+    if (js.mag <= 0.5f) return 0;
+    float a = js.ang;                             /* 0 up, 90 right */
+    if (a >= 315 || a < 45) return WPAD_BUTTON_UP;
+    if (a < 135)            return WPAD_BUTTON_RIGHT;
+    if (a < 225)            return WPAD_BUTTON_DOWN;
+    return WPAD_BUTTON_LEFT;
+}
+
+/* A Classic Controller's right stick (C-Stick) pushed past half way */
+static u32 classicSubStickDir(int ch)
+{
+    WPADData* wd = WPAD_Data(ch);
+    if (!wd || wd->exp.type != WPAD_EXP_CLASSIC) return 0;
+    const joystick_t& js = wd->exp.classic.rjs;
     if (js.mag <= 0.5f) return 0;
     float a = js.ang;                             /* 0 up, 90 right */
     if (a >= 315 || a < 45) return WPAD_BUTTON_UP;
@@ -165,12 +225,18 @@ static u32 nunchukStickDir(int ch)
     return WPAD_BUTTON_LEFT;
 }
 
-/* A GameCube controller's sticks (the C-Stick too) */
-static u32 gcStickDir(int port)
+/* A GameCube controller's main analog stick */
+static u32 gcMainStickDir(int port)
 {
     if (!s_padUp[port]) return 0;
-    return padStickDir(PAD_StickX(port), PAD_StickY(port)) |
-           padStickDir(PAD_SubStickX(port), PAD_SubStickY(port));
+    return toStickBits(padStickDir(PAD_StickX(port), PAD_StickY(port)));
+}
+
+/* A GameCube controller's C-Stick (sub stick) */
+static u32 gcSubStickDir(int port)
+{
+    if (!s_padUp[port]) return 0;
+    return toCStickBits(padStickDir(PAD_SubStickX(port), PAD_SubStickY(port)));
 }
 
 void Input::update() {
@@ -263,7 +329,12 @@ void Input::update() {
                 keyBits[ev.keycode] = b;
                 char c = 0;
                 if (ev.symbol == KS_Return || ev.symbol == KS_KP_Enter)       c = '\n';
-                else if (ev.symbol == KS_BackSpace || ev.symbol == KS_Delete) c = '\b';
+                else if (ev.symbol == KS_BackSpace)                           c = '\b';
+                else if (ev.symbol == KS_Delete)                              c = 0x7F;
+                else if (ev.symbol == KS_Left)                                c = 0x11;
+                else if (ev.symbol == KS_Right)                               c = 0x12;
+                else if (ev.symbol == KS_Home)                                c = 0x01;
+                else if (ev.symbol == KS_End)                                 c = 0x05;
                 else if (ev.symbol >= 32 && ev.symbol < 127)                  c = (char)ev.symbol;
                 if (c && s_typedLen < (int)sizeof(s_typed)) s_typed[s_typedLen++] = c;
             } else if (ev.type == KEYBOARD_RELEASED) {
@@ -317,19 +388,35 @@ void Input::update() {
     }
 
     /* sticks: a new push counts as a press of that controller */
-    static u32 prevStick[3][PORTS] = {};
+    static u32 prevGcMain[PORTS] = {};
+    static u32 prevGcSub[PORTS] = {};
+    static u32 prevClassicMain[PORTS] = {};
+    static u32 prevClassicSub[PORTS] = {};
+    static u32 prevNunchuk[PORTS] = {};
     u32 stick = 0, stickDown = 0;
     for (int i = 0; i < PORTS; ++i) {
-        const u32 g = gcStickDir(i), c = classicStickDir(i);
-        const u32 n = remoteThere[i] ? nunchukStickDir(i) : 0;
-        if ((g & ~prevStick[0][i]) && gcPort < 0)      gcPort = i;
-        if ((c & ~prevStick[1][i]) && classicChan < 0) classicChan = i;
-        if ((n & ~prevStick[2][i]) && remoteChan < 0)  remoteChan = i;
-        stickDown |= (g & ~prevStick[0][i]) | (c & ~prevStick[1][i]) | (n & ~prevStick[2][i]);
-        stick |= g | c | n;
-        prevStick[0][i] = g;
-        prevStick[1][i] = c;
-        prevStick[2][i] = n;
+        const u32 gm = gcMainStickDir(i);
+        const u32 gs = gcSubStickDir(i);
+        const u32 cm = toStickBits(classicStickDir(i));
+        const u32 cs = toCStickBits(classicSubStickDir(i));
+        const u32 n  = remoteThere[i] ? toStickBits(nunchukStickDir(i)) : 0;
+
+        const u32 gNew = (gm & ~prevGcMain[i]) | (gs & ~prevGcSub[i]);
+        const u32 cNew = (cm & ~prevClassicMain[i]) | (cs & ~prevClassicSub[i]);
+        const u32 nNew = (n & ~prevNunchuk[i]);
+
+        if (gNew && gcPort < 0)      gcPort = i;
+        if (cNew && classicChan < 0) classicChan = i;
+        if (nNew && remoteChan < 0)  remoteChan = i;
+
+        stickDown |= gNew | cNew | nNew;
+        stick     |= gm | gs | cm | cs | n;
+
+        prevGcMain[i]      = gm;
+        prevGcSub[i]       = gs;
+        prevClassicMain[i] = cm;
+        prevClassicSub[i]  = cs;
+        prevNunchuk[i]     = n;
     }
 
     /* any other controller's button or stick, or a key: the screen's own
@@ -337,7 +424,9 @@ void Input::update() {
      * points at) */
     if (remoteChan >= 0 || classicChan >= 0 || gcPort >= 0 || kbDown) s_mouseOn = false;
 
-    u32 down = wiiDown | gcDown | stickDown | mouseDown | kbDown;
+    u32 stickDirsDown = stickDirs(stickDown);
+    u32 stickDirsHeld = stickDirs(stick);
+    u32 down = wiiDown | gcDown | stickDown | stickDirsDown | mouseDown | kbDown;
     if (kbDown & WPAD_BUTTON_PLUS) plusDown = true;   /* Page Down, as + */
     /* the hints follow the controller used last; the pointer, the Wii
      * Remote used last */
@@ -352,7 +441,7 @@ void Input::update() {
         SYS_Report("[Input] pressed 0x%x (remote 0x%x ch %d, gamecube 0x%x port %d, stick 0x%x, mouse 0x%x, keys 0x%x)\n",
                    (unsigned)down, (unsigned)wiiDown, remoteChan >= 0 ? remoteChan + 1 : classicChan + 1,
                    (unsigned)gcDown, gcPort + 1, (unsigned)stickDown, (unsigned)mouseDown, (unsigned)kbDown);
-    u32 held = wiiHeld | gcHeld | stick | mouseHeld | kbHeld;
+    u32 held = wiiHeld | gcHeld | stick | stickDirsHeld | mouseHeld | kbHeld;
 
     /* A held direction repeats: after 400 ms, then every 90 ms */
     static u64 heldSince[4], lastRepeat[4];

@@ -1,7 +1,10 @@
 #include "Subtitles.h"
+#include "../jellyfin/JellyfinClient.h"
+#include "../core/Lang.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <algorithm>
 
 namespace {
@@ -126,4 +129,133 @@ const Subtitles::Cue* Subtitles::at(float secs)
     while (last < cues.size() && cues[last].to <= secs) ++last;
     if (last < cues.size() && cues[last].from <= secs) return &cues[last];
     return nullptr;
+}
+
+namespace {
+
+bool s_subtitlesDefaultEnabled = false;
+std::string s_subtitlesPreferredLang = "default";
+
+struct SubLangEntry {
+    const char* code;
+    const char* name;
+    const char* const tags[8];
+};
+
+static const SubLangEntry SUB_LANGS[] = {
+    { "default", N_("Default"), { nullptr } },
+    { "en",      "English",      { "en", "eng", "english", nullptr } },
+    { "es",      "Espa\xc3\xb1ol", { "es", "spa", "spanish", "espa\xc3\xb1ol", "espanol", nullptr } },
+    { "fr",      "Fran\xc3\xa7" "ais", { "fr", "fra", "fre", "french", "fran\xc3\xa7" "ais", "francais", nullptr } },
+    { "de",      "Deutsch",      { "de", "deu", "ger", "german", "deutsch", nullptr } },
+    { "it",      "Italiano",     { "it", "ita", "italian", "italiano", nullptr } },
+    { "nl",      "Nederlands",   { "nl", "dut", "nld", "dutch", "nederlands", nullptr } },
+    { "pt",      "Portugu\xc3\xaas", { "pt", "por", "portuguese", "portugu\xc3\xaas", "portugues", nullptr } },
+    { "ja",      "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e", { "ja", "jpn", "japanese", "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e", nullptr } },
+    { "ko",      "\xed\x95\x9c\xea\xb5\xad\xec\x96\xb4", { "ko", "kor", "korean", "\xed\x95\x9c\xea\xb5\xad\xec\x96\xb4", nullptr } },
+    { "zh",      "\xe4\xb8\xad\xe6\x96\x87", { "zh", "chi", "zho", "chinese", "\xe4\xb8\xad\xe6\x96\x87", nullptr } },
+    { "pl",      "Polski",       { "pl", "pol", "polish", "polski", nullptr } },
+    { "ru",      "\xd0\xa0\xd1\x83\xd1\x81\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9", { "ru", "rus", "russian", "\xd0\xa0\xd1\x83\xd1\x81\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9", nullptr } },
+};
+
+static const int SUB_LANGS_COUNT = sizeof(SUB_LANGS) / sizeof(SUB_LANGS[0]);
+
+static bool matchesLang(const MediaStream& s, const SubLangEntry& entry) {
+    auto toLowerStr = [](const std::string& str) {
+        std::string res;
+        res.reserve(str.size());
+        for (char c : str) res.push_back((char)tolower((unsigned char)c));
+        return res;
+    };
+    const std::string langLower = toLowerStr(s.language);
+    const std::string titleLower = toLowerStr(s.displayTitle);
+
+    for (int i = 0; entry.tags[i] != nullptr; ++i) {
+        const std::string tag = toLowerStr(entry.tags[i]);
+        if (tag.empty()) continue;
+        if (langLower == tag) return true;
+        if (langLower.size() > tag.size() && langLower.substr(0, tag.size()) == tag) return true;
+        if (titleLower.find(tag) != std::string::npos) return true;
+    }
+    return false;
+}
+
+} // namespace
+
+bool Subtitles::defaultEnabled() { return s_subtitlesDefaultEnabled; }
+void Subtitles::setDefaultEnabled(bool on) { s_subtitlesDefaultEnabled = on; }
+
+const std::string& Subtitles::preferredLanguage() { return s_subtitlesPreferredLang; }
+
+void Subtitles::setPreferredLanguage(const std::string& lang) {
+    for (int i = 0; i < SUB_LANGS_COUNT; ++i) {
+        if (lang == SUB_LANGS[i].code) {
+            s_subtitlesPreferredLang = SUB_LANGS[i].code;
+            return;
+        }
+    }
+    s_subtitlesPreferredLang = "default";
+}
+
+int Subtitles::preferredLanguageIndex() {
+    for (int i = 0; i < SUB_LANGS_COUNT; ++i) {
+        if (s_subtitlesPreferredLang == SUB_LANGS[i].code) return i;
+    }
+    return 0;
+}
+
+void Subtitles::setPreferredLanguageIndex(int idx) {
+    if (idx >= 0 && idx < SUB_LANGS_COUNT) s_subtitlesPreferredLang = SUB_LANGS[idx].code;
+    else s_subtitlesPreferredLang = "default";
+}
+
+void Subtitles::nextPreferredLanguage() {
+    int cur = preferredLanguageIndex();
+    setPreferredLanguageIndex((cur + 1) % SUB_LANGS_COUNT);
+}
+
+int Subtitles::languageCount() { return SUB_LANGS_COUNT; }
+
+const char* Subtitles::languageCode(int idx) {
+    if (idx < 0 || idx >= SUB_LANGS_COUNT) return "default";
+    return SUB_LANGS[idx].code;
+}
+
+const char* Subtitles::languageName(int idx) {
+    if (idx < 0 || idx >= SUB_LANGS_COUNT) idx = 0;
+    if (idx == 0) return tr(SUB_LANGS[0].name);
+    if (strcmp(SUB_LANGS[idx].code, "ko") == 0 && !Lang::canDraw("ko")) return "Korean";
+    if (strcmp(SUB_LANGS[idx].code, "zh") == 0 && !Lang::canDraw("zh")) return "Chinese";
+    return SUB_LANGS[idx].name;
+}
+
+int Subtitles::findTrack(const std::vector<MediaStream>& subs, int defaultSubIndex) {
+    if (subs.empty()) return -1;
+    if (s_subtitlesPreferredLang == "default" || s_subtitlesPreferredLang.empty()) {
+        if (defaultSubIndex >= 0) {
+            for (const auto& s : subs) {
+                if (s.index == defaultSubIndex) return s.index;
+            }
+        }
+        return subs[0].index;
+    }
+    int langIdx = preferredLanguageIndex();
+    if (langIdx <= 0 || langIdx >= SUB_LANGS_COUNT) {
+        if (defaultSubIndex >= 0) return defaultSubIndex;
+        return subs[0].index;
+    }
+    const SubLangEntry& entry = SUB_LANGS[langIdx];
+    int best = -1;
+    for (const auto& s : subs) {
+        if (matchesLang(s, entry)) {
+            if (s.index == defaultSubIndex) return s.index;
+            if (best < 0) best = s.index;
+        }
+    }
+    return best;
+}
+
+int Subtitles::selectTrack(const std::vector<MediaStream>& subs, int defaultSubIndex) {
+    if (!defaultEnabled() || subs.empty()) return -1;
+    return findTrack(subs, defaultSubIndex);
 }

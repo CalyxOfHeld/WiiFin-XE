@@ -8,6 +8,7 @@
 #include "../core/Lang.h"
 #include "Ui.h"
 #include "../input/Input.h"
+#include "../player/Subtitles.h"
 
 #include "../jellyfin/JellyfinClient.h"
 #include "../core/SoundFX.h"
@@ -61,9 +62,10 @@ bool LibraryView::loadingWait() {
     return false;
 }
 
-void LibraryView::runWithLoading(std::function<void()> fn) {
+bool LibraryView::runWithLoading(std::function<void()> fn) {
     s_fetchCtx.fn = std::move(fn);
     s_fetchDone   = false;
+    client.resetAbort();
     lwp_t thread;
     // Priority 64 is BELOW the main thread default (~80).
     // The worker therefore only runs during VIDEO_WaitVSync() inside GRRLIB_Render(),
@@ -72,7 +74,20 @@ void LibraryView::runWithLoading(std::function<void()> fn) {
     LWP_CreateThread(&thread, fetchWorker, nullptr,
                      s_fetchStack, sizeof(s_fetchStack), 64);
     bool sound = false;
+    bool cancelled = false;
     for (;;) {
+        Input::update();
+        if (g_app_powerOff || g_app_reset) {
+            client.abort();
+            cancelled = true;
+            break;
+        }
+        if (Input::isBackPressed()) {
+            SoundFX::play(SoundFX::FX::Back);
+            client.abort();
+            cancelled = true;
+            break;
+        }
         unsigned long long now = ticks_to_millisecs(gettime());
         if (s_fetchDone && (!spinnerSince || now - spinnerSince >= (unsigned long long)SPINNER_MIN_MS))
             break;
@@ -83,6 +98,13 @@ void LibraryView::runWithLoading(std::function<void()> fn) {
     if (sound) SoundFX::stopLoading();
     LWP_JoinThread(thread, nullptr);
     s_fetchCtx.fn = nullptr; // release lambda captures
+    if (cancelled) {
+        client.resetAbort();
+        loadingSince = spinnerSince = 0;
+        Ui::releaseFrozen();
+        return false;
+    }
+    return true;
 }
 
 // ---------------------------------------------------------------
@@ -139,6 +161,8 @@ void LibraryView::drawLoadingFrame() {
         snprintf(s, sizeof(s), "%s: %d / %d", progressLabel.c_str(), (int)progressDone, (int)progressTotal);
         Ui::textCentered(320, 290, s, 16, Ui::pal().text);
     }
+    const Ui::Hint r[] = { { "B", N_("Cancel") } };
+    Ui::footer(nullptr, 0, r, 1);
     SoundFX::tickLoading();
     // Flush to screen and block on vsync. This serves two purposes:
     // 1. The spinner actually appears and animates on screen.
@@ -374,17 +398,18 @@ bool LibraryView::startShuffle(const std::string& seasonId)
     bool ok = false;
     std::string err;
     freeDetail();
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         ok = client.getShuffledEpisodes(serverUrl, auth, currentSeriesId, seasonId, 100, drawn);
         if (ok && !drawn.empty())
             ok = client.getItemDetail(serverUrl, auth, drawn[0].id, detail);
         if (!ok) err = client.lastError();
-    });
+    })) return false;
     if (!ok) { errMsg = err; state = State::Error; return false; }
     if (drawn.empty()) return false;
     SYS_Report("[Shuffle] %d episode(s) drawn%s\n", (int)drawn.size(), seasonId.empty() ? "" : " (one season)");
     detailItemId    = drawn[0].id;
     detailIsEpisode = true;
+    selectDefaultTracks(detail.defaultAudioIndex, detail.defaultSubIndex);
     preparePlay(0LL, &drawn);
     return true;
 }
@@ -393,7 +418,7 @@ bool LibraryView::startMusicShuffle(const std::string& id, bool playlist)
 {
     std::vector<JellyfinAudioItem> tracks;
     bool ok = false;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         if (id.empty()) {
             std::vector<JellyfinItem> items;
             char q[256];
@@ -409,7 +434,7 @@ bool LibraryView::startMusicShuffle(const std::string& id, bool playlist)
             ok = playlist ? client.getPlaylistTracks(serverUrl, auth, id, tracks)
                           : client.getAlbumTracks(serverUrl, auth, id, tracks);
         }
-    });
+    })) return false;
     if (!ok || tracks.empty()) return false;
     if (std::none_of(tracks.begin(), tracks.end(), [](const JellyfinAudioItem& a) { return !a.video; }))
         return playPlaylistVideos(tracks, 0, true);
@@ -434,14 +459,14 @@ bool LibraryView::startVideoShuffle()
     bool ok = false;
     std::string err;
     freeDetail();
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         char q[256];
         snprintf(q, sizeof(q), "/Users/%s/Items?ParentId=%s&IncludeItemTypes=MusicVideo,Video&Recursive=true"
                  "&SortBy=Random&Limit=100", auth.userId.c_str(), currentLibId.c_str());
         ok = client.getItemsByQuery(serverUrl, auth, q, items);
         if (ok && !items.empty()) ok = client.getItemDetail(serverUrl, auth, items[0].id, detail);
         if (!ok) err = client.lastError();
-    });
+    })) return false;
     if (!ok) { errMsg = err; state = State::Error; return false; }
     if (items.empty()) return false;
     /* the queue of a shuffled series: next / previous and the next one at
@@ -455,6 +480,7 @@ bool LibraryView::startVideoShuffle()
     SYS_Report("[Shuffle] %d video(s) drawn\n", (int)drawn.size());
     detailItemId    = drawn[0].id;
     detailIsEpisode = false;
+    selectDefaultTracks(detail.defaultAudioIndex, detail.defaultSubIndex);
     preparePlay(0LL, &drawn);
     return true;
 }
@@ -482,15 +508,16 @@ bool LibraryView::playPlaylistVideos(const std::vector<JellyfinAudioItem>& list,
     bool ok = false;
     std::string err;
     freeDetail();
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         ok = client.getItemDetail(serverUrl, auth, queue[at].id, detail);
         if (!ok) err = client.lastError();
-    });
+    })) return false;
     if (!ok) { errMsg = err; state = State::Error; return false; }
     SYS_Report("[Playlist] %d video(s)%s, from video %d\n", (int)queue.size(),
                shuffle ? " shuffled" : "", at + 1);
     detailItemId    = queue[at].id;
     detailIsEpisode = !detail.seasonId.empty();
+    selectDefaultTracks(detail.defaultAudioIndex, detail.defaultSubIndex);
     preparePlay(0LL, &queue);
     pendingPlayEpisodeIdx = at;
     return true;
@@ -508,7 +535,7 @@ void LibraryView::loadDetail() {
     // spinner animates throughout (no freeze between network and JPEG decode).
     bool ok = false; std::string fetchErr;
     bool isEp = detailWideThumb();
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         ok = client.getItemDetail(serverUrl, auth, detailItemId, detail);
         if (!ok) { fetchErr = client.lastError(); return; }
         std::string imgBytes;
@@ -518,7 +545,10 @@ void LibraryView::loadDetail() {
             client.getItemImageBytes(serverUrl, auth, detailItemId, 240, 340, imgBytes);
         if (!imgBytes.empty())
             detailTex = loadJPEGTexture((const u8*)imgBytes.data(), (u32)imgBytes.size());
-    });
+    })) {
+        state = detailReturnState;
+        return;
+    }
     if (!ok) { errMsg = fetchErr; state = State::Error; return; }
 
     state = State::DetailReady;
@@ -564,8 +594,9 @@ void LibraryView::selectDefaultTracks(int audioIndex, int subIndex) {
     detailSubSel   = -1;
     for (int i = 0; i < (int)detail.audioStreams.size(); i++)
         if (detail.audioStreams[i].index == audioIndex) detailAudioSel = i;
+    int chosenSub = Subtitles::selectTrack(detail.subtitleStreams, subIndex);
     for (int i = 0; i < (int)detail.subtitleStreams.size(); i++)
-        if (detail.subtitleStreams[i].index == subIndex) detailSubSel = i;
+        if (detail.subtitleStreams[i].index == chosenSub) detailSubSel = i;
 }
 
 const std::string& LibraryView::detailSourceId() const {
@@ -626,12 +657,20 @@ void LibraryView::clampEpisodeScroll() {
 // ---------------------------------------------------------------
 void LibraryView::loadLibraries() {
     bool ok = false; std::string err;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         client.logServerInfo(serverUrl);
         allLibraries.clear();
         ok = client.getLibraries(serverUrl, auth, allLibraries);
-        if (!ok) err = client.lastError();
-    });
+        if (ok) {
+            client.postCapabilities(serverUrl, auth);
+        } else {
+            err = client.lastError();
+        }
+    })) {
+        exitTo = Exit::Profiles;
+        fetchCancelled = true;
+        return;
+    }
     filterLibraries();
     if (!ok && client.tokenRefused) {   /* back to the sign-in, for this profile */
         SYS_Report("[Library] the server refused the profile's token\n");
@@ -643,6 +682,7 @@ void LibraryView::loadLibraries() {
     if (libraries.empty()) { errMsg = N_("No library found"); state = State::Error; return; }
     activityLoaded = false;   /* the grid's Activity tab: fetched once opened */
     state = State::LibsReady;
+    Remote::start(serverUrl, auth.accessToken, client.sslVerify);
 }
 
 /* Continue Watching and Next Up of the grid home's Activity tab (the rows
@@ -784,11 +824,11 @@ void LibraryView::loadMovieCollections() {
     int limit      = POSTERS_PER_PAGE;
     int startIndex = itemPage * limit;
     bool ok = false; std::string err;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         ok = client.getMovieCollections(serverUrl, auth, movieLibId,
                                         startIndex, limit, items, itemTotal);
         if (!ok) err = client.lastError();
-    });
+    })) { state = State::LibsReady; return; }
     if (!ok) { errMsg = err.empty() ? N_("Collections unavailable") : err; state = State::Error; }
     else     { globFavMode = false; itemSel = 0; viewTop = 0; posterSel = 0; state = State::PostersLoad; }
 }
@@ -798,11 +838,11 @@ void LibraryView::loadMovieFavorites() {
     int limit      = POSTERS_PER_PAGE;
     int startIndex = itemPage * limit;
     bool ok = false; std::string err;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         ok = client.getFavoriteMovies(serverUrl, auth, movieLibId,
                                       startIndex, limit, items, itemTotal);
         if (!ok) err = client.lastError();
-    });
+    })) { state = State::LibsReady; return; }
     if (!ok) { errMsg = err.empty() ? N_("Favorites unavailable") : err; state = State::Error; }
     else     { globFavMode = false; itemSel = 0; viewTop = 0; posterSel = 0; state = State::PostersLoad; }
 }
@@ -812,10 +852,10 @@ void LibraryView::loadGlobalFavorites() {
     int limit      = POSTERS_PER_PAGE;
     int startIndex = itemPage * limit;
     bool ok = false; std::string err;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         ok = client.getGlobalFavorites(serverUrl, auth, startIndex, limit, items, itemTotal);
         if (!ok) err = client.lastError();
-    });
+    })) { state = State::LibsReady; return; }
     if (!ok) { errMsg = err.empty() ? N_("Favorites unavailable") : err; state = State::Error; }
     else     { globFavMode = true; itemSel = 0; viewTop = 0; posterSel = 0; state = State::PostersLoad; }
 }
@@ -833,7 +873,7 @@ void LibraryView::freeMovieSuggestions() {
 
 void LibraryView::loadMovieSuggestions() {
     freeMovieSuggestions();
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         client.getMovieContinueWatching(serverUrl, auth, movieContItems);
         if ((int)movieContItems.size() > 4) movieContItems.resize(4);
         for (int i = 0; i < (int)movieContItems.size(); i++) {
@@ -854,7 +894,7 @@ void LibraryView::loadMovieSuggestions() {
                 movieRecentTex[i] = loadJPEGTexture((const u8*)imgBytes.data(),
                                                       (u32)imgBytes.size());
         }
-    });
+    })) { state = State::LibsReady; return; }
     movieSuggestRow     = 0;
     movieSuggestContSel = 0;
     movieSuggestRecSel  = 0;
@@ -869,7 +909,10 @@ void LibraryView::loadItems() {
         std::string filter = (currentLibType == "music" ? musicFilter() : listFilter()) +
                              (sortable() ? sortQuery() : "");
         bool ok = false; std::string err;
-        runWithLoading([&]() { ok = feed.open(filter, err); });
+        if (!runWithLoading([&]() { ok = feed.open(filter, err); })) {
+            state = State::LibsReady;
+            return;
+        }
         if (!ok) { errMsg = err; state = State::Error; return; }
         itemTotal = feed.total();
         /* a library of loose files (no album tags) has no album: opened on
@@ -897,7 +940,7 @@ void LibraryView::loadItems() {
     int limit      = posterMode ? POSTERS_PER_PAGE : ITEMS_PER_PAGE;
     int startIndex = itemPage * limit;
     bool ok = false; std::string err;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         if (currentLibType == "music") {
             /* the tab's own query, a page of it (Posters view) */
             const std::string f = musicFilter() + (sortable() ? sortQuery() : "");
@@ -913,7 +956,10 @@ void LibraryView::loadItems() {
                                  sortable() ? sortQuery() : "");
         }
         if (!ok) err = client.lastError();
-    });
+    })) {
+        state = State::LibsReady;
+        return;
+    }
     if (!ok) { errMsg = err; state = State::Error; return; }
     if (currentLibType == "music" && !inItemsDrilldown) {
         /* no album (loose files): opened on the Songs tab, as the list does */
@@ -982,7 +1028,7 @@ void LibraryView::loadSeasons() {
     const bool posters = Ui::libraryStyle() != Ui::LibraryStyle::List;
     std::vector<GRRLIB_texImg*> tex;
     GRRLIB_texImg* seriesTex = nullptr;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         ok = client.getSeasons(serverUrl, auth, currentSeriesId, seasons);
         if (!ok) err = client.lastError();
         seriesFavorite = false;
@@ -1011,7 +1057,10 @@ void LibraryView::loadSeasons() {
         }
         SYS_Report("[Seasons] %d seasons, %d poster%s of their own%s\n", (int)seasons.size(), own, own == 1 ? "" : "s",
                    seriesTex ? ", the series' for the others" : "");
-    });
+    })) {
+        state = seasonsCallerState;
+        return;
+    }
     if (!ok) { errMsg = err; state = State::Error; }
     else {
         /* its special features: one more row, after the seasons */
@@ -1048,7 +1097,7 @@ void LibraryView::freeTVSuggestions() {
 
 void LibraryView::loadTVSuggestions() {
     freeTVSuggestions();
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         client.getTVContinueWatching(serverUrl, auth, tvContItems);
         if ((int)tvContItems.size() > 4) tvContItems.resize(4);
         for (int i = 0; i < (int)tvContItems.size(); i++) {
@@ -1069,7 +1118,7 @@ void LibraryView::loadTVSuggestions() {
                 tvRecentTex[i] = loadJPEGTexture((const u8*)imgBytes.data(),
                                                   (u32)imgBytes.size());
         }
-    });
+    })) { state = State::LibsReady; return; }
     tvSuggestRow     = 0;
     tvSuggestContSel = 0;
     tvSuggestRecSel  = 0;
@@ -1087,7 +1136,7 @@ void LibraryView::freeTVUpcoming() {
 
 void LibraryView::loadTVUpcoming() {
     freeTVUpcoming();
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         client.getTVUpcoming(serverUrl, auth, 8, tvUpcomingItems);
         if (tvUpcomingItems.size() > 8) tvUpcomingItems.resize(8);
         for (int i = 0; i < (int)tvUpcomingItems.size(); i++) {
@@ -1098,7 +1147,7 @@ void LibraryView::loadTVUpcoming() {
                 tvUpcomingTex[i] = loadJPEGTexture((const u8*)imgBytes.data(),
                                                     (u32)imgBytes.size());
         }
-    });
+    })) { state = State::LibsReady; return; }
     tvUpcomingSel = 0;
     tvUpcomingOff = 0;
     state = State::TVUpcomingReady;
@@ -1113,7 +1162,7 @@ void LibraryView::freeMusicSuggestions() {
 
 void LibraryView::loadMusicSuggestions() {
     freeMusicSuggestions();
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         client.getMusicLatest(serverUrl, auth, musicLibId, 8, musicRecentItems);
         if (musicRecentItems.size() > 8) musicRecentItems.resize(8);
         for (int i = 0; i < (int)musicRecentItems.size(); i++) {
@@ -1124,7 +1173,7 @@ void LibraryView::loadMusicSuggestions() {
                 musicRecentTex[i] = loadJPEGTexture((const u8*)imgBytes.data(),
                                                      (u32)imgBytes.size());
         }
-    });
+    })) { state = State::LibsReady; return; }
     musicSuggestSel = 0;
     musicSuggestOff = 0;
     state = State::MusicSuggestionsReady;
@@ -1134,10 +1183,10 @@ void LibraryView::loadPlaylistsTab() {
     items.clear();
     bool ok = false; std::string err;
     int total = 0;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         ok = client.getPlaylists(serverUrl, auth, 0, 50, items, total);
         if (!ok) err = client.lastError();
-    });
+    })) { state = State::LibsReady; return; }
     if (!ok) { errMsg = err; state = State::Error; }
     else     { itemSel = 0; viewTop = 0; itemTotal = total; state = State::ItemsReady; }
 }
@@ -1145,10 +1194,13 @@ void LibraryView::loadPlaylistsTab() {
 void LibraryView::loadEpisodes() {
     episodes.clear();
     bool ok = false; std::string err;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         ok = client.getEpisodes(serverUrl, auth, currentSeriesId, currentSeasonId, episodes);
         if (!ok) err = client.lastError();
-    });
+    })) {
+        state = State::SeasonsReady;
+        return;
+    }
     if (!ok) { errMsg = err; state = State::Error; }
     else {
         SYS_Report("[Episodes] %d in season %d\n", (int)episodes.size(),
@@ -1162,7 +1214,7 @@ void LibraryView::loadEpisodes() {
 void LibraryView::loadMusicTracks() {
     musicTracks.clear();
     bool ok = false; std::string err;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         if (musicIsPlaylist)
             ok = client.getPlaylistTracks(serverUrl, auth, musicAlbumId, musicTracks);
         else
@@ -1171,7 +1223,17 @@ void LibraryView::loadMusicTracks() {
         // Pick album artist from first track if not already known
         if (ok && musicAlbumArtist.empty() && !musicTracks.empty())
             musicAlbumArtist = musicTracks[0].artist;
-    });
+    })) {
+        if (tracksFromHome) {
+            tracksFromHome = false;
+            state = State::LibsReady;
+        } else if (musicTab == 1) {
+            state = State::MusicSuggestionsReady;
+        } else {
+            state = posterMode ? State::PostersReady : State::ItemsReady;
+        }
+        return;
+    }
     if (!ok) { errMsg = err; state = State::Error; return; }
     const int videos = (int)std::count_if(musicTracks.begin(), musicTracks.end(),
                                           [](const JellyfinAudioItem& a) { return a.video; });
@@ -1447,7 +1509,13 @@ bool LibraryView::updateState(ir_t& ir) {
         // Loading screens: the spinner frame is up, now fetch
         case State::LibsInit:              state = State::LibsLoad;  return false;
         case State::ItemsInit:             state = State::ItemsLoad; return false;
-        case State::LibsLoad:              loadLibraries();          return false;
+        case State::LibsLoad:
+            loadLibraries();
+            if (fetchCancelled) {
+                fetchCancelled = false;
+                return true;
+            }
+            return false;
         case State::ItemsLoad:             loadItems();              return false;
         case State::PostersLoad:           loadPosters();            return false;
         case State::SeasonsLoad:           loadSeasons();            return false;
@@ -1515,6 +1583,8 @@ bool LibraryView::render(ir_t& ir) {
     if (loading) {
         if (ringTex) Ui::spinner(ringTex, 320, 240);
         else         Ui::textCentered(320, 200, tr("Loading..."), 22, p.textDim);
+        const Ui::Hint r[] = { { "B", N_("Cancel") } };
+        Ui::footer(nullptr, 0, r, 1);
         drawCursor(ir);
         return true;
     }

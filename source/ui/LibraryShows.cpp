@@ -54,6 +54,7 @@ bool LibraryView::startSeriesFromStart()
     SYS_Report("[Series] from the start: %s\n", eps[0].name.c_str());
     detailItemId    = eps[0].id;
     detailIsEpisode = true;
+    selectDefaultTracks(detail.defaultAudioIndex, detail.defaultSubIndex);
     preparePlay(0LL, &eps);
     return true;
 }

@@ -629,9 +629,7 @@ void App::loop() {
         lv.setUserName(p.shownName());
         Avatars::setCurrent(p.picture);
         lv.setHiddenLibraries(p.hiddenLibs);
-        /* the server's remote control, while this profile is open */
-        jellyfinClient.postCapabilities(p.serverUrl, auth);
-        Remote::start(p.serverUrl, auth.accessToken, jellyfinClient.sslVerify);
+        /* the server's remote control, while this profile is open (started once libraries load) */
         struct RemoteOff { ~RemoteOff() { Remote::stop(); } } remoteOff;
         for (;;) {
             while (true) {
@@ -766,6 +764,7 @@ void App::loop() {
     auto editSignIn = [&](SavedProfile& sp, int field) {
         ConnectView cv(btnTex, cursorPointerTex, font, jellyfinClient);
         cv.setFields(sp.serverUrl, sp.username);
+        cv.setExistingAuth({ sp.userId, sp.accessToken, sp.serverName });
         cv.setEditing(field);
         ConnectResult res = ConnectResult::None;
         while (res == ConnectResult::None && running) {

@@ -31,6 +31,30 @@ public:
     /* Video zoom (Fit / Fill), no Wii Remote button for it */
     static const u32 BTN_ZOOM = 1u << 30;
 
+    /* Dedicated virtual buttons for specific controller axes */
+    static const u32 BTN_DPAD_UP     = 1u << 16;
+    static const u32 BTN_DPAD_DOWN   = 1u << 17;
+    static const u32 BTN_DPAD_LEFT   = 1u << 18;
+    static const u32 BTN_DPAD_RIGHT  = 1u << 19;
+
+    static const u32 BTN_C_UP        = 1u << 20;
+    static const u32 BTN_C_DOWN      = 1u << 21;
+    static const u32 BTN_C_LEFT      = 1u << 22;
+    static const u32 BTN_C_RIGHT     = 1u << 23;
+
+    static const u32 BTN_STICK_UP    = 1u << 24;
+    static const u32 BTN_STICK_DOWN  = 1u << 25;
+    static const u32 BTN_STICK_LEFT  = 1u << 26;
+    static const u32 BTN_STICK_RIGHT = 1u << 27;
+
+    enum class PadScrub { CStick = 0, MainStick = 1, DPad = 2, Off = 3 };
+    enum class PadVolume { DPad = 0, MainStick = 1, CStick = 2, Off = 3 };
+
+    static PadScrub padScrub();
+    static void setPadScrub(PadScrub s);
+    static PadVolume padVolume();
+    static void setPadVolume(PadVolume v);
+
     static void update();
     /* Wii Remote pointer in drawing space (see Ui::pointerToScreen). */
     static void readIR(ir_t& ir);

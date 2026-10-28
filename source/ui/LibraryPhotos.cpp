@@ -121,11 +121,14 @@ void LibraryView::openPhotos(const std::string& id, State back)
     bool ok = false;
     std::string err;
     std::vector<JellyfinItem> all;
-    runWithLoading([&]() {
+    if (!runWithLoading([&]() {
         int total = 0;
         ok = client.getItems(serverUrl, auth, currentLibId, 0, 1000, all, total, "");
         if (!ok) err = client.lastError();
-    });
+    })) {
+        state = back;
+        return;
+    }
     if (!ok) { errMsg = err; state = State::Error; return; }
     for (const JellyfinItem& it : all) if (it.type == "Photo") photos.push_back(it);
     int at = 0;

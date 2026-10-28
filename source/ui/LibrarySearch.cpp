@@ -5,6 +5,7 @@
 #include "../input/Input.h"
 #include "../core/Text.h"
 #include "../core/Lang.h"
+#include "../core/SoundFX.h"
 #include <stdio.h>
 #include <ogc/lwp_watchdog.h>   // gettime(), ticks_to_millisecs()
 
@@ -13,6 +14,7 @@ using namespace LibDraw;
 bool LibraryView::updateSearchInput(ir_t& ir) {
     searchKb.setOrigin((640 - searchKb.width()) * 0.5f, 132);
     searchKb.setEnterLabel(N_("Search"));
+    searchKb.setTextField(62, 70, 516, 38);
     switch (searchKb.update(ir, searchQuery, 64)) {
     case Keyboard::Result::Enter:            // Search key or [+]
         if (!searchQuery.empty()) state = State::SearchLoad;
@@ -35,13 +37,44 @@ bool LibraryView::updateSearchResults(ir_t& ir, bool aPressed) {
     // [1] → new search
     if (Input::is1Pressed()) {
         searchQuery.clear();
+        allSearchResults.clear();
         searchResults.clear();
         searchSel = 0; searchTop = 0;
+        searchFilterTab = 0;
         searchKb.reset();
         state = State::SearchInput;
         irMode = false;
         return false;
     }
+
+    // Tab switching with -/+
+    const int numTabs = 6;
+    if (Input::isLPressed()) {
+        searchFilterTab = (searchFilterTab + numTabs - 1) % numTabs;
+        applySearchFilter();
+        SoundFX::play(SoundFX::FX::Move);
+        return false;
+    }
+    if (Input::isRPressed()) {
+        searchFilterTab = (searchFilterTab + 1) % numTabs;
+        applySearchFilter();
+        SoundFX::play(SoundFX::FX::Move);
+        return false;
+    }
+
+    // IR click on tab bar
+    if (ir.valid && aPressed) {
+        int clickedTab = Ui::tabAt(ir.x, ir.y);
+        if (clickedTab >= 0 && clickedTab < numTabs) {
+            if (clickedTab != searchFilterTab) {
+                searchFilterTab = clickedTab;
+                applySearchFilter();
+                SoundFX::play(SoundFX::FX::Move);
+            }
+            return false;
+        }
+    }
+
     if (n == 0) return false;
 
     if (Input::isUpPressed())   { searchSel--; irMode = false; clampSearchScroll(); }
@@ -150,16 +183,57 @@ void LibraryView::clampSearchScroll() {
 }
 
 // ---------------------------------------------------------------
-void LibraryView::performSearch() {
+void LibraryView::applySearchFilter() {
     searchResults.clear();
-    bool ok = false; std::string err;
-    runWithLoading([&]() {
-        ok = client.searchItems(serverUrl, auth, searchQuery, 50, searchResults);
-        if (!ok) err = client.lastError();
-    });
-    if (!ok) { errMsg = err; state = State::Error; return; }
+    for (const auto& item : allSearchResults) {
+        // Respect hidden libraries: if parentId is known and hidden, skip
+        if (!item.parentId.empty() && isHidden(item.parentId)) continue;
+
+        // Check category tab:
+        // 0: All
+        // 1: Movies
+        // 2: Shows
+        // 3: Episodes
+        // 4: Music
+        // 5: Collections
+        if (searchFilterTab == 1 && item.type != "Movie") continue;
+        if (searchFilterTab == 2 && item.type != "Series") continue;
+        if (searchFilterTab == 3 && item.type != "Episode") continue;
+        if (searchFilterTab == 4 && item.type != "MusicAlbum" && item.type != "Audio" && item.type != "MusicArtist") continue;
+        if (searchFilterTab == 5 && item.type != "BoxSet" && item.type != "Playlist") continue;
+
+        // On "All" tab, respect if user has no visible music libraries
+        if (searchFilterTab == 0) {
+            bool hasMusic = false;
+            for (const auto& lib : libraries) {
+                if (lib.collectionType == "music") { hasMusic = true; break; }
+            }
+            if (!hasMusic && (item.type == "MusicAlbum" || item.type == "Audio" || item.type == "MusicArtist")) {
+                continue;
+            }
+        }
+
+        searchResults.push_back(item);
+    }
     searchSel = 0;
     searchTop = 0;
+    clampSearchScroll();
+}
+
+// ---------------------------------------------------------------
+void LibraryView::performSearch() {
+    allSearchResults.clear();
+    searchResults.clear();
+    bool ok = false; std::string err;
+    if (!runWithLoading([&]() {
+        ok = client.searchItems(serverUrl, auth, searchQuery, 100, allSearchResults);
+        if (!ok) err = client.lastError();
+    })) {
+        state = State::SearchInput;
+        return;
+    }
+    if (!ok) { errMsg = err; state = State::Error; return; }
+    applySearchFilter();
     state = State::SearchReady;
 }
 
@@ -171,17 +245,29 @@ void LibraryView::renderSearchInput(ir_t& ir) {
     // Search field: placeholder when empty, blinking caret
     {
         const float FX = 62, FY = 70, FW = 516, FH = 38;
-        bool caretOn = (ticks_to_millisecs(gettime()) / 500) % 2 == 0;
-        std::string display = searchQuery;
-        while (!display.empty() && Text::width(font, display.c_str(), 18) > (u32)(FW - 44))
-            display.erase(display.begin());
+        int cPos = searchKb.cursorPos();
+        if (cPos < 0 || cPos > (int)searchQuery.size()) cPos = (int)searchQuery.size();
+        int maxW = (int)FW - 44;
+        int scroll = searchKb.calcScrollOffset(searchQuery, maxW, 18);
+        std::string display = searchQuery.substr(scroll);
+        while (display.size() > 1 && Text::width(font, display.c_str(), 18) > (u32)maxW)
+            display.pop_back();
+
+        int relCaret = cPos - scroll;
+        if (relCaret < 0) relCaret = 0;
+        if (relCaret > (int)display.size()) relCaret = (int)display.size();
+
+        bool caretOn = (ticks_to_millisecs(gettime()) / 400) % 2 == 0;
         Ui::field(FX, FY, FW, FH, nullptr, 18, true);
+        if (searchKb.isTextFieldFocused()) {
+            Ui::roundBorder(FX, FY, FW, FH, 7, 2.0f, p.accent);
+        }
         if (searchQuery.empty())
             Ui::text(FX + 20, FY + 9, tr("Type a title, an actor..."), 18, Ui::alpha(p.textDim, 0.8f));
         else
             Ui::text(FX + 20, FY + 9, display.c_str(), 18, p.text);
         if (caretOn) {
-            float cx = FX + 20 + (searchQuery.empty() ? 0 : Ui::textWidth(display.c_str(), 18)) + 1;
+            float cx = FX + 20 + (relCaret > 0 ? Ui::textWidth(display.substr(0, relCaret).c_str(), 18) : 0);
             Ui::roundRect(cx, FY + 9, 2, 20, 1, p.accent);
         }
     }
@@ -201,15 +287,29 @@ void LibraryView::renderSearchResults(ir_t& ir) {
     const Ui::Palette& p = Ui::pal();
     int n = (int)searchResults.size();
 
-    // Header
-    {
-        char sc[32] = "";
+    // Tabbed header
+    const char* const kSearchTabs[6] = {
+        N_("All"),
+        N_("Movies"),
+        N_("Shows"),
+        N_("Episodes"),
+        N_("Music"),
+        N_("Collections")
+    };
+    float tabX0 = Ui::tabs(320, 10, kSearchTabs, 6, searchFilterTab, 13);
+
+    // Left of tabs: query breadcrumb
+    std::string srv = fitText(font, filterDejaVu(searchQuery, 30), 14, (int)tabX0 - 35);
+    Ui::text(20, 18, srv.c_str(), 14, p.textDim);
+
+    // Right of tabs: count
+    if (n > 0) {
+        char sc[32];
         if (n > SEARCH_VISIBLE) snprintf(sc, sizeof(sc), "%d / %d", searchSel + 1, n);
-        char hb[256];
-        snprintf(hb, sizeof(hb), tr("Results: %s"), filterDejaVu(searchQuery, 40).c_str());
-        std::string hdr = fitText(font, hb, 24, 460);
-        Ui::header(hdr.c_str(), sc[0] ? sc : nullptr);
+        else snprintf(sc, sizeof(sc), "%d", n);
+        Ui::textRight(612, 17, sc, 14, p.textDim);
     }
+    headerLine(46);
 
     if (n == 0) {
         Ui::textCentered(320, 200, tr("No results."), 20, p.textDim);
@@ -260,7 +360,7 @@ void LibraryView::renderSearchResults(ir_t& ir) {
         }
     }
 
-    const Ui::Hint l[] = { { "A", N_("Open") }, { "1", N_("New search") } };
+    const Ui::Hint l[] = { { "A", N_("Open") }, { "-/+", N_("Filter") }, { "1", N_("New search") } };
     const Ui::Hint r[] = { { "B", N_("Back") } };
-    Ui::footer(l, 2, r, 1);
+    Ui::footer(l, 3, r, 1);
 }

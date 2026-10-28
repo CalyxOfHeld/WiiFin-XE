@@ -3,6 +3,7 @@
 #include "LibraryDraw.h"
 #include "../player/vo_wiifin.h"
 #include "../player/WiiPlayer.h"
+#include "../player/Subtitles.h"
 #include "../core/SoundFX.h"
 #include "../core/Screensaver.h"
 #include "../player/RemoteSpeaker.h"
@@ -21,7 +22,9 @@
 enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_HOME, R_VIEW,
            R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS, R_CUSTOMIZE,
            R_SAVER, R_SPEAKER, R_SAVER_LOGO, R_POWER_BTN, R_RESET_BTN,
-           R_SAVER_SPEED, R_SAVER_EFFECT, R_KB_SIZE };
+           R_SAVER_SPEED, R_SAVER_EFFECT, R_KB_SIZE,
+           R_SUBTITLES, R_SUB_LANG,
+           R_PAD_SCRUB, R_PAD_VOLUME };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -56,10 +59,10 @@ SettingsView::SettingsView(GRRLIB_texImg* btn, GRRLIB_ttfFont* f, JellyfinClient
 /* A section's settings in groups, each under a header that A folds and
  * unfolds (all open at first; folded stays so while WiiFin runs).  In
  * rows, a header is H_BASE + its group. */
-enum Group { G_THEME, G_HOME, G_SCREEN, G_VIDEO, G_WII, G_SOUND, G_SAVER, G_CLOCK, G_BUTTONS, G_CONNECTION, G_COUNT };
+enum Group { G_THEME, G_HOME, G_SCREEN, G_VIDEO, G_SUBTITLES, G_CONTROLLER, G_WII, G_SOUND, G_SAVER, G_CLOCK, G_BUTTONS, G_CONNECTION, G_COUNT };
 static const char* const GROUPS[G_COUNT] = {
     /* TRANSLATORS: Settings: the headers over groups of settings */
-    N_("Theme"), N_("Home and Libraries"), N_("Screen and Keyboard"), N_("Video"), N_("Speaker and Disc Light"),
+    N_("Theme"), N_("Home and Libraries"), N_("Screen and Keyboard"), N_("Video"), N_("Subtitles"), N_("Controller"), N_("Speaker and Disc Light"),
     N_("Sound"), N_("Screensaver"), N_("Clock and Language"), N_("Buttons and Exit"), N_("Connection")
 };
 static const int H_BASE = 1000;
@@ -76,8 +79,10 @@ static std::vector<RowGroup> sectionGroups(int s, bool profile)
                                      : std::vector<int>{ R_START, R_DIM, R_HEADER } },
                  { G_SCREEN, { R_AREA, R_KB_SIZE } } };
     case S_PLAYBACK:
-        return { { G_VIDEO, { R_QUALITY, R_DIRECT, R_SMOOTH } },
-                 { G_WII,   { R_SPEAKER, R_LIGHT } } };
+        return { { G_VIDEO,      { R_QUALITY, R_DIRECT, R_SMOOTH } },
+                 { G_SUBTITLES,  { R_SUBTITLES, R_SUB_LANG } },
+                 { G_CONTROLLER, { R_PAD_SCRUB, R_PAD_VOLUME } },
+                 { G_WII,        { R_SPEAKER, R_LIGHT } } };
     case S_SYSTEM:
         return { { G_SOUND,      { R_MUSIC, R_SOUNDS } },
                  { G_SAVER,      { R_SAVER, R_SAVER_LOGO, R_SAVER_SPEED, R_SAVER_EFFECT } },
@@ -243,6 +248,46 @@ SettingsView::RowInfo SettingsView::describe(int id)
                                    : N_("Each frame shown as is (24 fps films judder slightly on 60 Hz)"),
             g_wiifin_smooth_motion ? N_("ON") : N_("OFF"), g_wiifin_smooth_motion ? p.ok : OFF);
         break;
+    case R_SUBTITLES:
+        set(N_("Subtitles"),
+            Subtitles::defaultEnabled() ? N_("Subtitles will always be on by default for every video")
+                                        : N_("Subtitles will start off by default for every video"),
+            Subtitles::defaultEnabled() ? N_("ON") : N_("OFF"),
+            Subtitles::defaultEnabled() ? p.ok : OFF);
+        break;
+    case R_SUB_LANG: {
+        const int idx = Subtitles::preferredLanguageIndex();
+        set(N_("Subtitle Language"),
+            idx == 0 ? N_("The track chosen by Jellyfin, if subtitles are on")
+                     : N_("Tries to choose subtitles in this language when available"),
+            Subtitles::languageName(idx),
+            idx == 0 ? OFF : p.accent);
+        break;
+    }
+    case R_PAD_SCRUB: {
+        static const char* const scrubNames[] = { N_("C-Stick"), N_("Main Stick"), N_("D-Pad"), N_("OFF") };
+        static const char* const scrubDescs[] = {
+            N_("Left and right on C-Stick / right stick jumps through video"),
+            N_("Left and right on the main analog stick jumps through video"),
+            N_("Left and right on the D-Pad jumps through video"),
+            N_("Stick and D-Pad scrubbing is turned off"),
+        };
+        const int s = (int)Input::padScrub();
+        set(N_("Scrub Control"), scrubDescs[s], scrubNames[s], s == 3 ? OFF : p.accent);
+        break;
+    }
+    case R_PAD_VOLUME: {
+        static const char* const volNames[] = { N_("D-Pad"), N_("Main Stick"), N_("C-Stick"), N_("OFF") };
+        static const char* const volDescs[] = {
+            N_("Up and down on the D-Pad turns volume up and down"),
+            N_("Up and down on the main analog stick turns volume up and down"),
+            N_("Up and down on C-Stick / right stick turns volume up and down"),
+            N_("Stick and D-Pad volume control is turned off"),
+        };
+        const int v = (int)Input::padVolume();
+        set(N_("Volume Control"), volDescs[v], volNames[v], v == 3 ? OFF : p.accent);
+        break;
+    }
     case R_THEME: {
         static const char* themeDesc[Ui::THEME_COUNT] = {
             N_("Light, like the Wii Menu"),
@@ -534,6 +579,18 @@ void SettingsView::activate(int index) {
             if (g_app_startProfile == profile->userId) g_app_startProfile.clear();
             else                                       g_app_startProfile = profile->userId;
             SYS_Report("[Settings] start-up profile %s\n", g_app_startProfile.empty() ? "none" : "this one");
+            break;
+        case R_SUBTITLES:
+            Subtitles::setDefaultEnabled(!Subtitles::defaultEnabled());
+            break;
+        case R_SUB_LANG:
+            Subtitles::nextPreferredLanguage();
+            break;
+        case R_PAD_SCRUB:
+            Input::setPadScrub((Input::PadScrub)(((int)Input::padScrub() + 1) % 4));
+            break;
+        case R_PAD_VOLUME:
+            Input::setPadVolume((Input::PadVolume)(((int)Input::padVolume() + 1) % 4));
             break;
     }
 }

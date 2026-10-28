@@ -41,6 +41,7 @@ public:
     enum class Exit { Profiles, Settings, WiiFinMenu, NowPlaying, SignIn, LocalMedia };
     Exit exitTo = Exit::Profiles;
     bool signInAgain = false;   /* loadLibraries: the token refused, leave for the sign-in */
+    bool fetchCancelled = false; /* loadLibraries / runWithLoading cancelled by user */
     /* back from the Settings the profile menu opened: the home again, as
      * the settings left it (theme, home screen, library view) */
     void onSettingsClosed();
@@ -454,7 +455,7 @@ private:
     void loadMusicSuggestions();
     void freeMusicSuggestions();
     void loadPlaylistsTab();
-    void runWithLoading(std::function<void()> fn);
+    bool runWithLoading(std::function<void()> fn);
     void freePosters();
     void stopPosterLoader();   // the page's posters still on their way
     void freeDetail();
@@ -466,15 +467,18 @@ private:
 
     // Search
     std::string               searchQuery;
+    std::vector<JellyfinItem> allSearchResults;
     std::vector<JellyfinItem> searchResults;
     int                       searchSel         = 0;
     int                       searchTop         = 0;
+    int                       searchFilterTab   = 0;
     State                     searchReturnState = State::LibsReady;
     static const int          SEARCH_VISIBLE    = 8;
     bool                      drilldownFromSearch = false; // true when ItemsReady/PostersReady was entered from search
     Keyboard                  searchKb;          // on-screen keyboard for search
 
     void performSearch();
+    void applySearchFilter();
     void clampSearchScroll();
     void renderSearchInput(ir_t& ir);
     void renderSearchResults(ir_t& ir);

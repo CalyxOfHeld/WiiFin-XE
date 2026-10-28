@@ -95,6 +95,7 @@ public:
     bool  buffering() const;
 
     void toast(const std::string& msg, int ms = 2000);
+    void showVolume(int vol, bool muted = false);
 
     /* The server's remote control (Remote): a seek to an absolute position
      * or by delta s, as the D-pad's (merged, then Action::SeekTo); a track
@@ -152,6 +153,11 @@ private:
 
     /* Hit-testing results for the current frame */
     int   hoverButton = -1;    /* 0..4 = transport buttons, 5 = zoom */
+    int   focusedButton = 2;   /* controller focus: 0..4 = transport, 5 = zoom, 6 = intro */
+    int   volumeLevel = 50;
+    bool  volumeMuted = false;
+    u64   volumeUntil = 0;
+    u64   volHoldSince = 0, volHoldLast = 0;
     bool  hoverBar    = false;
     int   hoverRow    = -1;    /* panel row */
     int   prevHoverRow = -1;   /* hover only moves the selection when it changes */

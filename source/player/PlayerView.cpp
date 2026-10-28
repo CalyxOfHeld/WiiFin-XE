@@ -256,6 +256,13 @@ void PlayerView::toast(const std::string& msg, int ms)
     toastUntil = nowMs() + ms;
 }
 
+void PlayerView::showVolume(int vol, bool muted)
+{
+    volumeLevel = vol;
+    volumeMuted = muted;
+    volumeUntil = nowMs() + 1500;
+}
+
 void PlayerView::openPanel(Panel p)
 {
     panel    = p;
@@ -308,23 +315,32 @@ void PlayerView::hitTest(const ir_t& ir)
     hoverButton = -1;
     hoverBar    = false;
     hoverRow    = -1;
-    hoverIntro  = introVisible() && inRect(ir, INTRO_X, INTRO_Y, INTRO_W, INTRO_H);
+    hoverIntro  = introVisible() && ir.valid && inRect(ir, INTRO_X, INTRO_Y, INTRO_W, INTRO_H);
 
     if (panel != Panel::None) {
         int rows = panelCount() - panelTop;
         if (rows > LIST_ROWS) rows = LIST_ROWS;
         for (int i = 0; i < rows; ++i)
-            if (inRect(ir, LIST_X, LIST_Y + 44 + i * ROW_H, LIST_W, ROW_H))
+            if (ir.valid && inRect(ir, LIST_X, LIST_Y + 44 + i * ROW_H, LIST_W, ROW_H))
                 hoverRow = panelTop + i;
         return;
     }
     /* still on screen while they fade out: still clickable */
     if (!controlsVisible() && controlsAlpha < 0.3f) return;
-    hoverBar = inRect(ir, BAR_X - 8, BAR_Y - 12, BAR_W + 16, BAR_H + 24);
-    for (int i = 0; i < BTN_COUNT; ++i)
-        if (inRect(ir, BTN_X0 + i * (BTN_W + BTN_GAP), BTN_Y, BTN_W, BTN_H))
-            hoverButton = i;
-    if (inRect(ir, zoomX(), BTN_Y, ZOOM_W, BTN_H)) hoverButton = BTN_ZOOM;
+
+    if (ir.valid) {
+        hoverBar = inRect(ir, BAR_X - 8, BAR_Y - 12, BAR_W + 16, BAR_H + 24);
+        for (int i = 0; i < BTN_COUNT; ++i)
+            if (inRect(ir, BTN_X0 + i * (BTN_W + BTN_GAP), BTN_Y, BTN_W, BTN_H))
+                hoverButton = i;
+        if (inRect(ir, zoomX(), BTN_Y, ZOOM_W, BTN_H)) hoverButton = BTN_ZOOM;
+    } else {
+        if (focusedButton == 6 && introVisible()) {
+            hoverIntro = true;
+        } else {
+            hoverButton = (focusedButton >= 0 && focusedButton <= BTN_ZOOM) ? focusedButton : 2;
+        }
+    }
 }
 
 void PlayerView::toggleZoom()
@@ -399,8 +415,10 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         if (hoverRow >= 0 && hoverRow != prevHoverRow) panelSel = hoverRow;
         prevHoverRow = hoverRow;
         if (down & WPAD_BUTTON_B) { panel = Panel::None; showControls(); return Action::None; }
-        if ((down & WPAD_BUTTON_UP)   && panelSel > 0)     --panelSel;
-        if ((down & WPAD_BUTTON_DOWN) && panelSel + 1 < n) ++panelSel;
+        const u32 upBits = WPAD_BUTTON_UP | Input::BTN_DPAD_UP | Input::BTN_STICK_UP;
+        const u32 dnBits = WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN | Input::BTN_STICK_DOWN;
+        if ((down & upBits) && panelSel > 0)     --panelSel;
+        if ((down & dnBits) && panelSel + 1 < n) ++panelSel;
         if (panelSel < panelTop) panelTop = panelSel;
         if (panelSel >= panelTop + LIST_ROWS) panelTop = panelSel - LIST_ROWS + 1;
         if (down & WPAD_BUTTON_A) return activatePanelRow(panelSel);
@@ -411,46 +429,101 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
     Action act = Action::None;
 
     if (down & WPAD_BUTTON_A) {
-        /* the pointer skips with the button only (a click on the bar meant
-         * the bar, even as the controls faded); without one, A anywhere */
-        if (hoverIntro || (!ir.valid && introVisible() && hoverButton < 0 && !hoverBar)) {
-            int i = activeSegment();
-            const MediaSegment& seg = ctx.intro.segments[i];
-            skippedSegments |= 1u << i;
-            if (seg.kind == MediaSegment::Outro && hasNext) {
-                act = Action::Next;
-            } else {
-                float to = seg.end + 0.3f, dur = duration();
-                if (dur > 0.0f && to > dur - 2.0f) to = dur - 2.0f;   /* credits at the very end */
-                SYS_Report("[Segments] %s: to %.1f s\n", segmentLabel(i), (double)to);
+        if (ir.valid) {
+            /* Pointer click */
+            if (hoverIntro) {
+                int i = activeSegment();
+                const MediaSegment& seg = ctx.intro.segments[i];
+                skippedSegments |= 1u << i;
+                if (seg.kind == MediaSegment::Outro && hasNext) {
+                    act = Action::Next;
+                } else {
+                    float to = seg.end + 0.3f, dur = duration();
+                    if (dur > 0.0f && to > dur - 2.0f) to = dur - 2.0f;   /* credits at the very end */
+                    SYS_Report("[Segments] %s: to %.1f s\n", segmentLabel(i), (double)to);
+                    seekInFlight = true;
+                    seekTo = to;
+                    act = Action::SeekTo;
+                }
+            } else if (visible && hoverBar && duration() > 0.0f) {
+                float frac = (ir.x - BAR_X) / (float)BAR_W;
+                if (frac < 0.0f) frac = 0.0f;
+                if (frac > 1.0f) frac = 1.0f;
                 seekInFlight = true;
-                seekTo = to;
+                seekTo = frac * duration();
                 act = Action::SeekTo;
-            }
-        } else if (visible && hoverBar && duration() > 0.0f) {
-            float frac = (ir.x - BAR_X) / (float)BAR_W;
-            if (frac < 0.0f) frac = 0.0f;
-            if (frac > 1.0f) frac = 1.0f;
-            seekInFlight = true;
-            seekTo = frac * duration();
-            act = Action::SeekTo;
-        } else if (visible && hoverButton >= 0) {
-            switch (hoverButton) {
-            case 0:
-                if (chapterJump(-1)) { act = Action::SeekTo; break; }
-                if (hasPrev) act = Action::Prev; else toast(tr("No previous episode"));
-                break;
-            case 1: nudgeSeek(-10.0f); break;
-            case 2: wii_player_pause_toggle(); break;
-            case 3: nudgeSeek(+10.0f); break;
-            case 4:
-                if (chapterJump(+1)) { act = Action::SeekTo; break; }
-                if (hasNext) act = Action::Next; else toast(tr("No next episode"));
-                break;
-            case BTN_ZOOM: toggleZoom(); break;
+            } else if (visible && hoverButton >= 0) {
+                switch (hoverButton) {
+                case 0:
+                    if (chapterJump(-1)) { act = Action::SeekTo; break; }
+                    if (hasPrev) act = Action::Prev; else toast(tr("No previous episode"));
+                    break;
+                case 1: nudgeSeek(-10.0f); break;
+                case 2: wii_player_pause_toggle(); break;
+                case 3: nudgeSeek(+10.0f); break;
+                case 4:
+                    if (chapterJump(+1)) { act = Action::SeekTo; break; }
+                    if (hasNext) act = Action::Next; else toast(tr("No next episode"));
+                    break;
+                case BTN_ZOOM: toggleZoom(); break;
+                }
+            } else {
+                wii_player_pause_toggle();
             }
         } else {
-            wii_player_pause_toggle();
+            /* Controller / GameCube / Classic navigation */
+            if (visible) {
+                if (focusedButton == 6 && introVisible()) {
+                    int i = activeSegment();
+                    const MediaSegment& seg = ctx.intro.segments[i];
+                    skippedSegments |= 1u << i;
+                    if (seg.kind == MediaSegment::Outro && hasNext) {
+                        act = Action::Next;
+                    } else {
+                        float to = seg.end + 0.3f, dur = duration();
+                        if (dur > 0.0f && to > dur - 2.0f) to = dur - 2.0f;
+                        SYS_Report("[Segments] %s: to %.1f s\n", segmentLabel(i), (double)to);
+                        seekInFlight = true;
+                        seekTo = to;
+                        act = Action::SeekTo;
+                    }
+                } else {
+                    switch (focusedButton) {
+                    case 0:
+                        if (chapterJump(-1)) { act = Action::SeekTo; break; }
+                        if (hasPrev) act = Action::Prev; else toast(tr("No previous episode"));
+                        break;
+                    case 1: nudgeSeek(-10.0f); break;
+                    case 2: wii_player_pause_toggle(); break;
+                    case 3: nudgeSeek(+10.0f); break;
+                    case 4:
+                        if (chapterJump(+1)) { act = Action::SeekTo; break; }
+                        if (hasNext) act = Action::Next; else toast(tr("No next episode"));
+                        break;
+                    case BTN_ZOOM: toggleZoom(); break;
+                    default:
+                        wii_player_pause_toggle();
+                        break;
+                    }
+                }
+            } else {
+                if (introVisible()) {
+                    int i = activeSegment();
+                    const MediaSegment& seg = ctx.intro.segments[i];
+                    skippedSegments |= 1u << i;
+                    if (seg.kind == MediaSegment::Outro && hasNext) {
+                        act = Action::Next;
+                    } else {
+                        float to = seg.end + 0.3f, dur = duration();
+                        if (dur > 0.0f && to > dur - 2.0f) to = dur - 2.0f;
+                        seekInFlight = true;
+                        seekTo = to;
+                        act = Action::SeekTo;
+                    }
+                } else {
+                    wii_player_pause_toggle();
+                }
+            }
         }
         showControls();
     }
@@ -459,23 +532,131 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         if (visible) return Action::Back;
         showControls();
     }
-    if (down & WPAD_BUTTON_RIGHT) nudgeSeek(+10.0f);
-    if (down & WPAD_BUTTON_LEFT)  nudgeSeek(-10.0f);
-    /* Left / Right held: on seeking, 10 s steps, 30 s after 3 s (the seek
-     * is made once let go, as the presses add up) */
-    {
-        const u32 hd = Input::held() & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT);
+
+    /* Scrub configuration */
+    const Input::PadScrub scrubMode = Input::padScrub();
+    u32 scrubLeftBits = 0, scrubRightBits = 0;
+    switch (scrubMode) {
+    case Input::PadScrub::CStick:
+        scrubLeftBits = Input::BTN_C_LEFT;
+        scrubRightBits = Input::BTN_C_RIGHT;
+        break;
+    case Input::PadScrub::MainStick:
+        scrubLeftBits = Input::BTN_STICK_LEFT;
+        scrubRightBits = Input::BTN_STICK_RIGHT;
+        break;
+    case Input::PadScrub::DPad:
+        scrubLeftBits = Input::BTN_DPAD_LEFT;
+        scrubRightBits = Input::BTN_DPAD_RIGHT;
+        break;
+    case Input::PadScrub::Off:
+        break;
+    }
+
+    /* Volume configuration */
+    const Input::PadVolume volMode = Input::padVolume();
+    u32 volUpBits = 0, volDownBits = 0;
+    switch (volMode) {
+    case Input::PadVolume::DPad:
+        volUpBits = Input::BTN_DPAD_UP;
+        volDownBits = Input::BTN_DPAD_DOWN;
+        break;
+    case Input::PadVolume::MainStick:
+        volUpBits = Input::BTN_STICK_UP;
+        volDownBits = Input::BTN_STICK_DOWN;
+        break;
+    case Input::PadVolume::CStick:
+        volUpBits = Input::BTN_C_UP;
+        volDownBits = Input::BTN_C_DOWN;
+        break;
+    case Input::PadVolume::Off:
+        break;
+    }
+
+    /* Volume adjustment */
+    if (volUpBits && (down & volUpBits)) {
+        wii_player_vol_up();
+        showVolume(wii_player_volume(), wii_player_muted());
+    }
+    if (volDownBits && (down & volDownBits)) {
+        wii_player_vol_down();
+        showVolume(wii_player_volume(), wii_player_muted());
+    }
+    if (volUpBits || volDownBits) {
+        const u32 vh = Input::held() & (volUpBits | volDownBits);
+        const u64 now = nowMs();
+        if (!vh) {
+            volHoldSince = 0;
+        } else if (down & vh) {
+            volHoldSince = volHoldLast = now;
+        } else if (volHoldSince && now - volHoldSince > 350 && now - volHoldLast >= 90) {
+            volHoldLast = now;
+            if (vh & volUpBits)   wii_player_vol_up();
+            if (vh & volDownBits) wii_player_vol_down();
+            showVolume(wii_player_volume(), wii_player_muted());
+        }
+    }
+
+    /* Scrub adjustment */
+    if (scrubRightBits && (down & scrubRightBits)) nudgeSeek(+10.0f);
+    if (scrubLeftBits && (down & scrubLeftBits))   nudgeSeek(-10.0f);
+    if (scrubLeftBits || scrubRightBits) {
+        const u32 hd = Input::held() & (scrubLeftBits | scrubRightBits);
         const u64 now = nowMs();
         if (!hd)                               holdSince = 0;
         else if (down & hd)                    holdSince = holdLast = now;
         else if (holdSince && now - holdSince > 500 && now - holdLast >= 200) {
             holdLast = now;
             const float step = now - holdSince > 3000 ? 30.0f : 10.0f;
-            nudgeSeek(hd & WPAD_BUTTON_RIGHT ? step : -step);
+            nudgeSeek(hd & scrubRightBits ? step : -step);
         }
     }
-    if (down & WPAD_BUTTON_UP)    { wii_player_vol_up();   toast(tr("Volume +"), 1000); }
-    if (down & WPAD_BUTTON_DOWN)  { wii_player_vol_down(); toast(tr("Volume -"), 1000); }
+
+    /* Overlay navigation with directional inputs not consumed by scrub or volume */
+    const u32 navLeft  = (Input::BTN_STICK_LEFT | Input::BTN_DPAD_LEFT | Input::BTN_C_LEFT) & ~scrubLeftBits;
+    const u32 navRight = (Input::BTN_STICK_RIGHT | Input::BTN_DPAD_RIGHT | Input::BTN_C_RIGHT) & ~scrubRightBits;
+    const u32 navUp    = (Input::BTN_STICK_UP | Input::BTN_DPAD_UP | Input::BTN_C_UP) & ~volUpBits;
+    const u32 navDown  = (Input::BTN_STICK_DOWN | Input::BTN_DPAD_DOWN | Input::BTN_C_DOWN) & ~volDownBits;
+
+    if (down & navLeft) {
+        if (!visible) {
+            showControls();
+            focusedButton = 2;
+        } else {
+            if (focusedButton == 6) focusedButton = 2;
+            else if (focusedButton > 0) --focusedButton;
+            showControls();
+        }
+    }
+    if (down & navRight) {
+        if (!visible) {
+            showControls();
+            focusedButton = 2;
+        } else {
+            if (focusedButton == 6) focusedButton = 4;
+            else if (focusedButton < BTN_ZOOM) ++focusedButton;
+            showControls();
+        }
+    }
+    if (down & navUp) {
+        if (!visible) {
+            showControls();
+            if (introVisible()) focusedButton = 6;
+            else focusedButton = 2;
+        } else {
+            if (introVisible()) focusedButton = 6;
+            showControls();
+        }
+    }
+    if (down & navDown) {
+        if (!visible) {
+            showControls();
+            focusedButton = 2;
+        } else {
+            if (focusedButton == 6) focusedButton = 2;
+            showControls();
+        }
+    }
     if (down & WPAD_BUTTON_PLUS) {
         if (hasNext) act = Action::Next; else toast(tr("No next episode"));
     }
@@ -698,6 +879,31 @@ void PlayerView::render(const ir_t& ir)
             else
                 Ui::roundRect(cx - 9.5f, cy - 3, 19, 6, 1, c);
         }
+        {
+            /* Volume badge on the bottom transport row */
+            float vx = Ui::screenLeft() < -20.0f ? (Ui::screenLeft() + 24.0f) : 10.0f;
+            float vw = 72.0f, vh = BTN_H;
+            Ui::button(vx, BTN_Y, vw, vh, "", 15, 0.0f);
+            float cy = BTN_Y + BTN_H * 0.5f;
+            const bool muted = wii_player_muted();
+            const u32 c  = muted ? p.accentDark : p.textDim;
+            const u32 tc = muted ? p.accentDark : p.text;
+
+            /* Speaker icon */
+            float ix = vx + 12.0f;
+            Ui::roundRect(ix, cy - 4.0f, 4.0f, 8.0f, 1.0f, c);
+            Ui::triangle(ix + 3.0f, cy - 3.0f, ix + 9.0f, cy - 7.0f, ix + 9.0f, cy + 7.0f, c);
+            Ui::roundRect(ix + 3.0f, cy - 3.0f, 2.5f, 6.0f, 0.5f, c);
+
+            char vstr[16];
+            if (muted) {
+                snprintf(vstr, sizeof(vstr), "%s", tr("MUT"));
+            } else {
+                snprintf(vstr, sizeof(vstr), "%d%%", wii_player_volume());
+            }
+            /* Clean spacing between speaker icon and text */
+            Ui::text(ix + 17.0f, cy - 8.0f, vstr, 13, tc);
+        }
         Ui::popOffset();
     }
 
@@ -736,6 +942,40 @@ void PlayerView::render(const ir_t& ir)
     /* ---- Toast ---- */
     if (!toastMsg.empty() && nowMs() < toastUntil)
         messagePill((k > 0.0f) ? TOP_H + 31 : 41, toastMsg, 16);
+
+    /* ---- Volume OSD popup ---- */
+    if (nowMs() < volumeUntil) {
+        const float w = 190.0f, h = 48.0f;
+        const float x = (640.0f - w) * 0.5f, y = 64.0f;
+        Ui::shadow(x, y, w, h, 14, 8.0f, p.shadow);
+        Ui::roundRect(x, y, w, h, 14, p.cardTop, p.cardBottom);
+        Ui::roundBorder(x, y, w, h, 14, 1.5f, p.cardBorder);
+
+        /* Speaker icon */
+        float sx = x + 20.0f, sy = y + 17.0f;
+        u32 ic = volumeMuted ? p.accentDark : p.text;
+        Ui::roundRect(sx, sy - 4.0f, 4.0f, 8.0f, 1.0f, ic);
+        Ui::triangle(sx + 3.0f, sy - 3.0f, sx + 9.0f, sy - 7.5f, sx + 9.0f, sy + 7.5f, ic);
+        Ui::roundRect(sx + 3.0f, sy - 3.0f, 2.5f, 6.0f, 0.5f, ic);
+
+        /* Label */
+        char vbuf[32];
+        if (volumeMuted) {
+            snprintf(vbuf, sizeof(vbuf), "%s", tr("Muted"));
+        } else {
+            snprintf(vbuf, sizeof(vbuf), "%s %d%%", tr("Volume"), volumeLevel);
+        }
+        Ui::text(sx + 21.0f, y + 8.0f, vbuf, 15, ic);
+
+        /* Volume slider / bar */
+        float bx = x + 18.0f, by = y + 32.0f, bw = w - 36.0f, bh = 5.0f;
+        Ui::roundRect(bx, by, bw, bh, bh * 0.5f, Ui::alpha(p.cardBorder, 0.7f));
+        if (!volumeMuted && volumeLevel > 0) {
+            float fillW = bw * (volumeLevel / 100.0f);
+            if (fillW < bh) fillW = bh;
+            Ui::roundRect(bx, by, fillW, bh, bh * 0.5f, p.accent, p.accentDark);
+        }
+    }
 
     /* ---- Pointer ---- */
     if (ir.valid && cursorTex && (k > 0.5f || panel != Panel::None || introVisible()))

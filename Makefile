@@ -67,40 +67,43 @@ OFILES      := $(ASSET_OFILES) $(SRC_OFILES)
 #---------------------------------------------------------------------------------
 # Flags
 #---------------------------------------------------------------------------------
-INCLUDE := $(foreach dir,$(INCLUDES), -I$(CURDIR)/$(dir)) \
+INCLUDE := $(foreach dir,$(INCLUDES), -I$(dir)) \
            -I$(LIBOGC_INC) -I$(BUILD) \
            -I/opt/devkitpro/portlibs/ppc/include \
            -I/opt/devkitpro/portlibs/ppc/include/freetype2 \
            -I/opt/devkitpro/portlibs/wii/include \
-           -I$(CURDIR)/libs/mbedtls/include
+           -Ilibs/mbedtls/include
 
 # WERROR=-Werror (set by the CI) turns warnings into errors
 WERROR      ?=
 CFLAGS      := -g -O2 -Wall $(WERROR) -MMD -MP $(MACHDEP) $(INCLUDE)
 CXXFLAGS    := $(CFLAGS)
-LDFLAGS     := -g $(MACHDEP) -Wl,-Map,$(TARGET).map -T $(CURDIR)/tools/wii_wiifin.ld \
+LDFLAGS     := -g $(MACHDEP) -Wl,-Map,$(TARGET).map -T tools/wii_wiifin.ld \
                -Wl,--wrap=LWP_JoinThread \
                -Wl,--wrap=SYS_Report \
                -Wl,--wrap=CONF_GetIdleLedMode \
                -Wl,--wrap=GRRLIB_Render -Wl,--wrap=iosFree -Wl,--wrap=AUDIO_InitDMA   # see source/core/LwpJoinFix.cpp, Log.cpp, WiiPlayer.cpp, RenderHook.cpp, player/OgcCompat.c
 LIBPATHS    := -L$(LIBOGC_LIB) -L/opt/devkitpro/portlibs/wii/lib -L/opt/devkitpro/portlibs/ppc/lib \
-               -L$(CURDIR)/libs/mbedtls/lib
+               -Llibs/mbedtls/lib
 
 LIBS        := -lgrrlib -lpngu `$(PKG_CONFIG) freetype2 libpng libjpeg --libs` -lbrotlidec -lbrotlicommon -lwiikeyboard -lfat -lwiiuse -lbte -lmad -lasnd -logc -lm -lz \
                -lmbedtls -lmbedx509 -lmbedcrypto
 
 # Link against mplayer-ce when available (see MPLAYER_CE_BUILD.md)
-ifneq ($(wildcard $(CURDIR)/libs/mplayer-ce-build/libmplayer.a),)
-LIBPATHS    += -L$(CURDIR)/libs/mplayer-ce-build
+ifneq ($(wildcard libs/mplayer-ce-build/libmplayer.a),)
+LIBPATHS    += -Llibs/mplayer-ce-build
 LIBS        := -Wl,--start-group -lmplayer -lfribidi -laesnd -ltinysmb -ldi -liso9660 -Wl,--end-group $(LIBS)
 endif
 
 #---------------------------------------------------------------------------------
 # Rules
 #---------------------------------------------------------------------------------
-.PHONY: all clean run
+.PHONY: all clean run dist
 
-all: $(BUILD) $(TARGET).dol
+all: $(BUILD) $(TARGET).dol dist
+
+dist: $(TARGET).dol
+	python3 tools/make_dist.py || python tools/make_dist.py
 
 $(BUILD):
 	mkdir -p $@

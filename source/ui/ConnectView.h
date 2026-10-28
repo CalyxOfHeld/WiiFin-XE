@@ -22,6 +22,8 @@ public:
 
     // Pre-fill server URL and username (called before showing the view)
     void setFields(const std::string& serverUrl, const std::string& username);
+    // Provide existing auth details when editing a profile (keeps session valid without re-typing password)
+    void setExistingAuth(const JellyfinAuth& a) { existingAuth = a; }
     // A saved profile's sign-in changed (Edit Profile): its own title, Save
     // for Connect, field (0 server, 1 user name, 2 password) focused first
     void setEditing(int field);
@@ -50,6 +52,8 @@ private:
     Field focusedField = Field::Server;
     bool editing = false;               // setEditing()
     std::string fields[3]; // Server, Username, Password
+    std::string origUsername;
+    JellyfinAuth existingAuth;
     bool showPassword = false;
 
     // --- Quick Connect tab ---
@@ -61,7 +65,10 @@ private:
 
     // --- Virtual keyboard ---
     bool kbActive = false;
+    std::string origField;       // snapshot before editing (restored on Cancel)
     Keyboard kb;                 // on-screen keyboard (shared with search)
+    void openKeyboard();
+    void cancelKeyboard();
 public:
     struct Job;                  /* a background request, see ConnectView.cpp */
 private:

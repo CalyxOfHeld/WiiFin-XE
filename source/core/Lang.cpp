@@ -124,6 +124,13 @@ void chooseKey(const char* key) {
     choose(-1);
 }
 
+bool canDraw(const char* code) {
+    if (!code) return true;
+    if (strcmp(code, "ko") == 0) return s_hangul;
+    if (strncmp(code, "zh", 2) == 0) return s_han;
+    return true;
+}
+
 } // namespace Lang
 
 std::string Lang::runTime(int minutes)

@@ -108,8 +108,26 @@ void ConnectView::startLogin() {
     struct Out { bool ok = false; JellyfinAuth auth; std::string err; };
     auto out = std::make_shared<Out>();
     std::string url = fields[0], user = fields[1], pass = fields[2];
+    bool isEditing = editing;
+    JellyfinAuth exAuth = existingAuth;
+    std::string origUser = origUsername;
     startJob(N_("Signing in"), false,
-        [this, out, url, user, pass]() {
+        [this, out, url, user, pass, isEditing, exAuth, origUser]() {
+            bool sameUser = origUser.empty() || (user == origUser);
+            if (isEditing && pass.empty() && !exAuth.accessToken.empty() && sameUser) {
+                if (client.validateAuth(url, exAuth)) {
+                    out->auth = exAuth;
+                    std::string sn;
+                    if (client.getServerName(url, out->auth, sn)) out->auth.serverName = sn;
+                    out->ok = true;
+                    return;
+                }
+            }
+            if (pass.empty() && isEditing && !sameUser) {
+                out->err = tr("Enter password for new username");
+                out->ok = false;
+                return;
+            }
             out->ok = client.authenticate(url, user, pass, out->auth);
             if (out->ok) {
                 std::string sn;
@@ -143,6 +161,20 @@ ConnectResult ConnectView::updateBusy() {
         else                                         autoDiscover = true;
         return ConnectResult::None;
     }
+    if (busy == Busy::Job) {
+        if (Input::isBackPressed()) {
+            SoundFX::play(SoundFX::FX::Back);
+            client.abort();
+            if (jobThread != LWP_THREAD_NULL) LWP_JoinThread(jobThread, nullptr);
+            jobThread = LWP_THREAD_NULL;
+            delete job;
+            job = nullptr;
+            busy = Busy::None;
+            client.resetAbort();
+            setStatus(N_("Cancelled."), true);
+            return ConnectResult::None;
+        }
+    }
     return finishJob();
 }
 
@@ -160,6 +192,7 @@ void ConnectView::setFields(const std::string& url, const std::string& uname) {
     while (fields[0].size() > 1 && fields[0].back() == '/')
         fields[0].pop_back();
     fields[1] = uname;
+    origUsername = uname;
     serverUrl  = fields[0];
 }
 
@@ -242,9 +275,9 @@ ConnectResult ConnectView::update(ir_t& ir) {
                 bool irFieldHandled = false;
                 // Field hit areas (from renderCredentials): y=110, y=180, y=250, button y=330
                 if (ir.x >= 80 && ir.x <= 560) {
-                    if      (ir.y >= 100 && ir.y <= 145) { focusedField = Field::Server;   kbActive = true; kb.reset(); irFieldHandled = true; irMode = true; }
-                    else if (ir.y >= 170 && ir.y <= 215) { focusedField = Field::Username;  kbActive = true; kb.reset(); irFieldHandled = true; irMode = true; }
-                    else if (ir.y >= 240 && ir.y <= 285) { focusedField = Field::Password;  kbActive = true; kb.reset(); irFieldHandled = true; irMode = true; }
+                    if      (ir.y >= 100 && ir.y <= 145) { focusedField = Field::Server;   openKeyboard(); irFieldHandled = true; irMode = true; }
+                    else if (ir.y >= 170 && ir.y <= 215) { focusedField = Field::Username;  openKeyboard(); irFieldHandled = true; irMode = true; }
+                    else if (ir.y >= 240 && ir.y <= 285) { focusedField = Field::Password;  openKeyboard(); irFieldHandled = true; irMode = true; }
                 }
                 // Connect button: centered at x=320, y=330, 200x48
                 if (!irFieldHandled &&
@@ -271,7 +304,7 @@ ConnectResult ConnectView::update(ir_t& ir) {
             // A button: open VKB or submit (only when not in IR mode)
             if (aPressed && !irMode) {
                 if (focusedField != Field::SubmitBtn) {
-                    kbActive = true; kb.reset();
+                    openKeyboard();
                 } else {
                     doSubmit:
                     SoundFX::play(SoundFX::FX::Start);
@@ -446,23 +479,74 @@ ConnectResult ConnectView::update(ir_t& ir) {
     return ConnectResult::None;
 }
 
+void ConnectView::openKeyboard() {
+    int fi = (int)focusedField;
+    if (fi <= 2) origField = fields[fi];
+    kbActive = true;
+    kb.reset();
+}
+
+void ConnectView::cancelKeyboard() {
+    int fi = (int)focusedField;
+    if (fi <= 2) fields[fi] = origField;
+    kbActive = false;
+    SoundFX::play(SoundFX::FX::Back);
+}
+
 // ---------------------------------------------------------------
 // Virtual keyboard input
 // ---------------------------------------------------------------
 void ConnectView::handleVKBInput(ir_t& ir) {
     int fi = (int)focusedField;
     if (fi > 2) { kbActive = false; return; }
+
+    const int PX = (int)((640 - kb.width()) * 0.5f) - 12, PW = (int)kb.width() + 24;
+    const int PY = (int)(238 - kb.lift()) - 50;
+    const int fieldX = PX + 100, fieldY = PY + 7, fieldW = PW - 305, fieldH = 32;
+    const int btnLeftX = PX + PW - 200, btnRightX = PX + PW - 168;
+    const int btnClearX = PX + PW - 136, btnClearW = 46;
+    const int btnCancelX = PX + PW - 86, btnCancelW = 76, btnH = 32;
+
+    // Check header button clicks
+    if (ir.valid && Input::isAJustPressed()) {
+        if (ir.y >= fieldY && ir.y <= fieldY + btnH) {
+            if (ir.x >= btnLeftX && ir.x <= btnLeftX + 28) {
+                int c = kb.cursorPos();
+                if (c < 0 || c > (int)fields[fi].size()) c = (int)fields[fi].size();
+                if (c > 0) { c--; kb.setCursorPos(c); SoundFX::play(SoundFX::FX::Move); }
+                return;
+            }
+            if (ir.x >= btnRightX && ir.x <= btnRightX + 28) {
+                int c = kb.cursorPos();
+                if (c < 0 || c > (int)fields[fi].size()) c = (int)fields[fi].size();
+                if (c < (int)fields[fi].size()) { c++; kb.setCursorPos(c); SoundFX::play(SoundFX::FX::Move); }
+                return;
+            }
+            if (ir.x >= btnClearX && ir.x <= btnClearX + btnClearW) {
+                fields[fi].clear();
+                kb.setCursorPos(0);
+                SoundFX::play(SoundFX::FX::Backspace);
+                return;
+            }
+            if (ir.x >= btnCancelX && ir.x <= btnCancelX + btnCancelW) {
+                cancelKeyboard();
+                return;
+            }
+        }
+    }
+
     kb.setOrigin((640 - kb.width()) * 0.5f, 238 - kb.lift());
     kb.setEnterLabel(fi < 2 ? N_("Next") : N_("Done"));
     kb.setUrlKeys(fi == 0);   /* the server's address: http:// and https:// keys */
+    kb.setTextField(fieldX, fieldY, fieldW, fieldH);
     switch (kb.update(ir, fields[fi], 255)) {
     case Keyboard::Result::Enter:
         /* OK walks through the fields, then lands on Connect */
-        if (fi < 2) { focusedField = (Field)(fi + 1); kb.reset(); }
+        if (fi < 2) { focusedField = (Field)(fi + 1); openKeyboard(); }
         else        { kbActive = false; focusedField = Field::SubmitBtn; }
         break;
     case Keyboard::Result::Cancel:
-        kbActive = false;
+        cancelKeyboard();
         break;
     default: break;
     }
@@ -569,11 +653,11 @@ void ConnectView::renderCredentials(ir_t& ir) {
     if (kbActive) {
         renderVKB(ir);
         const Ui::Hint l[] = { { "A", N_("Type") }, { "kbdel", N_("Delete") }, { "kbspace", N_("Space") } };
-        const Ui::Hint r[] = { { "kbsym", N_("Symbols") }, { "+!", focusedField == Field::Password ? N_("Done") : N_("Next") } };
-        Ui::footer(l, 2, r, 2);
+        const Ui::Hint r[] = { { "kbsym", N_("Symbols") }, { "+!", focusedField == Field::Password ? N_("Done") : N_("Next") }, { "B", N_("Cancel") } };
+        Ui::footer(l, 3, r, 3);
     } else {
         const Ui::Hint l[] = { { "A", N_("Select") }, { "UD", N_("Move") } };
-        const Ui::Hint r[] = { { "-/+", N_("Tabs") }, { "B", N_("Back") } };
+        const Ui::Hint r[] = { { "-/+", N_("Tabs") }, { "B", busy != Busy::None ? N_("Cancel") : N_("Back") } };
         Ui::footer(l, 2, r, 2);
     }
 }
@@ -591,12 +675,65 @@ void ConnectView::renderVKB(ir_t& ir) {
         int fi = (int)focusedField;
         const char* names[3] = { N_("Server URL"), N_("Username"), N_("Password") };
         if (fi <= 2) {
-            std::string v = fi == 2 ? std::string(fields[fi].size(), '*') : fields[fi];
-            v += "_";
-            while (v.size() > 1 && Ui::textWidth(v.c_str(), 16) > PW - 150)
-                v.erase(v.begin());
-            Ui::text(PX + 16, PY + 13, tr(names[fi]), 14, Ui::pal().textDim);
-            Ui::field(PX + 110, PY + 8, PW - 122, 28, v.c_str(), 16, true);
+            const int fieldX = PX + 100, fieldY = PY + 7, fieldW = PW - 305, fieldH = 32;
+            const int btnLeftX = PX + PW - 200, btnRightX = PX + PW - 168;
+            const int btnClearX = PX + PW - 136, btnClearW = 46;
+            const int btnCancelX = PX + PW - 86, btnCancelW = 76, btnH = 32;
+
+            std::string raw = fi == 2 ? std::string(fields[fi].size(), '*') : fields[fi];
+            int cPos = kb.cursorPos();
+            if (cPos < 0 || cPos > (int)raw.size()) cPos = (int)raw.size();
+
+            const int FONT_SZ = 18;
+            const float textStartX = fieldX + fieldH * 0.5f;
+            const float maxTextW = fieldW - fieldH;
+
+            int scroll = 0;
+            while (cPos > scroll && Ui::textWidth(raw.substr(scroll, cPos - scroll).c_str(), FONT_SZ) > maxTextW - 20)
+                scroll++;
+            std::string vis = raw.substr(scroll);
+            while (vis.size() > 1 && Ui::textWidth(vis.c_str(), FONT_SZ) > maxTextW)
+                vis.pop_back();
+
+            int relCaret = cPos - scroll;
+            if (relCaret < 0) relCaret = 0;
+            if (relCaret > (int)vis.size()) relCaret = (int)vis.size();
+
+            Ui::text(PX + 12, PY + 14, tr(names[fi]), 14, Ui::pal().textDim);
+
+            bool tfFocus = kb.isTextFieldFocused();
+            Ui::field(fieldX, fieldY, fieldW, fieldH, vis.c_str(), FONT_SZ, true);
+            if (tfFocus) {
+                Ui::roundBorder(fieldX, fieldY, fieldW, fieldH, fieldH * 0.5f, 2.5f, Ui::pal().accent);
+            }
+
+            // Blinking caret vertical bar (3px wide, high contrast)
+            bool caretOn = (ticks_to_millisecs(gettime()) / 400) % 2 == 0;
+            if (caretOn) {
+                float prefixW = (relCaret > 0) ? Ui::textWidth(vis.substr(0, relCaret).c_str(), FONT_SZ) : 0.0f;
+                float caretX = textStartX + prefixW;
+                Ui::roundRect(caretX, fieldY + 5, 3, fieldH - 10, 1.0f, Ui::pal().accent);
+            }
+
+            // [ < ] Button
+            bool hovLeft = ir.valid && ir.x >= btnLeftX && ir.x <= btnLeftX + 28 &&
+                           ir.y >= fieldY && ir.y <= fieldY + btnH;
+            Ui::button(btnLeftX, fieldY, 28, btnH, "<", 16, hovLeft ? 0.35f : 0.0f);
+
+            // [ > ] Button
+            bool hovRight = ir.valid && ir.x >= btnRightX && ir.x <= btnRightX + 28 &&
+                            ir.y >= fieldY && ir.y <= fieldY + btnH;
+            Ui::button(btnRightX, fieldY, 28, btnH, ">", 16, hovRight ? 0.35f : 0.0f);
+
+            // [ Clear ] Button
+            bool hovClear = ir.valid && ir.x >= btnClearX && ir.x <= btnClearX + btnClearW &&
+                            ir.y >= fieldY && ir.y <= fieldY + btnH;
+            Ui::button(btnClearX, fieldY, btnClearW, btnH, N_("Clear"), 13, hovClear ? 0.35f : 0.0f);
+
+            // [ Cancel ] Button
+            bool hovCancel = ir.valid && ir.x >= btnCancelX && ir.x <= btnCancelX + btnCancelW &&
+                             ir.y >= fieldY && ir.y <= fieldY + btnH;
+            Ui::button(btnCancelX, fieldY, btnCancelW, btnH, N_("Cancel"), 14, hovCancel ? 0.35f : 0.0f);
         }
     }
 

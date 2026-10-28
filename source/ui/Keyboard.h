@@ -37,6 +37,21 @@ public:
     void setUrlKeys(bool on)            { urlKeys = on; }   /* http:// and https:// for Space */
     void reset();
 
+    /* Text field bounds (screen coords) so Keyboard can handle clicks on it */
+    void setTextField(float x, float y, float w, float h) {
+        tfX = x; tfY = y; tfW = w; tfH = h; hasTextField = true;
+    }
+    void clearTextField() { hasTextField = false; }
+    bool isTextFieldFocused() const { return selRow == -1; }
+    void setTextFieldFocused(bool f) { selRow = f ? -1 : 0; }
+
+    int  cursorPos() const { return cursor; }
+    void setCursorPos(int pos);
+
+    /* Helpers for text field rendering and click calculation */
+    int  calcScrollOffset(const std::string& text, int maxW, int fontSize) const;
+    static int charIndexAt(const std::string& text, int fontSize, float clickX);
+
     /* Edits text (at most maxLen bytes). */
     Result update(const ir_t& ir, std::string& text, size_t maxLen = 128);
     void   render(const ir_t& ir) const;
@@ -54,7 +69,7 @@ public:
     float lift()   const { return height() - ROWS * 40.0f; }
 
 private:
-    enum Special { K_NONE = 0, K_SHIFT, K_SYM, K_SPACE, K_DEL, K_ENTER, K_HTTP, K_HTTPS };
+    enum Special { K_NONE = 0, K_SHIFT, K_SYM, K_SPACE, K_DEL, K_ENTER, K_HTTP, K_HTTPS, K_LEFT, K_RIGHT };
     struct Key { int row, col, span; char ch; Special sp; };
 
     float       x0 = 67, y0 = 140;
@@ -63,6 +78,9 @@ private:
     int   page  = 0;          /* 0 letters, 1 symbols         */
     int   shift = 0;          /* 0 off, 1 next letter, 2 lock */
     int   selRow = 1, selCol = 0;
+    int   cursor = -1;        /* -1: at the end of text */
+    bool  hasTextField = false;
+    float tfX = 0, tfY = 0, tfW = 0, tfH = 0;
     unsigned long long lastShiftMs = 0;
     mutable unsigned long long flashMs = 0;   /* key press feedback */
     int   flashRow = -1, flashCol = -1;

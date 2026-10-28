@@ -548,20 +548,34 @@ bool runPlaySession(JellyfinClient& client,
                     if (!episodes.empty() && episodeIdx > 0) requestStop(PLAYER_STOP_PREV, N_("Loading previous episode..."));
                     else view.toast(tr("No previous episode"));
                     break;
-                case Remote::Cmd::VolumeUp:   wii_player_vol_up();   view.toast(tr("Volume +"), 1000); lastProgressAt = 0; break;
-                case Remote::Cmd::VolumeDown: wii_player_vol_down(); view.toast(tr("Volume -"), 1000); lastProgressAt = 0; break;
-                case Remote::Cmd::SetVolume: {
-                    wii_player_set_volume(rc.value);
-                    char t[48]; snprintf(t, sizeof(t), tr("Volume %d"), wii_player_volume());
-                    view.toast(t, 1000);
+                case Remote::Cmd::VolumeUp:
+                    wii_player_vol_up();
+                    view.showVolume(wii_player_volume(), wii_player_muted());
                     lastProgressAt = 0;
                     break;
-                }
-                case Remote::Cmd::Mute:       wii_player_set_mute(1); view.toast(tr("Sound off"), 1500); lastProgressAt = 0; break;
-                case Remote::Cmd::Unmute:     wii_player_set_mute(0); view.toast(tr("Sound on"), 1500);  lastProgressAt = 0; break;
+                case Remote::Cmd::VolumeDown:
+                    wii_player_vol_down();
+                    view.showVolume(wii_player_volume(), wii_player_muted());
+                    lastProgressAt = 0;
+                    break;
+                case Remote::Cmd::SetVolume:
+                    wii_player_set_volume(rc.value);
+                    view.showVolume(wii_player_volume(), wii_player_muted());
+                    lastProgressAt = 0;
+                    break;
+                case Remote::Cmd::Mute:
+                    wii_player_set_mute(1);
+                    view.showVolume(wii_player_volume(), true);
+                    lastProgressAt = 0;
+                    break;
+                case Remote::Cmd::Unmute:
+                    wii_player_set_mute(0);
+                    view.showVolume(wii_player_volume(), false);
+                    lastProgressAt = 0;
+                    break;
                 case Remote::Cmd::ToggleMute:
                     wii_player_set_mute(!wii_player_muted());
-                    view.toast(wii_player_muted() ? tr("Sound off") : tr("Sound on"), 1500);
+                    view.showVolume(wii_player_volume(), wii_player_muted());
                     lastProgressAt = 0;
                     break;
                 case Remote::Cmd::AudioTrack:    view.remoteTrack(true,  rc.value); break;
@@ -748,8 +762,14 @@ bool runPlaySession(JellyfinClient& client,
                     ok = client.getItemDetail(serverUrl, auth, episodes[nextIdx].id, nextDetail);
                     if (ok) {
                         if (nextDetail.defaultAudioIndex >= 0) nextAudio = nextDetail.defaultAudioIndex;
+                        int chosenSub = -1;
+                        if (subIdx >= 0) {
+                            chosenSub = Subtitles::findTrack(nextDetail.subtitleStreams, nextDetail.defaultSubIndex);
+                        } else if (Subtitles::defaultEnabled()) {
+                            chosenSub = Subtitles::selectTrack(nextDetail.subtitleStreams, nextDetail.defaultSubIndex);
+                        }
                         for (const MediaStream& s : nextDetail.subtitleStreams)
-                            if (s.index == nextDetail.defaultSubIndex) {
+                            if (s.index == chosenSub) {
                                 nextSub  = s.index;
                                 nextBurn = s.isText ? -1 : s.index;   /* text: drawn by WiiFin */
                             }

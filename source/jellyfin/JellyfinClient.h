@@ -12,6 +12,7 @@ struct JellyfinItem {
     std::string id;
     std::string name;
     std::string type; // "Movie", "Series", "MusicAlbum", ...
+    std::string parentId;
     int         year = 0;
     long long   playbackPositionTicks = 0;
     long long   runtimeTicks          = 0;
@@ -200,6 +201,14 @@ public:
     // be closed behind our back (MPlayer closes all of them after a video
     // session), so a stale socket number is never reused.
     void dropConnection();
+
+    // Cancel in-flight network requests (immediate abort of connect, recv, retries)
+    void abort();
+    void resetAbort();
+    bool isAborted() const;
+
+    // Check if an existing authentication token is still valid on the server
+    bool validateAuth(const std::string& serverUrl, const JellyfinAuth& auth);
 
     // Authenticate with username + password
     // Returns true on success, fills out auth

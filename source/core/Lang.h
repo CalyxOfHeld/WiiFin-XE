@@ -40,6 +40,9 @@ int         next(int i);
 const char* choiceKey();
 void        chooseKey(const char* key);
 
+/* Whether the fonts in use can draw Korean or Chinese characters. */
+bool        canDraw(const char* code);
+
 /* a running time: "1h 3min", "45min"; "" under a minute */
 std::string runTime(int minutes);
 
