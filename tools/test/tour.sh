@@ -46,9 +46,15 @@ SCRIPT="$1" TOKEN="$TOKEN" USERID="$USERID" SERVER="${SERVER:-http://127.0.0.1:1
 import os
 e = os.environ
 p = 'source/input/Input.cpp'; s = open(p).read()
-old = 'u32 wDown = WPAD_ButtonsDown(0);'
+old = 'int remoteChan = -1, classicChan = -1;        /* pressed this frame */'
 assert old in s, 'Input::update changed: update tools/test/tour.sh'
-s = s.replace(old, 'u32 wDown = tourButtons(); classic = true;')
+s = s.replace(old, old + '''
+    u32 tourBtn = tourButtons();
+    if (tourBtn) {
+        wiiDown |= fromWpad(tourBtn, true, false);
+        if (tourBtn & (WPAD_BUTTON_PLUS | WPAD_CLASSIC_BUTTON_PLUS)) plusDown = true;
+        if (classicChan < 0) classicChan = 0;
+    }''', 1)
 s = s.replace('void Input::update() {', '''#include <ogc/system.h>
 #include <stdio.h>
 /* "POINTER" / "NOPOINTER" in a scenario: the pointer shows at a fixed spot
