@@ -72,6 +72,7 @@ void PlayerView::setContext(const PlayerViewContext& c)
     pickAudio    = c.currentAudio;
     pickSub      = c.currentSub;
     skippedSegments = 0;
+    focusSegment = -1;
     seekPending  = false;
     seekInFlight = false;
     seekInPlaceSince = false;
@@ -316,6 +317,15 @@ void PlayerView::hitTest(const ir_t& ir)
     hoverBar    = false;
     hoverRow    = -1;
     hoverIntro  = introVisible() && ir.valid && inRect(ir, INTRO_X, INTRO_Y, INTRO_W, INTRO_H);
+
+    /* a skip button coming up takes the focus (once each), as Netflix's
+     * does: with the controls still up from the last one, A paused
+     * instead of going to the next episode */
+    const int seg = introVisible() ? activeSegment() : -1;
+    if (seg >= 0 && seg != focusSegment) {
+        focusSegment  = seg;
+        focusedButton = 6;
+    }
 
     if (panel != Panel::None) {
         int rows = panelCount() - panelTop;

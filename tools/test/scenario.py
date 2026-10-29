@@ -144,8 +144,13 @@ def write_sd(sc, sd, sess):
     sc['cfg'] = [c for c in sc['cfg'] if not c.startswith('profile.0.access_token=')]
     d = os.path.join(sd, 'apps', 'WiiFin')
     os.makedirs(d, exist_ok=True)
-    # device_id: the tests' own, apart from a Dolphin of the user's on the same server
-    cfg = ['music_enabled=0', 'home_layout=0', 'library_view=2', 'screen_area_asked=1',
+    # device_id: the tests' own, apart from a Dolphin of the user's on the same server.
+    # The scenarios were written for WiiFin's first defaults; XE's (sounds
+    # off, Max quality, solid colours, the browse page first...) are set
+    # back here, and a scenario's own cfg lines still override them
+    cfg = ['music_enabled=0', 'ui_sounds=1', 'video_quality=1', 'solid_colors=0', 'disc_light=1',
+           'remote_speaker=0', 'keyboard_size=0', 'screensaver_min=3', 'start_browse=0',
+           'home_layout=0', 'library_view=2', 'screen_area_asked=1',
            'device_id=wiifin-test-dolphin'] + sc['cfg'] + [
         'profile_count=1', 'profile.0.server_url=' + sc['server'], 'profile.0.username=wii',
         'profile.0.server_name=Jellyfin Test', 'profile.0.user_id=' + user, 'profile.0.access_token=' + token]

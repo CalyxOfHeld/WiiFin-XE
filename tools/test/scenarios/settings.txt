@@ -1,5 +1,3 @@
-# Out of date: written for the old Settings (one page per section, no
-# group headers). Walk the new layout before using it again.
 # Every setting changed once from the Settings of WiiFin's menu (System
 # Settings, then View Settings: theme and backgrounds): the line WiiFin
 # logs on leaving shows each one changed; the music stops at once and the
@@ -10,38 +8,70 @@ cfg music_enabled=1
 cfg ui_sounds=1
 cfg clock_12h=0
 3000  DOWN
-4000  A          Settings: its sections
-5000  DOWN       System Settings
-5500  A
-6300  A          Background Music off, at once
+3400  DOWN       Settings
+4000  A          its sections, on View Settings
+5000  DOWN
+5400  DOWN       System Settings
+5800  RIGHT
+6300  DOWN
+6800  A          Background Music off, at once
 7300  DOWN       a sound without the music
 7800  A          Interface Sounds off
-8300  DOWN       Clock
-8800  A          12-hour
-9300  DOWN       Language
-9800  DOWN       Screen Area
-10300 A          the calibration
-11300 RIGHT      1 px from the left
-12000 B          done
-13000 DOWN       SSL Verification
-13500 A          off
-14000 DOWN       Video Quality
-14500 A          High
-15000 DOWN       Direct Play
-15500 A          off
-16000 DOWN       Smooth Motion
-16500 A          off
-17000 DOWN       Disc Slot Light
-17500 A          off
-18000 B          the sections
-19000 UP         View Settings
-19500 A
-20000 A          Theme: Flix (home in rows)
-20500 DOWN       Backgrounds
-21000 A          solid
-21500 B          the sections
-22500 B          leave
-24000 END
+8300  DOWN
+8600  DOWN
+8900  DOWN
+9200  DOWN
+9500  DOWN
+9800  DOWN
+10100 DOWN       Clock
+10500 A          12-hour
+10900 DOWN
+11200 DOWN
+11500 DOWN
+11800 DOWN
+12100 DOWN
+12400 DOWN
+12700 DOWN       SSL Verification
+13100 A          off
+13600 B          the sections
+14100 UP         Playback Settings
+14500 RIGHT
+14900 DOWN       Video Quality
+15300 A          High
+15700 DOWN       Direct Play
+16100 A          off
+16500 DOWN       Smooth Motion
+16900 A          off
+17300 DOWN
+17600 DOWN
+17900 DOWN
+18200 DOWN
+18500 DOWN
+18800 DOWN
+19100 DOWN
+19400 DOWN
+19700 DOWN       Disc Slot Light
+20100 A          off
+20600 B          the sections
+21100 UP         View Settings
+21500 RIGHT
+21900 DOWN       Theme
+22300 A          Flix (home in rows)
+22700 DOWN
+23000 DOWN       Backgrounds
+23400 A          solid
+23800 DOWN
+24100 DOWN
+24400 DOWN
+24700 DOWN
+25000 DOWN
+25300 DOWN       Screen Area
+25700 A          the calibration
+26700 RIGHT      1 px from the left
+27400 B          done
+28400 B          the sections
+29400 B          leave
+31000 END
 expect logorder "musicLoop: exiting" "[Sound] move"
 expect nologafter "musicLoop: exiting" "ASND_End"
 expect nologafter "[TOUR] t=8" "[Sound]"

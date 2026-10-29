@@ -6,18 +6,27 @@
 server http://127.0.0.1:18096
 cfg language=fr
 3000  DOWN
-4000  A          Paramètres
-5000  DOWN       Paramètres système
-5500  A
-6000  DOWN
-6300  DOWN
-6600  DOWN       Langue
-7000  A          Italiano
-7500  A          Japanese
-8000  A          Nederlands
-8500  A          the language of the Wii
-9000  B          the sections
-10000 B          leave
-11500 END
+3400  DOWN       Paramètres
+4000  A
+5000  DOWN
+5400  DOWN       Paramètres système
+5800  RIGHT
+6200  DOWN
+6500  DOWN
+6800  DOWN
+7100  DOWN
+7400  DOWN
+7700  DOWN
+8000  DOWN
+8300  DOWN
+8600  DOWN
+8900  DOWN       Langue
+9300  A          Italiano
+9800  A          Japanese
+10300 A          Nederlands
+10800 A          the language of the Wii
+11300 B          the sections
+12300 B          leave
+13800 END
 expect logre "\[Settings\] .*, language en"
 expect nolog [Text] no glyph

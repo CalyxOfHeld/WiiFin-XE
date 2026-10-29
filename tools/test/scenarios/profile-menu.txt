@@ -1,6 +1,6 @@
 # The profile menu (A on the avatar): Settings while signed in, with the
 # profile's own sections; View Settings: Home Screen to rows, for this
-# profile; Sign-In Settings (before System Settings): Passcode, chosen
+# profile; Sign-In Settings (after System Settings): Passcode, chosen
 # among the others, typed twice on leaving; WiiFin Menu goes
 # past the profiles.  Opening the profile again asks the passcode: a
 # wrong one, then 1234.
@@ -13,44 +13,50 @@ cfg home_layout=0
 14000 DOWN
 14400 DOWN       Settings
 15000 A          the sections of a profile
-16000 A          View Settings
-17000 DOWN
-17400 DOWN       Home Screen
-18000 A          rows
+16000 RIGHT      View Settings, its list
+16400 DOWN
+16800 DOWN
+17200 DOWN
+17600 DOWN
+18000 DOWN       Home Screen
+18500 A          rows
 19000 B          the sections
-19500 DOWN       Sign-In Settings, right after View Settings
-20200 A
-21000 A          Sign-In: Passcode
-21400 A          Password
-21800 A          Automatic
-22200 A          Passcode again: nothing asked yet
-22600 B          leaving: the passcode, typed twice
-23400 A          1
-23900 RIGHT
-24200 A          2
+19400 DOWN
+19800 DOWN
+20200 DOWN       Sign-In Settings
+20700 RIGHT
+21200 A          Sign-In: Passcode
+21600 A          Password
+22000 A          Automatic
+22400 A          Passcode again: nothing asked yet
+22800 B          the sections
+23400 B          leaving: the passcode, typed twice
+24200 A          1
 24700 RIGHT
-25000 A          3
-25500 DOWN
-25800 LEFT
-26100 LEFT
-26400 A          4
-27400 A          again: 1
-27900 RIGHT
-28200 A          2
+25000 A          2
+25500 RIGHT
+25800 A          3
+26300 DOWN
+26600 LEFT
+26900 LEFT
+27200 A          4
+28200 A          again: 1
 28700 RIGHT
-29000 A          3
-29500 DOWN
-29800 LEFT
-30100 LEFT
-30400 A          4: the sections
-31000 B          the home, in rows now
+29000 A          2
+29500 RIGHT
+29800 A          3
+30300 DOWN
+30600 LEFT
+30900 LEFT
+31200 A          4: the home, in rows now
 33000 UP         the header
 33500 RIGHT      the profile button
 34000 A          its menu
 35000 DOWN
 35300 DOWN
-35600 DOWN       WiiFin Menu
-36200 A
+35600 DOWN
+35900 DOWN       WiiFin Main Menu
+36500 A
 38000 A          Connect To Jellyfin
 40000 A          the profile: its passcode
 41000 A

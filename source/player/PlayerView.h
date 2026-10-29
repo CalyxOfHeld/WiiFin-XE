@@ -154,6 +154,7 @@ private:
     /* Hit-testing results for the current frame */
     int   hoverButton = -1;    /* 0..4 = transport buttons, 5 = zoom */
     int   focusedButton = 2;   /* controller focus: 0..4 = transport, 5 = zoom, 6 = intro */
+    int   focusSegment  = -1;  /* the segment whose skip button last took the focus */
     int   volumeLevel = 50;
     bool  volumeMuted = false;
     u64   volumeUntil = 0;
