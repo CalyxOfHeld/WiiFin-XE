@@ -1,4 +1,5 @@
 #include "UsbMouse.h"
+#include "UsbGamepad.h"
 #include <gccore.h>
 #include <ogc/usb.h>
 #include <ogc/ipc.h>
@@ -29,6 +30,7 @@ struct Layout {
 struct Mouse {
     bool   connected = false;
     s32    fd = -1;
+    s32    device = -1;       /* its usb_device_entry id */
     u8     ep = 0;
     u16    len = 8;           /* bytes asked for at each read */
     bool   bootWheel = true;  /* boot: a 4th byte of -1..1 is a wheel, until it isn't */
@@ -214,6 +216,7 @@ bool openCandidate(const Candidate& c)
     }
     s_m = Mouse();
     s_m.fd = fd;
+    s_m.device = c.dev.device_id;
     s_m.ep = c.ep;
     s_m.len = c.epSize < 8 ? 8 : c.epSize > MAX_REPORT ? MAX_REPORT : c.epSize;
     s_m.lay = lay;
@@ -244,6 +247,9 @@ bool findMouse()
     for (int i = 0; i < count && i < MAX_DEVICES; ++i) {
         const usb_device_entry& e = list[i];
         if (!e.vid || !e.pid) continue;
+        /* the gamepad driver's: closing it after a look would fire the
+         * gamepad's removal callback */
+        if (e.device_id == UsbGamepad::deviceId()) continue;
         /* read without opening it (an opened device closed is suspended,
          * and the keyboard driver may be using it); the old USB interface
          * (no IOS 58) needs it opened */
@@ -391,6 +397,8 @@ void UsbMouse::shutdown()
 }
 
 bool UsbMouse::connected() { return s_thread != LWP_THREAD_NULL && s_m.connected; }
+
+s32 UsbMouse::deviceId() { return s_m.connected ? s_m.device : -1; }
 
 UsbMouse::State UsbMouse::take()
 {

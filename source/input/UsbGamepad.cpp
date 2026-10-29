@@ -1,4 +1,5 @@
 #include "UsbGamepad.h"
+#include "UsbMouse.h"
 #include "Input.h"
 #include <gccore.h>
 #include <ogc/usb.h>
@@ -38,6 +39,7 @@ struct Candidate {
 struct GamepadDevice {
     bool    connected = false;
     s32     fd = -1;
+    s32     device = -1;    /* its usb_device_entry id */
     u8      ep = 0;
     u8      epOut = 0;
     u16     len = 64;
@@ -56,6 +58,11 @@ sem_t         s_waitSema = LWP_SEM_NULL;
 mutex_t       s_lock = LWP_MUTEX_NULL;
 volatile bool s_quit = false;
 volatile s32  s_result = 0;
+volatile bool s_removed = false;     /* the removal callback came */
+volatile bool s_readDone = false;    /* the read asked for has finished */
+int           s_dumped = 0;          /* reports logged since connecting */
+volatile bool s_hidWatch = false;    /* a device change notification is asked for */
+volatile bool s_venWatch = false;
 static bool   s_xboxGuideHeld = false;
 u8 s_stack[16 * 1024] __attribute__((aligned(32)));
 
@@ -68,46 +75,44 @@ s8  s_subX = 0,   s_subY = 0;
 s32 readCb(s32 result, void*)
 {
     s_result = result;
+    s_readDone = true;
     LWP_SemPost(s_readSema);
     return 0;
 }
 
 s32 removedCb(s32, void*)
 {
+    s_removed = true;
     LWP_SemPost(s_readSema);
     LWP_SemPost(s_waitSema);
     return 0;
 }
 
-s32 changeCb(s32, void*)
+/* a device came or went: the notification is used up */
+s32 hidChangeCb(s32, void*)
 {
+    s_hidWatch = false;
     LWP_SemPost(s_waitSema);
     return 0;
 }
 
-s32 writeDummyCb(s32, void*)
+s32 venChangeCb(s32, void*)
 {
+    s_venWatch = false;
+    LWP_SemPost(s_waitSema);
     return 0;
 }
 
-PadType identifyPad(u16 vid, u16 pid, u8 ifaceClass = 0, u8 ifaceSubClass = 0, u8 ifaceProto = 0)
+/* A vendor-class (0xFF) interface: an Xbox pad, or None.  Only these are
+ * Xbox pads: the vendors below also make HID pads (PDP, PowerA and Hori
+ * for Switch, Razer for PS4), which are not. */
+PadType identifyXbox(u16 vid, u16 pid, u8 ifaceSubClass, u8 ifaceProto)
 {
-    /* Check interface class/subclass/protocol for Xbox vendor-specific controllers */
-    if (ifaceClass == 0xFF) {
-        if (ifaceSubClass == 0x47 || ifaceProto == 0xD0) {
-            return PadType::XboxOne;
-        }
-        if (ifaceSubClass == 0x5D || ifaceProto == 0x01) {
-            return PadType::Xbox360;
-        }
+    if (ifaceSubClass == 0x47 || ifaceProto == 0xD0) {
+        return PadType::XboxOne;
     }
-
-    /* Nintendo Switch controllers */
-    if (vid == 0x057E) {
-        if (pid == 0x2009 || pid == 0x2006 || pid == 0x2007 || pid == 0x200E ||
-            pid == 0x2017 || pid == 0x2019 || pid == 0x201E) {
-            return PadType::SwitchPro;
-        }
+    if (ifaceSubClass == 0x5D || ifaceProto == 0x01) {
+        return PadType::Xbox360;
     }
 
     /* Microsoft Official Xbox One & Series X|S */
@@ -137,6 +142,21 @@ PadType identifyPad(u16 vid, u16 pid, u8 ifaceClass = 0, u8 ifaceSubClass = 0, u
     /* Third-party Xbox 360 controllers */
     if (vid == 0x11C9 || vid == 0x1689 || vid == 0x1BAD) {
         return PadType::Xbox360;
+    }
+    /* another vendor-class interface: not a pad we know */
+    return PadType::None;
+}
+
+PadType identifyPad(u16 vid, u16 pid, u8 ifaceClass, u8 ifaceSubClass, u8 ifaceProto)
+{
+    if (ifaceClass == 0xFF) return identifyXbox(vid, pid, ifaceSubClass, ifaceProto);
+
+    /* Nintendo Switch controllers */
+    if (vid == 0x057E) {
+        if (pid == 0x2009 || pid == 0x2006 || pid == 0x2007 || pid == 0x200E ||
+            pid == 0x2017 || pid == 0x2019 || pid == 0x201E) {
+            return PadType::SwitchPro;
+        }
     }
 
     /* Sony Interactive Entertainment */
@@ -197,11 +217,17 @@ int scanCandidates(Candidate* c, int max)
     for (int i = 0; i < count && nc < max; ++i) {
         const usb_device_entry& e = list[i];
         if (!e.vid || !e.pid) continue;
+        /* the mouse driver's: closing it after a look would fire its removal
+         * callback (USBV5_CloseDevice does) */
+        if (e.device_id == UsbMouse::deviceId()) continue;
+        const bool vendorList = i >= countHid;
 
         usb_devdesc dd;
         memset(&dd, 0, sizeof(dd));
         s32 got = e.device_id >= 0x20 || e.device_id < -1 ? USB_GetDescriptors(e.device_id, &dd) : -1;
-        if (got < 0) {
+        /* never opened just to look: the vendor list also holds USB drives,
+         * whose driver would be told they went */
+        if (got < 0 && !vendorList) {
             s32 fd = -1;
             if (USB_OpenDevice(e.device_id, e.vid, e.pid, &fd) >= 0) {
                 got = USB_GetDescriptors(fd, &dd);
@@ -222,16 +248,11 @@ int scanCandidates(Candidate* c, int max)
                     (id->bInterfaceProtocol == USB_PROTOCOL_KEYBOARD || id->bInterfaceProtocol == USB_PROTOCOL_MOUSE))
                     continue;
 
-                PadType pt = identifyPad(e.vid, e.pid, id->bInterfaceClass, id->bInterfaceSubClass, id->bInterfaceProtocol);
-                const bool isXboxType = (pt == PadType::XboxOne || pt == PadType::Xbox360);
-                const bool isHid = (id->bInterfaceClass == USB_CLASS_HID);
-                const bool isXboxIntf = (id->bInterfaceClass == 0xFF &&
-                                        (id->bInterfaceSubClass == 0x47 || id->bInterfaceSubClass == 0x5D ||
-                                         id->bInterfaceProtocol == 0xD0 || id->bInterfaceProtocol == 0x01 ||
-                                         id->bInterfaceNumber == 0));
-
-                if (!isHid && !isXboxType && !isXboxIntf) continue;
-                if ((isXboxType || isXboxIntf) && id->bInterfaceNumber != 0) continue; /* Xbox controller data is on interface 0 */
+                if (id->bInterfaceClass != USB_CLASS_HID && id->bInterfaceClass != 0xFF) continue;
+                const PadType pt = identifyPad(e.vid, e.pid, id->bInterfaceClass, id->bInterfaceSubClass, id->bInterfaceProtocol);
+                if (pt == PadType::None) continue;
+                /* Xbox controller data is on interface 0 */
+                if (id->bInterfaceClass == 0xFF && id->bInterfaceNumber != 0) continue;
 
                 const usb_endpointdesc* edOut = outEndpoint(id);
                 const u8 epOutAddr = edOut ? (u8)edOut->bEndpointAddress : 0;
@@ -244,13 +265,62 @@ int scanCandidates(Candidate* c, int max)
     return nc;
 }
 
+/* A report descriptor with a Generic Desktop Joystick or Gamepad
+ * application collection.  Keyboards and mice, and the extra interfaces of
+ * their wireless receivers, have none. */
+bool isGamepadReport(const u8* d, int n)
+{
+    u32 page = 0, usage = 0;
+    bool haveUsage = false;
+    for (int i = 0; i < n; ) {
+        const u8 p = d[i++];
+        if (p == 0xFE) {                  /* long item */
+            if (i >= n) break;
+            i += 2 + d[i];
+            continue;
+        }
+        const int sz = (p & 3) == 3 ? 4 : (p & 3);
+        if (i + sz > n) break;
+        u32 u = 0;
+        for (int k = 0; k < sz; ++k) u |= (u32)d[i + k] << (8 * k);
+        i += sz;
+        const int type = (p >> 2) & 3, tag = p >> 4;
+        if (type == 1 && tag == 0) {      /* usage page */
+            page = u;
+        } else if (type == 2 && tag == 0 && !haveUsage) {   /* the first usage */
+            usage = sz == 4 ? u : (page << 16) | u;
+            haveUsage = true;
+        } else if (type == 0) {           /* main: locals end here */
+            if (tag == 10 && u == 1 && haveUsage &&
+                (usage == 0x00010004u || usage == 0x00010005u))
+                return true;
+            haveUsage = false;
+        }
+    }
+    return false;
+}
+
 bool openCandidate(const Candidate& c)
 {
     s32 fd = -1;
     if (USB_OpenDevice(c.dev.device_id, c.dev.vid, c.dev.pid, &fd) < 0) return false;
 
-    /* Ensure configuration 1 is selected (essential for vendor-class 0xFF devices) */
-    USB_SetConfiguration(fd, 1);
+    if (c.type == PadType::GenericHID) {
+        static u8 rdesc[1024];
+        const s32 size = USB_GetReportDescriptorSize(fd, c.iface);
+        if (size <= 0 || size > (s32)sizeof(rdesc) ||
+            USB_GetReportDescriptor(fd, c.iface, rdesc, (u16)size) < 0 || !isGamepadReport(rdesc, size)) {
+            SYS_Report("[Gamepad] %04x:%04x interface %d: not a gamepad (%d byte descriptor)\n",
+                       c.dev.vid, c.dev.pid, c.iface, (int)size);
+            USB_CloseDevice(&fd);
+            return false;
+        }
+    }
+
+    /* Vendor-class (Xbox) pads: configuration 1.  Not HID ones: IOS has
+     * configured those, and a SET_CONFIGURATION under it resets them. */
+    if (c.type == PadType::XboxOne || c.type == PadType::Xbox360)
+        USB_SetConfiguration(fd, 1);
 
     if (USB_DeviceRemovalNotifyAsync(fd, removedCb, nullptr) < 0) {
         USB_CloseDevice(&fd);
@@ -276,24 +346,31 @@ bool openCandidate(const Candidate& c)
             /* GIP Power-On packet */
             const u8 xboxone_init[5] = { 0x05, 0x20, 0x00, 0x01, 0x00 };
             memcpy(s_cmdBuf, xboxone_init, sizeof(xboxone_init));
-            USB_WriteIntrMsgAsync(fd, c.epOut, sizeof(xboxone_init), s_cmdBuf, writeDummyCb, nullptr);
-            SYS_Report("[Gamepad] Xbox One power-on init sent (ep 0x%02x)\n", c.epOut);
+            const s32 r = USB_WriteIntrMsg(fd, c.epOut, sizeof(xboxone_init), s_cmdBuf);
+            SYS_Report("[Gamepad] Xbox One power-on init (ep 0x%02x): %d\n", c.epOut, (int)r);
         }
     } else if (c.type == PadType::SwitchPro) {
         if (s_cmdBuf && c.epOut) {
-            /* Switch Pro USB mode handshake:
-             * Send handshake (0x80, 0x02) and force USB mode (0x80, 0x04).
-             * Never send 0x80, 0x03 (High Speed 480Mbps) because Wii OH0 is Full Speed (12Mbps) only! */
+            /* Switch Pro USB handshake (0x80 0x02), then no USB timeout
+             * (0x80 0x04).  One write at a time: they share s_cmdBuf.
+             * (0x80 0x03, which Linux also sends, sets the pad's internal
+             * UART speed, not the USB one; it is left out as before.) */
             s_cmdBuf[0] = 0x80; s_cmdBuf[1] = 0x02;
-            USB_WriteIntrMsgAsync(fd, c.epOut, 2, s_cmdBuf, writeDummyCb, nullptr);
-            usleep(10000);
+            const s32 r1 = USB_WriteIntrMsg(fd, c.epOut, 2, s_cmdBuf);
             s_cmdBuf[0] = 0x80; s_cmdBuf[1] = 0x04;
-            USB_WriteIntrMsgAsync(fd, c.epOut, 2, s_cmdBuf, writeDummyCb, nullptr);
-            SYS_Report("[Gamepad] Switch Pro USB handshake sent (ep 0x%02x)\n", c.epOut);
+            const s32 r2 = USB_WriteIntrMsg(fd, c.epOut, 2, s_cmdBuf);
+            SYS_Report("[Gamepad] Switch Pro USB handshake (ep 0x%02x): %d %d\n", c.epOut, (int)r1, (int)r2);
         }
     }
 
     s_dev.fd        = fd;
+    s_dev.device    = c.dev.device_id;
+    s_dumped        = 0;
+    s_removed       = false;
+    /* closing the last pad fired its removal callback: that post would
+     * start a second read under the first one */
+    u32 posted = 0;
+    if (LWP_SemGetValue(s_readSema, &posted) >= 0 && posted) LWP_SemWait(s_readSema);
     s_dev.ep        = c.ep;
     s_dev.epOut     = c.epOut;
     s_dev.len       = c.len > 0 && c.len <= MAX_REPORT ? c.len : (c.type == PadType::DualShock3 ? 49 : 64);
@@ -711,26 +788,16 @@ void decodeSwitchPro(const u8* buf, int len)
         return;
     }
 
-    /* Fallback to generic HID parser */
-    decodeGenericHID(buf, len);
+    /* anything else (0x81 handshake replies, ...) carries no buttons: read
+     * as a generic pad's report it pressed buttons at random */
 }
 
 void decodeGenericHID(const u8* buf, int len)
 {
     if (len < 5) return;
 
-    /* If this report actually matches Xbox One GIP input packet */
-    if ((buf[0] == 0x20 && len >= 18) || (buf[0] == 0x07 && len >= 5) || (buf[0] == 0x00 && buf[1] == 0x14 && len >= 14)) {
-        s_dev.type = (buf[0] == 0x00 && buf[1] == 0x14) ? PadType::Xbox360 : PadType::XboxOne;
-        decodeXbox(buf, len);
-        return;
-    }
-    /* If matches Switch Pro report */
-    if (((buf[0] == 0x30 || buf[0] == 0x21) && len >= 12) || (buf[0] == 0x3F && len >= 8)) {
-        s_dev.type = PadType::SwitchPro;
-        decodeSwitchPro(buf, len);
-        return;
-    }
+    /* Xbox pads are never HID ones and a Switch Pro is known by its ids: no
+     * guessing them from a report's first byte */
     /* If this report actually matches a DualShock 4 report (e.g. clone / third-party), route to DS4 parser */
     if (len >= 64 && buf[0] == 0x01 && (buf[5] & 0x0F) <= 8) {
         s_dev.type = PadType::DualShock4;
@@ -855,6 +922,19 @@ void decodeGenericHID(const u8* buf, int len)
     LWP_MutexUnlock(s_lock);
 }
 
+/* The device is still plugged in: in either host's list (IOS 58's; the
+ * old interface has no device ids, so there it counts as gone) */
+bool stillAttached(s32 device)
+{
+    if (device == 0 || device == -1) return false;
+    usb_device_entry list[MAX_DEVICES];
+    u8 count = 0;
+    if (USB_GetDeviceList(list, MAX_DEVICES, 0, &count) < 0) return false;
+    for (int i = 0; i < count && i < MAX_DEVICES; ++i)
+        if (list[i].device_id == device) return true;
+    return false;
+}
+
 void* threadMain(void*)
 {
     while (!s_quit) {
@@ -865,13 +945,17 @@ void* threadMain(void*)
                 if (openCandidate(cand[i])) break;
             }
             if (!s_dev.connected) {
-                /* Register change notify for HID devices just in case */
-                USB_DeviceChangeNotifyAsync(USB_CLASS_HID, changeCb, nullptr);
-                /* Sleep briefly before rescanning so any newly plugged device
-                 * (HID or Vendor 0xFF) is picked up promptly without burning CPU */
-                for (int w = 0; w < 5 && !s_quit; ++w) {
-                    usleep(100000);
-                }
+                /* wait for a device to come or go, on either host.  One
+                 * notification each, asked again only once it has come:
+                 * libogc keeps each one asked for in its 16 KB USB heap until
+                 * a device changes, and asking twice a second filled it in a
+                 * few minutes (then no USB request worked) */
+                if (!s_hidWatch)
+                    s_hidWatch = USB_DeviceChangeNotifyAsync(USB_CLASS_HID, hidChangeCb, nullptr) >= 0;
+                if (!s_venWatch)
+                    s_venWatch = USB_DeviceChangeNotifyAsync(0xFF, venChangeCb, nullptr) >= 0;
+                if (s_hidWatch || s_venWatch) LWP_SemWait(s_waitSema);
+                else usleep(500000);
                 continue;
             }
         }
@@ -879,7 +963,11 @@ void* threadMain(void*)
         if (s_quit) break;
 
         /* Submit interrupt read request */
-        if (USB_ReadIntrMsgAsync(s_dev.fd, s_dev.ep, s_dev.len, s_buf, readCb, nullptr) < 0) {
+        s_result = 0;
+        s_readDone = false;
+        if (s_removed || USB_ReadIntrMsgAsync(s_dev.fd, s_dev.ep, s_dev.len, s_buf, readCb, nullptr) < 0) {
+            SYS_Report("[Gamepad] Controller gone%s\n", s_removed ? " (removed)" : " (read could not start)");
+            s_removed = false;
             USB_CloseDevice(&s_dev.fd);
             s_dev.connected = false;
             s_xboxGuideHeld = false;
@@ -890,8 +978,37 @@ void* threadMain(void*)
             continue;
         }
 
-        LWP_SemWait(s_readSema);
+        /* until the read finishes.  The removal callback also comes when
+         * another driver opens and closes the pad (USBV5_CloseDevice fires
+         * it; on the Wii a DualShock 4 got one every 3 s or so): the pad
+         * still in the device list, the read goes on */
+        while (!s_quit) {
+            LWP_SemWait(s_readSema);
+            if (s_removed) {
+                s_removed = false;
+                if (!stillAttached(s_dev.device) ||
+                    USB_DeviceRemovalNotifyAsync(s_dev.fd, removedCb, nullptr) < 0) {
+                    s_removed = true;
+                    break;
+                }
+            }
+            if (s_readDone) break;
+        }
         if (s_quit) break;
+        if (s_removed) continue;          /* closed at the top */
+
+        /* the first reports, for controller bug reports */
+        if (s_result > 0 && s_dumped < 4) {
+            char hex[3 * 24 + 1];
+            const int n = s_result < 24 ? (int)s_result : 24;
+            for (int k = 0; k < n; ++k) {
+                static const char* H = "0123456789abcdef";
+                hex[3 * k] = H[s_buf[k] >> 4]; hex[3 * k + 1] = H[s_buf[k] & 15]; hex[3 * k + 2] = ' ';
+            }
+            hex[3 * n] = 0;
+            SYS_Report("[Gamepad] report %d (%d bytes): %s\n", s_dumped + 1, (int)s_result, hex);
+            ++s_dumped;
+        }
 
         if (s_result > 0) {
             if (s_dev.type == PadType::DualShock4) {
@@ -988,4 +1105,9 @@ bool UsbGamepad::isPlayStation()
 bool UsbGamepad::isXbox()
 {
     return s_dev.connected && (s_dev.type == PadType::XboxOne || s_dev.type == PadType::Xbox360);
+}
+
+s32 UsbGamepad::deviceId()
+{
+    return s_dev.connected ? s_dev.device : -1;
 }

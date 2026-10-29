@@ -25,4 +25,7 @@ namespace UsbMouse {
     State take();
     /* A mouse is plugged in and being read. */
     bool connected();
+    /* The USB device id being read (-1: none).  UsbGamepad leaves it
+     * alone: a device opened and closed has its removal callback fired. */
+    s32 deviceId();
 }

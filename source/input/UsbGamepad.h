@@ -27,4 +27,6 @@ namespace UsbGamepad {
     bool  connected();
     bool  isPlayStation();
     bool  isXbox();
+    /* The USB device id being read (-1: none); UsbMouse leaves it alone. */
+    s32   deviceId();
 }

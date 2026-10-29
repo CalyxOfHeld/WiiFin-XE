@@ -95,12 +95,14 @@ static s32 __WUPC_HandleConnect(void *arg, struct bte_pcb *pcb, u8 err)
 
 	if (err != ERR_OK || __WUPC_ChannelsUsed >= WUPC_CHAN_MAX)
 	{
+		SYS_Report("[WUPC] connection refused (err %d, %u in use)\n", (int)err, (unsigned)__WUPC_ChannelsUsed);
 		bte_disconnect(pcb);
 		return err;
 	}
 
 	stat->channel = __WUPC_ChannelsUsed;
 	stat->rumble = 0;
+	SYS_Report("[WUPC] Wii U Pro Controller %u connected\n", (unsigned)(stat->channel + 1));
 
 	__WUPC_SetLED(pcb, __WUPC_ChannelsUsed);
 
@@ -137,6 +139,7 @@ static s32 __WUPC_HandleConnect_step2(void *arg, struct bte_pcb *pcb, u8 err)
 static s32 __WUPC_HandleDisconnect(void *arg, struct bte_pcb *pcb __attribute__((unused)), u8 err)
 {
 	struct WUPCStat *stat = (struct WUPCStat*)arg;
+	SYS_Report("[WUPC] Wii U Pro Controller %u gone\n", (unsigned)(stat->channel + 1));
 	if (__WUPC_ChannelsUsed) __WUPC_ChannelsUsed--;
 
 	u32 i;
@@ -222,6 +225,7 @@ int __wrap_wiiuse_accept(struct wiimote_listen_t *wml, struct bd_addr *bdaddr, c
 	if (__WUPC_Inited && __WUPC_IsProController(bdaddr, name))
 	{
 		struct WUPCStat *stat = __WUPC_FindStatusSlot(bdaddr);
+		SYS_Report("[WUPC] accepting '%s'\n", name ? (const char *)name : "");
 		__WUPC_RegisterPad(stat, bdaddr, 1);
 		return 1;
 	}
@@ -233,6 +237,7 @@ int __wrap_wiiuse_connect(struct wiimote_listen_t *wml, struct bd_addr *bdaddr, 
 	if (__WUPC_Inited && __WUPC_IsProController(bdaddr, name))
 	{
 		struct WUPCStat *stat = __WUPC_FindStatusSlot(bdaddr);
+		SYS_Report("[WUPC] connecting to '%s'\n", name ? (const char *)name : "");
 		__WUPC_RegisterPad(stat, bdaddr, 0);
 		return 1;
 	}
@@ -258,6 +263,9 @@ void WUPC_Init(void)
 
 	__WUPC_ChannelsUsed = 0;
 	__WUPC_Inited = 1;
+	for (i = 0; i < __WUPC_Devices.num_registered; ++i)
+		if (strstr(__WUPC_Devices.registered[i].name, "-UC") != NULL)
+			SYS_Report("[WUPC] paired: '%s'\n", __WUPC_Devices.registered[i].name);
 }
 
 void WUPC_Disconnect(u8 chan)
