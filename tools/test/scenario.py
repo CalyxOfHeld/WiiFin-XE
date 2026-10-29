@@ -150,7 +150,7 @@ def write_sd(sc, sd, sess):
     # back here, and a scenario's own cfg lines still override them
     cfg = ['music_enabled=0', 'ui_sounds=1', 'video_quality=1', 'solid_colors=0', 'disc_light=1',
            'remote_speaker=0', 'keyboard_size=0', 'screensaver_min=3', 'start_browse=0',
-           'home_layout=0', 'library_view=2', 'screen_area_asked=1',
+           'home_layout=0', 'library_view=2', 'screen_area_asked=1', 'ask_before_stop=0',
            'device_id=wiifin-test-dolphin'] + sc['cfg'] + [
         'profile_count=1', 'profile.0.server_url=' + sc['server'], 'profile.0.username=wii',
         'profile.0.server_name=Jellyfin Test', 'profile.0.user_id=' + user, 'profile.0.access_token=' + token]

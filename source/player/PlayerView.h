@@ -60,6 +60,11 @@ public:
 
     PlayerView(GRRLIB_ttfFont* font, GRRLIB_texImg* cursor, GRRLIB_texImg* ring);
 
+    /* the settings: B asks before the video stops; + / - and |< >| go
+     * to the next or previous episode (off: |< >| only the chapters) */
+    static bool askBeforeStop;
+    static bool episodeButtons;
+
     void setContext(const PlayerViewContext& c);
 
     /* Busy message shown with the spinner over the last frame (stream
@@ -153,7 +158,7 @@ private:
 
     /* Hit-testing results for the current frame */
     int   hoverButton = -1;    /* 0..4 = transport buttons, 5 = zoom */
-    int   focusedButton = 2;   /* controller focus: 0..4 = transport, 5 = zoom, 6 = intro */
+    int   focusedButton = 2;   /* controller focus: 0..4 = transport, 5 = zoom, 6 = intro, 7 = the bar */
     int   focusSegment  = -1;  /* the segment whose skip button last took the focus */
     int   volumeLevel = 50;
     bool  volumeMuted = false;
@@ -163,6 +168,12 @@ private:
     int   hoverRow    = -1;    /* panel row */
     int   prevHoverRow = -1;   /* hover only moves the selection when it changes */
     bool  hoverIntro  = false;
+    /* B with Ask Before Stopping: Stop / Keep watching, over the video */
+    bool  stopAsk     = false;
+    int   stopSel     = 0;     /* 0 = Stop, 1 = Keep watching */
+    int   stopHover   = -1;
+    Action updateStopAsk(u32 down, const ir_t& ir);
+    void   drawStopAsk();
 
     float duration() const;
     bool  introVisible() const { return activeSegment() >= 0; }
@@ -170,7 +181,7 @@ private:
     int   activeSegment() const;
     const char* segmentLabel(int i) const;
     bool  controlsVisible() const;
-    void  nudgeSeek(float delta);
+    void  nudgeSeek(float delta, int waitMs = 400);
     float displayPosition() const;
     void  showControls(int ms = 5000);
     bool  chapterJump(int dir);   /* |< >| through the chapters, when there are */

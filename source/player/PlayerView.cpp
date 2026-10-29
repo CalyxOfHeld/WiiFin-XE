@@ -29,6 +29,14 @@ static const int INTRO_X    = 466, INTRO_Y = 312, INTRO_W = 150, INTRO_H = 40;
 static const int LIST_X     = 150, LIST_W  = 340;
 static const int LIST_Y     = 112, ROW_H   = 34;
 static const int LIST_ROWS  = 7;
+/* focusedButton on the seek bar (Up from the buttons) */
+static const int FOCUS_BAR  = 7;
+/* Ask Before Stopping: its card, Stop and Keep watching side by side */
+static const int ASK_X = 160, ASK_Y = 150, ASK_W = 320, ASK_H = 136;
+static const int ASK_BW = 130, ASK_BH = 40, ASK_GAP = 16;
+static const int ASK_BX = 320 - (2 * ASK_BW + ASK_GAP) / 2, ASK_BY = ASK_Y + 74;
+static const u32 DIR_LEFT  = Input::BTN_STICK_LEFT | Input::BTN_DPAD_LEFT | Input::BTN_C_LEFT | WPAD_BUTTON_LEFT;
+static const u32 DIR_RIGHT = Input::BTN_STICK_RIGHT | Input::BTN_DPAD_RIGHT | Input::BTN_C_RIGHT | WPAD_BUTTON_RIGHT;
 
 static u64 nowMs() { return ticks_to_millisecs(gettime()); }
 
@@ -60,6 +68,9 @@ static std::string streamLabel(const MediaStream& s, int n)
 
 /* ------------------------------------------------------------------------ */
 
+bool PlayerView::askBeforeStop  = true;
+bool PlayerView::episodeButtons = true;
+
 PlayerView::PlayerView(GRRLIB_ttfFont* f, GRRLIB_texImg* cursor, GRRLIB_texImg* ring)
     : font(f), cursorTex(cursor), ringTex(ring)
 {
@@ -73,6 +84,7 @@ void PlayerView::setContext(const PlayerViewContext& c)
     pickSub      = c.currentSub;
     skippedSegments = 0;
     focusSegment = -1;
+    stopAsk      = false;
     seekPending  = false;
     seekInFlight = false;
     seekInPlaceSince = false;
@@ -140,7 +152,7 @@ void PlayerView::showControls(int ms)
 /* MPlayer cannot seek in Jellyfin's live transcodes (the TS timestamps
  * don't start at 0 and the stream isn't seekable), so every seek restarts
  * the transcode at the target.  Repeated presses are merged into one. */
-void PlayerView::nudgeSeek(float delta)
+void PlayerView::nudgeSeek(float delta, int waitMs)
 {
     float base = seekPending ? seekPendingTo : position();
     float target = base + delta;
@@ -149,7 +161,7 @@ void PlayerView::nudgeSeek(float delta)
     if (dur > 0.0f && target > dur - 5.0f) target = dur - 5.0f;
     seekPending   = true;
     seekPendingTo = target;
-    seekCommitAt  = nowMs() + 400;   /* presses closer than this add up */
+    seekCommitAt  = nowMs() + waitMs;   /* presses closer than this add up */
     showControls();
 }
 
@@ -347,7 +359,7 @@ void PlayerView::hitTest(const ir_t& ir)
     } else {
         if (focusedButton == 6 && introVisible()) {
             hoverIntro = true;
-        } else {
+        } else if (focusedButton != FOCUS_BAR) {
             hoverButton = (focusedButton >= 0 && focusedButton <= BTN_ZOOM) ? focusedButton : 2;
         }
     }
@@ -411,6 +423,12 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
 
     const bool hasNext = ctx.episodeIdx + 1 < (int)ctx.episodes.size();
     const bool hasPrev = !ctx.episodes.empty() && ctx.episodeIdx > 0;
+    /* |< >| past the chapters, and + / -: the episodes, unless turned off */
+    auto toEpisode = [&](int dir, Action& act) {
+        if (!episodeButtons)                 toast(tr("Episode buttons are off in Settings"));
+        else if (dir > 0 ? hasNext : hasPrev) act = dir > 0 ? Action::Next : Action::Prev;
+        else                                 toast(dir > 0 ? tr("No next episode") : tr("No previous episode"));
+    };
 
     if (seekPending && nowMs() >= seekCommitAt) {
         seekPending  = false;
@@ -418,6 +436,7 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         seekTo = seekPendingTo;
         return Action::SeekTo;
     }
+    if (stopAsk) return updateStopAsk(down, ir);
 
     /* ---- Track picker ---- */
     if (panel != Panel::None) {
@@ -466,14 +485,14 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
                 switch (hoverButton) {
                 case 0:
                     if (chapterJump(-1)) { act = Action::SeekTo; break; }
-                    if (hasPrev) act = Action::Prev; else toast(tr("No previous episode"));
+                    toEpisode(-1, act);
                     break;
                 case 1: nudgeSeek(-10.0f); break;
                 case 2: wii_player_pause_toggle(); break;
                 case 3: nudgeSeek(+10.0f); break;
                 case 4:
                     if (chapterJump(+1)) { act = Action::SeekTo; break; }
-                    if (hasNext) act = Action::Next; else toast(tr("No next episode"));
+                    toEpisode(+1, act);
                     break;
                 case BTN_ZOOM: toggleZoom(); break;
                 }
@@ -483,7 +502,16 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         } else {
             /* Controller / GameCube / Classic navigation */
             if (visible) {
-                if (focusedButton == 6 && introVisible()) {
+                if (focusedButton == FOCUS_BAR) {
+                    if (seekPending) {
+                        seekPending  = false;
+                        seekInFlight = true;
+                        seekTo = seekPendingTo;
+                        act = Action::SeekTo;
+                    } else {
+                        wii_player_pause_toggle();
+                    }
+                } else if (focusedButton == 6 && introVisible()) {
                     int i = activeSegment();
                     const MediaSegment& seg = ctx.intro.segments[i];
                     skippedSegments |= 1u << i;
@@ -501,14 +529,14 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
                     switch (focusedButton) {
                     case 0:
                         if (chapterJump(-1)) { act = Action::SeekTo; break; }
-                        if (hasPrev) act = Action::Prev; else toast(tr("No previous episode"));
+                        toEpisode(-1, act);
                         break;
                     case 1: nudgeSeek(-10.0f); break;
                     case 2: wii_player_pause_toggle(); break;
                     case 3: nudgeSeek(+10.0f); break;
                     case 4:
                         if (chapterJump(+1)) { act = Action::SeekTo; break; }
-                        if (hasNext) act = Action::Next; else toast(tr("No next episode"));
+                        toEpisode(+1, act);
                         break;
                     case BTN_ZOOM: toggleZoom(); break;
                     default:
@@ -540,7 +568,19 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
     }
 
     if (down & WPAD_BUTTON_B) {
-        if (visible) return Action::Back;
+        if (visible && seekPending && !ir.valid && focusedButton == FOCUS_BAR) {
+            seekPending = false;   /* back to where it was */
+            showControls();
+            return Action::None;
+        }
+        if (visible) {
+            if (!askBeforeStop) return Action::Back;
+            stopAsk   = true;
+            stopSel   = 0;
+            stopHover = -1;
+            showControls();
+            return Action::None;
+        }
         showControls();
     }
 
@@ -590,6 +630,12 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
     case Input::PadVolume::Off:
         break;
     }
+    /* the controls up: the D-pad's Up and Down go between the skip
+     * button, the bar and the buttons (the volume again once they go) */
+    if (visible && !ir.valid) {
+        volUpBits   &= ~Input::BTN_DPAD_UP;
+        volDownBits &= ~Input::BTN_DPAD_DOWN;
+    }
 
     /* Volume adjustment */
     if (volUpBits && (down & volUpBits)) {
@@ -615,6 +661,27 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         }
     }
 
+    /* On the bar: Left / Right move where it goes, faster the longer
+     * they are held; it goes there with A, or 2 s after the last move
+     * (one restart of the stream, not one for each press) */
+    const bool onBar = visible && !ir.valid && focusedButton == FOCUS_BAR;
+    if (onBar) {
+        const u32 hd = Input::held() & (DIR_LEFT | DIR_RIGHT);
+        const u64 now = nowMs();
+        if (down & (DIR_LEFT | DIR_RIGHT)) {
+            holdSince = holdLast = now;
+            nudgeSeek(down & DIR_RIGHT ? +30.0f : -30.0f, 2000);
+        } else if (!hd) {
+            holdSince = 0;
+        } else if (holdSince && now - holdSince > 400 && now - holdLast >= 150) {
+            holdLast = now;
+            const u64 held = now - holdSince;
+            const float step = held > 4000 ? 180.0f : held > 1500 ? 60.0f : 30.0f;
+            nudgeSeek(hd & DIR_RIGHT ? step : -step, 2000);
+        }
+        scrubLeftBits = scrubRightBits = 0;
+    }
+
     /* Scrub adjustment */
     if (scrubRightBits && (down & scrubRightBits)) nudgeSeek(+10.0f);
     if (scrubLeftBits && (down & scrubLeftBits))   nudgeSeek(-10.0f);
@@ -636,7 +703,7 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
     const u32 navUp    = (Input::BTN_STICK_UP | Input::BTN_DPAD_UP | Input::BTN_C_UP) & ~volUpBits;
     const u32 navDown  = (Input::BTN_STICK_DOWN | Input::BTN_DPAD_DOWN | Input::BTN_C_DOWN) & ~volDownBits;
 
-    if (down & navLeft) {
+    if (!onBar && (down & navLeft)) {
         if (!visible) {
             showControls();
             focusedButton = 2;
@@ -646,7 +713,7 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
             showControls();
         }
     }
-    if (down & navRight) {
+    if (!onBar && (down & navRight)) {
         if (!visible) {
             showControls();
             focusedButton = 2;
@@ -656,13 +723,15 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
             showControls();
         }
     }
+    /* top to bottom: the skip button, the bar, the buttons */
     if (down & navUp) {
         if (!visible) {
             showControls();
             if (introVisible()) focusedButton = 6;
             else focusedButton = 2;
         } else {
-            if (introVisible()) focusedButton = 6;
+            if (focusedButton == FOCUS_BAR) { if (introVisible()) focusedButton = 6; }
+            else if (focusedButton != 6)    focusedButton = FOCUS_BAR;
             showControls();
         }
     }
@@ -671,16 +740,13 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
             showControls();
             focusedButton = 2;
         } else {
-            if (focusedButton == 6) focusedButton = 2;
+            if (focusedButton == 6)              focusedButton = FOCUS_BAR;
+            else if (focusedButton == FOCUS_BAR) focusedButton = 2;
             showControls();
         }
     }
-    if (down & WPAD_BUTTON_PLUS) {
-        if (hasNext) act = Action::Next; else toast(tr("No next episode"));
-    }
-    if (down & WPAD_BUTTON_MINUS) {
-        if (hasPrev) act = Action::Prev; else toast(tr("No previous episode"));
-    }
+    if (down & WPAD_BUTTON_PLUS)  toEpisode(+1, act);
+    if (down & WPAD_BUTTON_MINUS) toEpisode(-1, act);
     if (down & Input::BTN_ZOOM) toggleZoom();   /* Classic ZL/ZR, GameCube Z */
     if (down & WPAD_BUTTON_1) {
         if (ctx.audioStreams.size() > 1) openPanel(Panel::Audio);
@@ -798,17 +864,18 @@ void PlayerView::render(const ir_t& ir)
         float frac = dur > 0.0f ? pos / dur : 0.0f;
         if (frac > 1.0f) frac = 1.0f;
         if (frac < 0.0f) frac = 0.0f;
-        float barH = hoverBar ? BAR_H + 4 : BAR_H;
+        const bool barFocus = !ir.valid && focusedButton == FOCUS_BAR && panel == Panel::None && !stopAsk;
+        float barH = hoverBar || barFocus ? BAR_H + 4 : BAR_H;
         float barY = BAR_Y - (barH - BAR_H) / 2;
         Ui::roundRect(BAR_X, barY, BAR_W, barH, barH / 2, Ui::alpha(p.cardBorder, 0.6f));
         if (frac > 0.0f)
             Ui::roundRect(BAR_X, barY, BAR_W * frac < barH ? barH : BAR_W * frac, barH, barH / 2,
                           Ui::mix(p.accent, 0xFFFFFFFF, 0.2f), p.accent);
         {
-            float kx = BAR_X + BAR_W * frac, ky = BAR_Y + BAR_H / 2.0f, kr = hoverBar ? 9.0f : 7.0f;
+            float kx = BAR_X + BAR_W * frac, ky = BAR_Y + BAR_H / 2.0f, kr = hoverBar || barFocus ? 9.0f : 7.0f;
             Ui::shadow(kx - kr, ky - kr + 1, kr * 2, kr * 2, kr, 4.0f, p.shadow);
-            Ui::circle(kx, ky, kr, p.cardTop);
-            Ui::roundBorder(kx - kr, ky - kr, kr * 2, kr * 2, kr, 2.0f, p.accent);
+            Ui::circle(kx, ky, kr, barFocus ? Ui::mix(p.cardTop, p.accent, 0.5f * Ui::pulse()) : p.cardTop);
+            Ui::roundBorder(kx - kr, ky - kr, kr * 2, kr * 2, kr, barFocus ? 3.0f : 2.0f, p.accent);
         }
         /* Where a seek would land: under the pointer on the bar, or the
          * target of the -10s / +10s presses still to be played.  Its time
@@ -846,13 +913,16 @@ void PlayerView::render(const ir_t& ir)
         }
         Ui::text(BAR_X, TIME_Y, fmtTime(pos).c_str(), 15, p.text);
         Ui::textRight(BAR_X + BAR_W, TIME_Y, dur > 0.0f ? fmtTime(dur).c_str() : "--:--", 15, p.textDim);
+        if (barFocus)
+            Ui::textCentered(320, TIME_Y + 1, tr("Left / Right to move, hold to go faster, A to go"), 13, p.textDim);
 
         /* Transport buttons */
         const bool hasNext = ctx.episodeIdx + 1 < (int)ctx.episodes.size();
         const bool hasPrev = !ctx.episodes.empty() && ctx.episodeIdx > 0;
         /* |< and >| go from chapter to chapter first */
         const bool chapters = ctx.chapters.size() >= 2;
-        const bool enabled[BTN_COUNT] = { hasPrev || chapters, true, true, true, hasNext || chapters };
+        const bool enabled[BTN_COUNT] = { (episodeButtons && hasPrev) || chapters, true, true, true,
+                                          (episodeButtons && hasNext) || chapters };
         for (int i = 0; i < BTN_COUNT; ++i) {
             float x = BTN_X0 + i * (BTN_W + BTN_GAP);
             float f = (hoverButton == i && enabled[i]) ? Ui::pulse() : 0.0f;
@@ -957,6 +1027,8 @@ void PlayerView::render(const ir_t& ir)
         }
     }
 
+    if (stopAsk) drawStopAsk();
+
     /* ---- Toast ---- */
     if (!toastMsg.empty() && nowMs() < toastUntil)
         messagePill((k > 0.0f) ? TOP_H + 31 : 41, toastMsg, 16);
@@ -996,6 +1068,38 @@ void PlayerView::render(const ir_t& ir)
     }
 
     /* ---- Pointer ---- */
-    if (ir.valid && cursorTex && (k > 0.5f || panel != Panel::None || introVisible()))
+    if (ir.valid && cursorTex && (k > 0.5f || panel != Panel::None || introVisible() || stopAsk))
         if (!Ui::mouseCursor(ir.x, ir.y)) GRRLIB_DrawImg((int)ir.x - 20, (int)ir.y - 4, cursorTex, ir.angle, 1.0f, 1.0f, 0xFFFFFFFF);
+}
+
+/* ---- Ask Before Stopping --------------------------------------------- */
+
+/* B with the controls up: Stop or Keep watching (the video plays on
+ * behind); B again keeps it */
+PlayerView::Action PlayerView::updateStopAsk(u32 down, const ir_t& ir)
+{
+    showControls();
+    stopHover = -1;
+    for (int i = 0; i < 2; ++i)
+        if (inRect(ir, ASK_BX + i * (ASK_BW + ASK_GAP), ASK_BY, ASK_BW, ASK_BH)) stopHover = i;
+    if (stopHover >= 0) stopSel = stopHover;
+    if (down & DIR_LEFT)  stopSel = 0;
+    if (down & DIR_RIGHT) stopSel = 1;
+    if (down & WPAD_BUTTON_B) { stopAsk = false; return Action::None; }
+    if ((down & WPAD_BUTTON_A) && (!ir.valid || stopHover >= 0)) {
+        stopAsk = false;
+        if (stopSel == 0) return Action::Back;
+    }
+    return Action::None;
+}
+
+void PlayerView::drawStopAsk()
+{
+    const Ui::Palette& p = Ui::pal();
+    Ui::card(ASK_X, ASK_Y, ASK_W, ASK_H, 16, 0.0f);
+    Ui::textCentered(320, ASK_Y + 22, tr("Stop watching?"), 20, p.text);
+    const char* const labels[2] = { N_("Stop"), N_("Keep watching") };
+    for (int i = 0; i < 2; ++i)
+        Ui::button(ASK_BX + i * (ASK_BW + ASK_GAP), ASK_BY, ASK_BW, ASK_BH, tr(labels[i]), 16,
+                   i == stopSel ? Ui::pulse() : 0.0f);
 }

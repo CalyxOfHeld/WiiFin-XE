@@ -4,6 +4,7 @@
 #include "../player/vo_wiifin.h"
 #include "../player/WiiPlayer.h"
 #include "../player/Subtitles.h"
+#include "../player/PlayerView.h"
 #include "../core/SoundFX.h"
 #include "../core/Screensaver.h"
 #include "../player/RemoteSpeaker.h"
@@ -24,7 +25,7 @@ enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_H
            R_SAVER, R_SPEAKER, R_SAVER_LOGO, R_POWER_BTN, R_RESET_BTN,
            R_SAVER_SPEED, R_SAVER_EFFECT, R_KB_SIZE,
            R_SUBTITLES, R_SUB_LANG,
-           R_PAD_SCRUB, R_PAD_VOLUME };
+           R_PAD_SCRUB, R_PAD_VOLUME, R_EPISODE_BTNS, R_ASK_STOP };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -81,7 +82,7 @@ static std::vector<RowGroup> sectionGroups(int s, bool profile)
     case S_PLAYBACK:
         return { { G_VIDEO,      { R_QUALITY, R_DIRECT, R_SMOOTH } },
                  { G_SUBTITLES,  { R_SUBTITLES, R_SUB_LANG } },
-                 { G_CONTROLLER, { R_PAD_SCRUB, R_PAD_VOLUME } },
+                 { G_CONTROLLER, { R_PAD_SCRUB, R_PAD_VOLUME, R_EPISODE_BTNS, R_ASK_STOP } },
                  { G_WII,        { R_SPEAKER, R_LIGHT } } };
     case S_SYSTEM:
         return { { G_SOUND,      { R_MUSIC, R_SOUNDS } },
@@ -288,6 +289,18 @@ SettingsView::RowInfo SettingsView::describe(int id)
         set(N_("Volume Control"), volDescs[v], volNames[v], v == 3 ? OFF : p.accent);
         break;
     }
+    case R_EPISODE_BTNS:
+        set(N_("Episode Buttons"),
+            PlayerView::episodeButtons ? N_("+ and - (and |< >| after the last chapter) go to the next or previous episode")
+                                       : N_("+ and - do nothing; |< >| only go through the chapters"),
+            PlayerView::episodeButtons ? N_("ON") : N_("OFF"), PlayerView::episodeButtons ? p.ok : OFF);
+        break;
+    case R_ASK_STOP:
+        set(N_("Ask Before Stopping"),
+            PlayerView::askBeforeStop ? N_("B asks before the video stops")
+                                      : N_("B stops the video at once"),
+            PlayerView::askBeforeStop ? N_("ON") : N_("OFF"), PlayerView::askBeforeStop ? p.ok : OFF);
+        break;
     case R_THEME: {
         static const char* themeDesc[Ui::THEME_COUNT] = {
             N_("Light, like the Wii Menu"),
@@ -592,6 +605,8 @@ void SettingsView::activate(int index) {
         case R_PAD_VOLUME:
             Input::setPadVolume((Input::PadVolume)(((int)Input::padVolume() + 1) % 4));
             break;
+        case R_EPISODE_BTNS: PlayerView::episodeButtons = !PlayerView::episodeButtons; break;
+        case R_ASK_STOP:     PlayerView::askBeforeStop  = !PlayerView::askBeforeStop;  break;
     }
 }
 

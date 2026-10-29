@@ -11,6 +11,7 @@
 #include "../player/WiiPlayer.h"
 #include "../player/RemoteSpeaker.h"
 #include "../player/Subtitles.h"
+#include "../player/PlayerView.h"
 #include "../input/Input.h"
 #include "Screensaver.h"
 #include "../ui/Keyboard.h"
@@ -95,6 +96,10 @@ void App::loadSettings() {
                 Input::setPadVolume(Input::PadVolume::Off);
             else
                 Input::setPadVolume(Input::PadVolume::DPad);
+        } else if (strcmp(key, "episode_buttons") == 0) {
+            PlayerView::episodeButtons = atoi(val) != 0;
+        } else if (strcmp(key, "ask_before_stop") == 0) {
+            PlayerView::askBeforeStop = atoi(val) != 0;
         } else if (strcmp(key, "disc_light") == 0) {
             g_wiifin_disc_light = atoi(val) != 0;
         } else if (strcmp(key, "video_zoom") == 0) {
@@ -317,6 +322,8 @@ void App::saveSettings() {
                            Input::padVolume() == Input::PadVolume::CStick ? "c_stick" : "off";
     fprintf(f, "controller_scrub=%s\n",  scrubVal);
     fprintf(f, "controller_volume=%s\n", volVal);
+    fprintf(f, "episode_buttons=%d\n", PlayerView::episodeButtons ? 1 : 0);
+    fprintf(f, "ask_before_stop=%d\n", PlayerView::askBeforeStop ? 1 : 0);
     fprintf(f, "disc_light=%d\n",     g_wiifin_disc_light ? 1 : 0);
     fprintf(f, "video_zoom=%d\n",       (int)VideoSurface::zoom());
     fprintf(f, "exit_to_loader=%d\n",   g_app_exitToLoader ? 1 : 0);
