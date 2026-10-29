@@ -249,7 +249,7 @@ bool findMouse()
         if (!e.vid || !e.pid) continue;
         /* the gamepad driver's: closing it after a look would fire the
          * gamepad's removal callback */
-        if (e.device_id == UsbGamepad::deviceId()) continue;
+        if (UsbGamepad::owns(e.device_id)) continue;
         /* read without opening it (an opened device closed is suspended,
          * and the keyboard driver may be using it); the old USB interface
          * (no IOS 58) needs it opened */
