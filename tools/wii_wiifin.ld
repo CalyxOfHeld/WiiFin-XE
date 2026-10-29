@@ -68,8 +68,9 @@ SECTIONS {
 
         .rodata : {
                 KEEP( *(.rodata.__sys_versioninfo) )
-                /* not Brotli's dictionary (125 KB): with the blobs below */
-                EXCLUDE_FILE(*libbrotlicommon.a:*) *(.rodata .rodata.* .gnu.linkonce.r.*)
+                /* not Brotli's dictionary (125 KB) nor FreeType's glyph names
+                 * (56 KB): with the blobs below */
+                EXCLUDE_FILE(*libbrotlicommon.a:* *libfreetype.a:psnames.o) *(.rodata .rodata.* .gnu.linkonce.r.*)
                 *(.rodata1)
                 *(.fixup)
                 *(.got1)
@@ -187,6 +188,9 @@ SECTIONS {
                 /* Brotli's dictionary (constant): the code below 0x80804000
                  * had grown to touch the stub zone */
                 *libbrotlicommon.a:*(.rodata .rodata.*)
+                /* FreeType's glyph names (constant): the CI's test build,
+                 * with its scripted presses, had reached the stub zone */
+                *libfreetype.a:psnames.o(.rodata .rodata.*)
                 *stub_zone.o(.stub_zone)
                 . = ALIGN(32);   /* DOL loaders round section sizes up to 32 bytes */
         } :text2 = 0
