@@ -52,6 +52,17 @@ The Wii plays stereo. 5.1 sound is mixed down to two channels.
 
 Picture-based subtitles (PGS, VobSub) are drawn into the video by the server, so they need a converted stream. Text subtitles (SRT, ASS, VTT) are drawn by the Wii and work with direct play too.
 
+### Skip Intro doesn't appear
+
+The Skip Intro button appears only when the Jellyfin server has intro times. Jellyfin does not work them out by itself:
+
+1. In your Jellyfin Dashboard, go to **Plugins > Repositories** and add the Intro Skipper repository (manifest URL: `https://manifest.intro-skipper.org/manifest.json`).
+2. Install the **Intro Skipper** plugin from the catalog and restart the Jellyfin server.
+3. In **Scheduled Tasks**, run **Media Segment Scan**.
+4. In your library's settings, ensure Intro Skipper is ticked under **Media segment providers** if that option is shown.
+
+Once intro times exist on the server, WiiFin-XE shows the Skip Intro button during the intro, and the button takes controller focus so pressing **A** skips it.
+
 ### No sound from the Wii Remote's speaker
 
 The **Wii Remote Speaker** setting doesn't make a sound yet. It's a known issue.

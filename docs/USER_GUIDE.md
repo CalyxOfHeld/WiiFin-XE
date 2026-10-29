@@ -49,10 +49,10 @@ WiiFin-XE uses the same folder as WiiFin and replaces it. It keeps its settings,
 
 - Played by the integrated MPlayer CE engine: **direct play** of what the Wii decodes in real time (SD DivX/Xvid, MPEG-1/2, H.264 up to 480p, VP8; AVI, MKV, MP4, MPEG-TS/PS; seeks in the file itself), server-side transcoding for the rest, and back to transcoding when a file does not play smoothly (see [DIRECT_PLAY.md](../DIRECT_PLAY.md))
 - **Player**: seek bar with the server's trickplay thumbnails (Jellyfin 10.9+), left / right held to seek on, |◀ ▶| from chapter to chapter, volume, audio and subtitle tracks (text subtitles drawn by WiiFin, so the video can still play as it is), zoom (fit / fill)
-- **Overlay Navigation**: on GameCube and Classic Controllers, D-Pad or Left Stick navigates the on-screen controls with an animated pulsing focus ring, and **A** triggers the selected action. Press **B** to hide the overlay.
+- **Overlay Navigation**: on GameCube, Classic, and USB Controllers, D-Pad or Left Stick navigates the on-screen controls (|◀◀, −10s, Play/Pause, +10s, ▶▶|, Zoom, and Skip Intro when available) with an animated pulsing focus ring, and **A** triggers the selected action. D-Pad Up moves onto the seek bar to jump through the stream. Press **B** to hide the overlay.
 - **Live Volume HUD**: real-time floating volume card (0–100% and mute cross) and transport bar volume badge during adjustments.
 - **Subtitles**: OFF by default, with automatic preferred language matching against media tracks.
-- **Skip intro / recap / credits** buttons from the server's media segments (Jellyfin 10.10+ with a plugin such as Intro Skipper), and **Next episode** during the credits
+- **Skip intro / recap / credits** buttons from the server's media segments (Jellyfin 10.10+ with a plugin such as Intro Skipper), and **Next episode** during the credits; skip buttons automatically take controller focus so pressing **A** triggers them immediately
 - **Resume** where you left off; progress, pauses and the play method (direct or transcoded) reported to the server, each console a device of its own
 - A slow connection lowers the quality by itself; a picture that gets stuck is retried another way, with a message that says what happens
 
@@ -82,11 +82,11 @@ From the Jellyfin dashboard or apps:
 
 ## 🎮 Controls
 
-WiiFin-XE supports all standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the wireless **Wii U Pro Controller**, the **Nintendo Switch Pro Controller** (over USB), wired **Microsoft Xbox controllers** (Xbox One, Series X|S, 360 over USB), wired **Sony PlayStation controllers** (DualShock 4, DualShock 3, DualSense over USB), **Generic USB HID gamepads** (DragonRise, retro SNES/arcade USB pads, PC gamepads), the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**.
+WiiFin-XE supports standard Wii input methods: the **Wii Remote (Wiimote) & Nunchuk**, the **GameCube controller** (all 4 ports), the **Classic Controller / Classic Controller Pro**, the wireless **Wii U Pro Controller** (Bluetooth), the **Nintendo Switch Pro Controller** (USB), wired **Microsoft Xbox One controllers** (USB), wired **Sony PlayStation controllers** (DualShock 4 and DualShock 3 over USB), the **Wii U GamePad** (in Virtual Console injects), and standard **USB mice and keyboards**. DualSense, Xbox 360 and generic USB HID gamepads should also work. (Note: the Wii U Pro Controller works over Bluetooth only; plugged into USB it only charges. The Xbox Series X|S controller is not supported as the Wii's USB system drops it during setup).
 
 The pointer is optional: every screen works completely with the D-pad and analog sticks. On-screen button hints automatically adapt to show the exact glyphs of the controller used last (Wii Remote, Classic, GameCube, PlayStation vector glyphs, Xbox vector badges, or Keyboard caps).
 
-| Wii Remote (Wiimote) | Classic / Wii U Pro / Switch Pro | Microsoft Xbox (One / Series / 360) | Sony PlayStation (DS3 / DS4 / DualSense) | Generic USB Gamepad | GameCube Controller | Action |
+| Wii Remote (Wiimote) | Classic / Wii U Pro / Switch Pro | Microsoft Xbox (One / 360) | Sony PlayStation (DS3 / DS4 / DualSense) | Generic USB Gamepad | GameCube Controller | Action |
 |---|---|---|---|---|---|---|
 | A / B | A / B | A / B | ✕ / ○ | Button 1 (A) / Button 2 (B) | A / B | Select / Back |
 | D-pad | D-pad or Left Stick | D-pad or Left Stick | D-pad or Left Stick | D-pad or Left Stick | D-pad or Stick | Move (hold to repeat); left / right: A-Z in lists, −10 / +10 s in player |
@@ -96,11 +96,12 @@ The pointer is optional: every screen works completely with the D-pad and analog
 | HOME | HOME | Xbox Guide (or View + Menu) | PS Button (or Share + Options) | Select + Start | START | HOME menu overlay |
 | pointer | ZL / ZR | RS (Right Stick Click) | R3 (Right Stick Click) | R3 (Button 12) | Z | Video zoom (fit / fill); in menus: toggle browse page, Enter |
 
-- **Several controllers:** all four Wii Remotes, Wii U Pro Controllers, all four GameCube ports, and USB gamepads work simultaneously.
+- **Several controllers:** all four Wii Remotes, wireless Wii U Pro Controllers, all four GameCube ports, and USB gamepads work simultaneously.
 - **Wii Remote & Nunchuk:** use the IR pointer or D-pad; the Nunchuk's stick acts as the D-pad, C is − and Z is +.
-- **Wii U Pro Controller:** syncs wirelessly over Bluetooth. Supports dual analog sticks, rumble, and uses Classic Controller button hints.
+- **Wii U Pro Controller:** syncs wirelessly over Bluetooth. Supports dual analog sticks, rumble, and uses Classic Controller button hints. (Plugged in by USB it only charges).
 - **GameCube Controllers:** dual-analog sticks are fully utilized. By default, C-Stick scrubs playback (left/right ±10 s, held seeks continuously) and D-Pad controls volume (up/down). Roles can be customized in `Settings > Playback > Controller`.
-- **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons directly with a pulsing ring, and **A** executes the button. When controls are hidden, Left / Right instantly skips backward / forward 10 seconds (holding performs continuous scrub). Press **B** to hide the overlay.
+- **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons (|◀◀, −10s, Play/Pause, +10s, ▶▶|, Zoom, and Skip Intro / Next Episode) with a pulsing ring, and **A** executes the button. Pressing Up moves onto the seek bar. When a skip button appears (Skip Intro, Next Episode), it automatically takes focus so pressing **A** activates it. When controls are hidden, Left / Right instantly skips backward / forward 10 seconds (holding performs continuous scrub). Press **B** to hide the overlay.
+- **Seek bar:** when controls are visible, pressing Up moves selection to the seek bar. Left/Right move 30 seconds at a time; holding down accelerates (60 seconds, then 3 minutes per step). Pressing **A** seeks immediately (or wait 2 seconds after the last press); pressing **B** returns the marker to where playback was without seeking. The stream restarts only once. While controls are visible, Up/Down navigate between skip buttons, seek bar, and transport buttons.
 - **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right cycle through the header buttons.
 - **On-screen keyboard shortcuts:**
   - **Delete:** − on Wii Remote / Classic, LB on Xbox, Square (□) or L1 on PlayStation, Button 5 on Generic, X on GameCube. B also deletes (leaves when empty).
@@ -121,12 +122,11 @@ Standard USB mice and keyboards plugged into the Wii's rear USB ports work out o
 
 ### USB Gamepads (Xbox, PlayStation, Switch Pro & Generic HID)
 
-Standard wired USB controllers connect directly to the Wii's USB ports (or via an unpowered/powered USB hub):
-- **Microsoft Xbox Controllers (Xbox One, Xbox Series X|S, Xbox 360):** Plug in over USB. Automatically sends GIP power-on initialization and displays native vector Xbox badges (green A, red B, blue X, yellow Y, LB/RB badges, Xbox Guide button). Supports dual analog sticks, in-player overlay navigation, C-stick scrubbing, and volume adjustment. Pressing **View + Menu** acts as a fallback HOME button.
-- **Nintendo Switch Pro Controller:** Plug in over USB. Automatically performs high-speed USB handshake and parses 60Hz input telemetry (both standard report 0x30/0x21 and simple report 0x3F). Uses familiar Nintendo Classic button layout (A on right, B on bottom, X on top, Y on left, +, −, and Home).
-- **DualShock 4 & DualSense (PS4 / PS5):** Plug in over USB. Automatically displays native procedural vector PlayStation glyphs (blue ✕, red ○, pink □, green △, L1/R1, L2/R2, Share/Options, PS). Supports dual analog sticks, in-player overlay navigation, C-stick scrubbing, and volume adjustment.
-- **DualShock 3 (PS3):** Supports official and clone PS3 controllers over USB with automatic operational feature report wake-up.
-- **Generic USB HID Gamepads:** Supports standard DirectInput controllers, DragonRise USB gamepads, PC USB controllers, and retro USB pads (SNES/NES style). Pressing **Select + Start** together acts as the HOME menu button.
+Standard wired USB controllers connect directly to the Wii's rear USB ports (or via an unpowered/powered USB hub):
+- **Microsoft Xbox One Controllers:** Tested and working plugged into either rear USB port (including analog sticks and hot-plugging while running). Automatically sends GIP power-on initialization and displays native vector Xbox badges (green A, red B, blue X, yellow Y, LB/RB badges, Xbox Guide button). Supports dual analog sticks, in-player overlay navigation, C-stick scrubbing, and volume adjustment. Pressing **View + Menu** acts as a fallback HOME button. (Note: wired Xbox 360 controllers should work. The **Xbox Series X|S** controller does not work because the Wii's USB system drops it during setup).
+- **Nintendo Switch Pro Controller:** Tested and working plugged into either rear USB port (including analog sticks and hot-plugging while running). Automatically performs high-speed USB handshake and parses 60Hz input telemetry (both standard report 0x30/0x21 and simple report 0x3F). Uses familiar Nintendo Classic button layout (A on right, B on bottom, X on top, Y on left, +, −, and Home).
+- **DualShock 4 & DualShock 3 (PS4 / PS3):** Tested and working plugged into either rear USB port (including analog sticks and hot-plugging while running). DualShock 3 activates automatically upon connection. Automatically displays native procedural vector PlayStation glyphs (blue ✕, red ○, pink □, green △, L1/R1, L2/R2, Share/Options, PS). Supports dual analog sticks, in-player overlay navigation, C-stick scrubbing, and volume adjustment. DualSense should also work.
+- **Generic USB HID Gamepads:** Standard DirectInput controllers, DragonRise USB gamepads, PC USB controllers, and retro USB pads (SNES/NES style) should work. Pressing **Select + Start** together acts as the HOME menu button.
 - **Triggers & Bumpers:** L1/LB and L2/LT comfortably navigate backward (previous tab/page); R1/RB and R2/RT navigate forward (next tab/page). Zoom is mapped cleanly to R3 / RS (stick click) to prevent unintended trigger zooming.
 
 ## ⚙️ Settings
@@ -166,6 +166,8 @@ From a profile's menu, View holds that profile's own look. From WiiFin's main me
 | | Smooth Motion | Blend frames on picture changes, so 24 fps films move evenly on 60 Hz TVs |
 | Controller | Scrub Control | Choose which control scrubs playback on GameCube controllers: C-Stick (default) or D-Pad |
 | | Volume Control | Choose which control adjusts volume on GameCube controllers: D-Pad (default) or C-Stick |
+| | Episode Buttons | Whether + and − change episodes (default On); when Off, |◀◀ / ▶▶| only skip chapters |
+| | Ask Before Stopping | Whether pressing B asks "Stop watching?" with Stop / Keep watching choices (default On) |
 | Subtitles | Subtitles Default | Whether subtitles are Off (default) or On when playback begins |
 | | Preferred Subtitle Language | Preferred language to match against stream subtitle tracks (Any, English, French, Spanish, German, Italian, etc.) |
 | Speaker and Disc Light | Wii Remote Speaker | Off, Wii Remote only, or TV + Remote |
