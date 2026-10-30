@@ -1523,7 +1523,8 @@ bool showPage()
         over = s.over;
     }
     if (exitWii) {
-        MusicSession::stop(false);
+        /* WiiFin Main Menu: WiiFin goes on, its menu's sound with it */
+        MusicSession::stop(g_app_toMenu);
     } else if (over) {
         MusicSession::pump();
     } else if (g_mplayer_paused) {

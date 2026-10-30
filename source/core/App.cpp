@@ -963,6 +963,7 @@ void App::loop() {
         /* back at WiiFin's menu: the HOME menu's WiiFin Menu is done */
         g_app_toMenu = false;
         g_app_toProfileMenu = false;
+        toMainMenu = false;   /* here already (runConnect may have set it) */
 
         // --- Input: D-pad navigation ---
         if (g_app_reset) running = false;

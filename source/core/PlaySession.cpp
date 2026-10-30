@@ -811,7 +811,8 @@ bool runPlaySession(JellyfinClient& client,
                     long long resumeTicks = 0LL;
                     if (nextDetail.playbackPositionTicks > 0) {
                         resumeTicks = nextDetail.playbackPositionTicks;
-                    } else if (nextIdx >= 0 && nextIdx < (int)episodes.size() && episodes[nextIdx].playbackPositionTicks > 0) {
+                    } else if (!nextDetail.played && nextIdx >= 0 && nextIdx < (int)episodes.size() &&
+                               episodes[nextIdx].playbackPositionTicks > 0) {   /* watched: the server's 0 stands */
                         resumeTicks = episodes[nextIdx].playbackPositionTicks;
                     }
                     if (resumeTicks > 0 && nextDetail.runtimeTicks > 0 &&

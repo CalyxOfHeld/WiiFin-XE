@@ -427,10 +427,19 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
 
     if (down & WPAD_BUTTON_HOME) return Action::Home;
     if (hudHidden) {
-        if (down != 0) {
-            showControls();
+        if (injected != Action::None) {
+            showControls();   /* a track changed from the server: its panel shows */
+        } else {
+            /* a seek made just before hiding still goes */
+            if (seekPending && nowMs() >= seekCommitAt) {
+                seekPending  = false;
+                seekInFlight = true;
+                seekTo = seekPendingTo;
+                return Action::SeekTo;
+            }
+            if (down != 0) showControls();
+            return Action::None;
         }
-        return Action::None;
     }
     if (!busyMsg.empty()) return Action::None;   /* switching streams */
     if (injected != Action::None) { Action a = injected; injected = Action::None; return a; }
