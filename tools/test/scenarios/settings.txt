@@ -57,7 +57,7 @@ cfg clock_12h=0
 20900 DOWN
 21200 DOWN
 21500 DOWN
-21800 DOWN       Disc Slot Light (past Skip Intro's 3 and Ask Before Next)
+21800 DOWN       Disc Slot Light (past the 3 Skip Intro rows and Ask Before Next)
 22200 A          off
 22700 B          the sections
 23200 UP         View Settings

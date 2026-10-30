@@ -4,6 +4,7 @@
 # seasons of 5 episodes, 20 s each; each press comes before the episode ends).
 server http://127.0.0.1:18096
 positions-reset
+cfg ask_before_next=0
 position "Shuffle Show S01E05" 2
 6000  A          Connect To Jellyfin
 9000  A          the profile
