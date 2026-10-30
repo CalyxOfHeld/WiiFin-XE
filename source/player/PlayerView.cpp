@@ -441,8 +441,9 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
     auto toEpisode = [&](int dir, Action& act) {
         if (!episodeButtons)                 toast(tr("Episode buttons are off in Settings"));
         else if (dir > 0 ? hasNext : hasPrev) {
-            if (dir > 0 && askBeforeNext) {
+            if (askBeforeNext) {
                 nextAsk   = true;
+                nextDir   = dir;
                 nextSel   = 0;
                 nextHover = -1;
                 showControls();
@@ -1176,7 +1177,7 @@ PlayerView::Action PlayerView::updateNextAsk(u32 down, const ir_t& ir)
     if (down & WPAD_BUTTON_B) { nextAsk = false; return Action::None; }
     if ((down & WPAD_BUTTON_A) && (!ir.valid || nextHover >= 0)) {
         nextAsk = false;
-        if (nextSel == 0) return Action::Next;
+        if (nextSel == 0) return nextDir > 0 ? Action::Next : Action::Prev;
     }
     return Action::None;
 }
@@ -1185,8 +1186,9 @@ void PlayerView::drawNextAsk()
 {
     const Ui::Palette& p = Ui::pal();
     Ui::card(ASK_X, ASK_Y, ASK_W, ASK_H, 16, 0.0f);
-    Ui::textCentered(320, ASK_Y + 22, tr("Skip to next episode?"), 20, p.text);
-    const char* const labels[2] = { N_("Skip"), N_("Keep watching") };
+    Ui::textCentered(320, ASK_Y + 22, nextDir > 0 ? tr("Skip to next episode?") : tr("Go back to previous episode?"),
+                     20, p.text);
+    const char* const labels[2] = { nextDir > 0 ? N_("Skip") : N_("Go back"), N_("Keep watching") };
     for (int i = 0; i < 2; ++i)
         Ui::button(ASK_BX + i * (ASK_BW + ASK_GAP), ASK_BY, ASK_BW, ASK_BH, tr(labels[i]), 16,
                    i == nextSel ? Ui::pulse() : 0.0f);

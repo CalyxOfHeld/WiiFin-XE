@@ -189,6 +189,7 @@ private:
     /* Next with Ask Before Next: Skip / Keep watching */
     bool  nextAsk     = false;
     int   nextSel     = 0;     /* 0 = Skip, 1 = Keep watching */
+    int   nextDir     = 1;     /* +1 the next episode, -1 the previous */
     int   nextHover   = -1;
     Action updateNextAsk(u32 down, const ir_t& ir);
     void   drawNextAsk();

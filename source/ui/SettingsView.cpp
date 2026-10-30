@@ -306,7 +306,7 @@ SettingsView::RowInfo SettingsView::describe(int id)
         break;
     case R_ASK_NEXT:
         set(N_("Ask Before Next Episode"),
-            PlayerView::askBeforeNext ? N_("Ask before skipping to the next episode")
+            PlayerView::askBeforeNext ? N_("Ask before skipping to the next or previous episode")
                                       : N_("Skip immediately without asking"),
             PlayerView::askBeforeNext ? N_("ON") : N_("OFF"), PlayerView::askBeforeNext ? p.ok : OFF);
         break;
