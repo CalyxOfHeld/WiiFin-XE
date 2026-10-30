@@ -25,7 +25,8 @@ enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_H
            R_SAVER, R_SPEAKER, R_SAVER_LOGO, R_POWER_BTN, R_RESET_BTN,
            R_SAVER_SPEED, R_SAVER_EFFECT, R_KB_SIZE,
            R_SUBTITLES, R_SUB_LANG,
-           R_PAD_SCRUB, R_PAD_VOLUME, R_EPISODE_BTNS, R_ASK_STOP };
+           R_PAD_SCRUB, R_PAD_VOLUME, R_EPISODE_BTNS, R_ASK_STOP, R_ASK_NEXT,
+           R_SKIP_BTN, R_SKIP_AFTER, R_SKIP_PLUGIN };
 
 /* The sections, on the left: a search through all of them, then the look
  * (a profile's own; WiiFin's menu: the start-up one), playback, what
@@ -60,10 +61,10 @@ SettingsView::SettingsView(GRRLIB_texImg* btn, GRRLIB_ttfFont* f, JellyfinClient
 /* A section's settings in groups, each under a header that A folds and
  * unfolds (all open at first; folded stays so while WiiFin runs).  In
  * rows, a header is H_BASE + its group. */
-enum Group { G_THEME, G_HOME, G_SCREEN, G_VIDEO, G_SUBTITLES, G_CONTROLLER, G_WII, G_SOUND, G_SAVER, G_CLOCK, G_BUTTONS, G_CONNECTION, G_COUNT };
+enum Group { G_THEME, G_HOME, G_SCREEN, G_VIDEO, G_SUBTITLES, G_SKIP, G_CONTROLLER, G_WII, G_SOUND, G_SAVER, G_CLOCK, G_BUTTONS, G_CONNECTION, G_COUNT };
 static const char* const GROUPS[G_COUNT] = {
     /* TRANSLATORS: Settings: the headers over groups of settings */
-    N_("Theme"), N_("Home and Libraries"), N_("Screen and Keyboard"), N_("Video"), N_("Subtitles"), N_("Controller"), N_("Speaker and Disc Light"),
+    N_("Theme"), N_("Home and Libraries"), N_("Screen and Keyboard"), N_("Video"), N_("Subtitles"), N_("Skip Intro"), N_("Controller"), N_("Speaker and Disc Light"),
     N_("Sound"), N_("Screensaver"), N_("Clock and Language"), N_("Buttons and Exit"), N_("Connection")
 };
 static const int H_BASE = 1000;
@@ -82,7 +83,9 @@ static std::vector<RowGroup> sectionGroups(int s, bool profile)
     case S_PLAYBACK:
         return { { G_VIDEO,      { R_QUALITY, R_DIRECT, R_SMOOTH } },
                  { G_SUBTITLES,  { R_SUBTITLES, R_SUB_LANG } },
-                 { G_CONTROLLER, { R_PAD_SCRUB, R_PAD_VOLUME, R_EPISODE_BTNS, R_ASK_STOP } },
+                 { G_SKIP,       PlayerView::skipButton ? std::vector<int>{ R_SKIP_BTN, R_SKIP_AFTER, R_SKIP_PLUGIN }
+                                                        : std::vector<int>{ R_SKIP_BTN, R_SKIP_PLUGIN } },
+                 { G_CONTROLLER, { R_PAD_SCRUB, R_PAD_VOLUME, R_EPISODE_BTNS, R_ASK_STOP, R_ASK_NEXT } },
                  { G_WII,        { R_SPEAKER, R_LIGHT } } };
     case S_SYSTEM:
         return { { G_SOUND,      { R_MUSIC, R_SOUNDS } },
@@ -300,6 +303,37 @@ SettingsView::RowInfo SettingsView::describe(int id)
             PlayerView::askBeforeStop ? N_("B asks before the video stops")
                                       : N_("B stops the video at once"),
             PlayerView::askBeforeStop ? N_("ON") : N_("OFF"), PlayerView::askBeforeStop ? p.ok : OFF);
+        break;
+    case R_ASK_NEXT:
+        set(N_("Ask Before Next Episode"),
+            PlayerView::askBeforeNext ? N_("Ask before skipping to the next episode")
+                                      : N_("Skip immediately without asking"),
+            PlayerView::askBeforeNext ? N_("ON") : N_("OFF"), PlayerView::askBeforeNext ? p.ok : OFF);
+        break;
+    case R_SKIP_BTN:
+        set(N_("Skip Intro Button"),
+            PlayerView::skipButton ? N_("Offers to skip intros, recaps and credits; needs the Intro Skipper plugin on your server")
+                                   : N_("No skip button: intros, recaps and credits play through"),
+            PlayerView::skipButton ? N_("ON") : N_("OFF"), PlayerView::skipButton ? p.ok : OFF);
+        break;
+    case R_SKIP_AFTER: {
+        const int n = PlayerView::skipIntroAfter;
+        set(N_("Show Skip Intro After"),
+            n == 0 ? N_("Skip intro shows from the very first episode of a series")
+                   : N_("Skip intro shows once you've watched this many episodes of the series"),
+            n == 0 ? N_("Always") : "", n == 0 ? OFF : p.accent);
+        if (n > 0) {
+            char v[32];
+            /* TRANSLATORS: Show Skip Intro After: episodes of the series watched */
+            snprintf(v, sizeof(v), n == 1 ? tr("%d episode") : tr("%d episodes"), n);
+            r.value = v;
+        }
+        break;
+    }
+    case R_SKIP_PLUGIN:
+        set(N_("Intro Skipper Plugin"),
+            N_("WiiFin gets intro and credits times from your Jellyfin server: A says how to set it up"),
+            N_("About"), p.accent);
         break;
     case R_THEME: {
         static const char* themeDesc[Ui::THEME_COUNT] = {
@@ -607,6 +641,21 @@ void SettingsView::activate(int index) {
             break;
         case R_EPISODE_BTNS: PlayerView::episodeButtons = !PlayerView::episodeButtons; break;
         case R_ASK_STOP:     PlayerView::askBeforeStop  = !PlayerView::askBeforeStop;  break;
+        case R_ASK_NEXT:     PlayerView::askBeforeNext  = !PlayerView::askBeforeNext;  break;
+        case R_SKIP_BTN:     /* off: how many episodes first has no say, so it goes */
+            PlayerView::skipButton = !PlayerView::skipButton;
+            if (section != S_SEARCH) rows = shownRows(section);
+            break;
+        case R_SKIP_AFTER:
+            PlayerView::skipIntroAfter = (PlayerView::skipIntroAfter + 1) % (PlayerView::SKIP_AFTER_MAX + 1);
+            break;
+        case R_SKIP_PLUGIN:
+            Ui::showNotice(tr("Intro Skipper"),
+                           tr("On your Jellyfin server, add the Intro Skipper repository (intro-skipper.org) "
+                              "under Plugins, install it and restart. Once it has scanned your shows, "
+                              "their episodes get the button."),
+                           9000);
+            break;
     }
 }
 

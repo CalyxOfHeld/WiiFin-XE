@@ -446,6 +446,10 @@ public:
                             const JellyfinAuth& auth,
                             const std::string& episodeId,
                             IntroInfo& out);
+    /* episodes of episodeId's series the user has watched; -1 not an
+     * episode, or no answer */
+    int playedInSeries(const std::string& serverUrl, const JellyfinAuth& auth,
+                       const std::string& episodeId);
 
     // Trickplay thumbnails of a video, at the smallest size the server made.
     // False when there are none (not generated, or a server before 10.9).

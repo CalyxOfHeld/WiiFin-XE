@@ -3198,6 +3198,31 @@ bool JellyfinClient::getIntroTimestamps(const std::string& serverUrl,
 }
 
 // ---------------------------------------------------------------------------
+// How many episodes of an episode's series the user has watched:
+//   GET /Users/{u}/Items/{id}  its SeriesId, then
+//   GET /Users/{u}/Items?ParentId={series}&Recursive=true&IsPlayed=true&Limit=0
+// -1: not an episode, or the server didn't say.
+// ---------------------------------------------------------------------------
+int JellyfinClient::playedInSeries(const std::string& serverUrl,
+                                   const JellyfinAuth& auth,
+                                   const std::string& episodeId)
+{
+    std::string resp;
+    if (httpRequest(serverUrl + "/Users/" + auth.userId + "/Items/" + episodeId, "GET", "", "",
+                    auth.accessToken, resp) != 200)
+        return -1;
+    const std::string seriesId = jsonGetString(resp, "SeriesId");
+    if (seriesId.empty()) return -1;
+    char qs[512];
+    snprintf(qs, sizeof(qs),
+        "/Users/%s/Items?ParentId=%s&Recursive=true&IncludeItemTypes=Episode"
+        "&IsPlayed=true&Limit=0&EnableImages=false",
+        auth.userId.c_str(), seriesId.c_str());
+    if (httpRequest(serverUrl + qs, "GET", "", "", auth.accessToken, resp) != 200) return -1;
+    return jsonGetInt(resp, "TotalRecordCount");
+}
+
+// ---------------------------------------------------------------------------
 // Trickplay thumbnails (Jellyfin 10.9+)
 // GET /Users/{u}/Items/{id}?Fields=Trickplay answers, among the rest:
 //   "Trickplay":{"<mediaSourceId>":{"320":{"Width":320,"Height":180,

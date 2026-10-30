@@ -553,6 +553,15 @@ void LibraryView::loadDetail() {
 
     state = State::DetailReady;
 
+    if (detail.playbackPositionTicks <= 0) {
+        for (const auto& ep : episodes) {
+            if (ep.id == detailItemId && ep.playbackPositionTicks > 0) {
+                detail.playbackPositionTicks = ep.playbackPositionTicks;
+                break;
+            }
+        }
+    }
+
     /* the tracks the server picks for this user (Jellyfin's own clients
      * start with them too) */
     selectDefaultTracks(detail.defaultAudioIndex, detail.defaultSubIndex);

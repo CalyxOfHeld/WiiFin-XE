@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <functional>
+#include <algorithm>
 #include <ogc/lwp_watchdog.h>
 
 /* State captured before starting a stream so the MPlayer callback can send
@@ -252,7 +253,21 @@ bool runPlaySession(JellyfinClient& client,
         if (!introFetched) {
             runWithPlayerUI(view, ir, N_("Loading..."), [&]() {
                 intro = IntroInfo();
-                client.getIntroTimestamps(serverUrl, auth, itemId, intro);
+                if (PlayerView::skipButton) client.getIntroTimestamps(serverUrl, auth, itemId, intro);
+                /* a series new to the user: its intro and recap watched, not
+                 * skipped, for the first few episodes */
+                auto& segs = intro.segments;
+                auto opening = [](const MediaSegment& m) {
+                    return m.kind == MediaSegment::Intro || m.kind == MediaSegment::Recap;
+                };
+                if (PlayerView::skipIntroAfter > 0 && std::any_of(segs.begin(), segs.end(), opening)) {
+                    const int seen = client.playedInSeries(serverUrl, auth, itemId);
+                    if (seen >= 0 && seen < PlayerView::skipIntroAfter) {
+                        SYS_Report("[Segments] %d of the series watched (%d asked): no intro skip\n",
+                                   seen, PlayerView::skipIntroAfter);
+                        segs.erase(std::remove_if(segs.begin(), segs.end(), opening), segs.end());
+                    }
+                }
                 /* the chapters of the file played (a version has its own) */
                 std::vector<JellyfinChapter> ch;
                 chapters.clear();
@@ -755,9 +770,14 @@ bool runPlaySession(JellyfinClient& client,
                 /* its tracks as the server picks them (as on its page) */
                 int nextAudio = 0, nextSub = -1, nextBurn = -1;
                 runWithPlayerUI(view, ir, N_("Loading episode..."), [&]() {
-                    if (posTicks > 0)
+                    if (posTicks > 0) {
                         client.reportPlaybackStopped(serverUrl, auth, itemId, mediaSourceId,
                                                      playSessionId, posTicks);
+                        if (episodeIdx >= 0 && episodeIdx < (int)episodes.size()) {
+                            episodes[episodeIdx].playbackPositionTicks = posTicks;
+                        }
+                        lv.updateEpisodeProgress(itemId, posTicks);
+                    }
                     client.deleteActiveEncoding(serverUrl, auth, playSessionId);
                     ok = client.getItemDetail(serverUrl, auth, episodes[nextIdx].id, nextDetail);
                     if (ok) {
@@ -774,36 +794,60 @@ bool runPlaySession(JellyfinClient& client,
                                 nextBurn = s.isText ? -1 : s.index;   /* text: drawn by WiiFin */
                             }
                     }
-                    ok = ok && client.getPlaybackUrl(serverUrl, auth,
-                                                     episodes[nextIdx].id, episodes[nextIdx].id,
-                                                     nextAudio, nextBurn, 0, nextUrl, nextSession, how);
                 });
-                reported = true;
-                SYS_Report("[runPlay] %s episode: %d of %d\n",
-                           reason == PLAYER_STOP_NEXT ? "next" : "previous", nextIdx + 1, (int)episodes.size());
+                reported = true;   /* the stop is sent: not again on the way out */
+
                 if (ok) {
-                    episodeIdx    = nextIdx;
-                    itemId        = episodes[nextIdx].id;
-                    mediaSourceId = itemId;
-                    playSessionId = nextSession;
-                    url           = nextUrl;
-                    audioStreams  = nextDetail.audioStreams;
-                    subStreams    = nextDetail.subtitleStreams;
-                    audioIdx      = nextAudio;
-                    subIdx        = nextSub;
-                    burnSub       = nextBurn;
-                    subs.clear();
-                    subLoaded     = -1;
-                    if (subIdx >= 0 && burnSub < 0 && !loadSub(subIdx)) subIdx = -1;
-                    startTicks    = 0;
-                    runtimeTicks  = nextDetail.runtimeTicks;
-                    introFetched  = false;
-                    allowDirect   = true;
-                    retries       = 0;
-                    everPlayed    = false;
-                    reported      = false;
-                    wiifin_video_clear();   /* don't show the old episode while loading */
-                    continue;
+                    long long resumeTicks = 0LL;
+                    if (nextDetail.playbackPositionTicks > 0) {
+                        resumeTicks = nextDetail.playbackPositionTicks;
+                    } else if (nextIdx >= 0 && nextIdx < (int)episodes.size() && episodes[nextIdx].playbackPositionTicks > 0) {
+                        resumeTicks = episodes[nextIdx].playbackPositionTicks;
+                    }
+                    if (resumeTicks > 0 && nextDetail.runtimeTicks > 0 &&
+                        resumeTicks >= nextDetail.runtimeTicks - 100000000LL) {
+                        resumeTicks = 0LL;
+                    }
+
+                    long long nextStartTicks = 0LL;
+                    if (resumeTicks > 0) {
+                        std::string epName = episodeTitle(episodes[nextIdx]);
+                        nextStartTicks = view.askResume(ir, resumeTicks, epName);
+                    }
+
+                    runWithPlayerUI(view, ir, N_("Loading episode..."), [&]() {
+                        ok = client.getPlaybackUrl(serverUrl, auth,
+                                                   episodes[nextIdx].id, episodes[nextIdx].id,
+                                                   nextAudio, nextBurn, nextStartTicks,
+                                                   nextUrl, nextSession, how);
+                    });
+
+                    if (ok) {
+                        SYS_Report("[runPlay] %s episode: %d of %d (startTicks=%lld)\n",
+                                   reason == PLAYER_STOP_NEXT ? "next" : "previous", nextIdx + 1, (int)episodes.size(), nextStartTicks);
+                        episodeIdx    = nextIdx;
+                        itemId        = episodes[nextIdx].id;
+                        mediaSourceId = itemId;
+                        playSessionId = nextSession;
+                        url           = nextUrl;
+                        audioStreams  = nextDetail.audioStreams;
+                        subStreams    = nextDetail.subtitleStreams;
+                        audioIdx      = nextAudio;
+                        subIdx        = nextSub;
+                        burnSub       = nextBurn;
+                        subs.clear();
+                        subLoaded     = -1;
+                        if (subIdx >= 0 && burnSub < 0 && !loadSub(subIdx)) subIdx = -1;
+                        startTicks    = nextStartTicks;
+                        runtimeTicks  = nextDetail.runtimeTicks;
+                        introFetched  = false;
+                        allowDirect   = true;
+                        retries       = 0;
+                        everPlayed    = false;
+                        reported      = false;
+                        wiifin_video_clear();   /* don't show the old episode while loading */
+                        continue;
+                    }
                 }
             }
         }
@@ -818,9 +862,11 @@ bool runPlaySession(JellyfinClient& client,
     MusicBGM::init(musicWasRunning);
     runWithPlayerUI(view, ir, N_("Stopping..."), [&]() {
         if (g_wiifin_stream_fail_status >= 500) client.logTranscodeFailure(serverUrl, auth);
-        if (!reported && posTicks > 0)
+        if (!reported && posTicks > 0) {
             client.reportPlaybackStopped(serverUrl, auth, itemId, mediaSourceId,
                                          playSessionId, posTicks);
+            lv.updateEpisodeProgress(itemId, posTicks);
+        }
         client.deleteActiveEncoding(serverUrl, auth, playSessionId);
     });
     wiifin_video_clear();

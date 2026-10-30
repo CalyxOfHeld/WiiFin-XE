@@ -63,7 +63,14 @@ public:
     /* the settings: B asks before the video stops; + / - and |< >| go
      * to the next or previous episode (off: |< >| only the chapters) */
     static bool askBeforeStop;
+    static bool askBeforeNext;
     static bool episodeButtons;
+    /* the Skip button over intros, recaps and credits (their times from
+     * the server: Intro Skipper); intros and recaps only once this many
+     * episodes of the series were watched (0: from the first) */
+    static bool skipButton;
+    static int  skipIntroAfter;
+    static const int SKIP_AFTER_MAX = 10;
 
     void setContext(const PlayerViewContext& c);
 
@@ -102,6 +109,9 @@ public:
     void toast(const std::string& msg, int ms = 2000);
     void showVolume(int vol, bool muted = false);
 
+    /* Prompt user to Continue or start From Start when an episode has a checkpoint */
+    long long askResume(ir_t& ir, long long resumeTicks, const std::string& epTitle = "");
+
     /* The server's remote control (Remote): a seek to an absolute position
      * or by delta s, as the D-pad's (merged, then Action::SeekTo); a track
      * switch (Jellyfin stream index, -1 = no subtitles), as the picker's:
@@ -128,6 +138,7 @@ private:
     int   panelSel     = 0;
     int   panelTop     = 0;
     u64   controlsUntil = 0;   /* ms timestamp; controls visible until then */
+    bool  hudHidden     = false; /* Y pressed: HUD hidden until next button */
     bool  firstPicture  = false; /* the first picture shown: the controls go soon after */
     u64   holdSince = 0, holdLast = 0;   /* Left / Right held: seeking on */
     float controlsAlpha = 0.0f;
@@ -174,6 +185,13 @@ private:
     int   stopHover   = -1;
     Action updateStopAsk(u32 down, const ir_t& ir);
     void   drawStopAsk();
+
+    /* Next with Ask Before Next: Skip / Keep watching */
+    bool  nextAsk     = false;
+    int   nextSel     = 0;     /* 0 = Skip, 1 = Keep watching */
+    int   nextHover   = -1;
+    Action updateNextAsk(u32 down, const ir_t& ir);
+    void   drawNextAsk();
 
     float duration() const;
     bool  introVisible() const { return activeSegment() >= 0; }

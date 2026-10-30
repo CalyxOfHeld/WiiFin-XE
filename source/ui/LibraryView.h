@@ -33,6 +33,14 @@ public:
     // spills into MEM2, which keeps ~45 MB free while MPlayer runs), and
     // reload the detail page for lastItemId (fresh resume position).
     void onPlaybackFinished(const std::string& lastItemId);
+    void updateEpisodeProgress(const std::string& epId, long long posTicks) {
+        for (auto& ep : episodes) {
+            if (ep.id == epId) {
+                ep.playbackPositionTicks = posTicks;
+                break;
+            }
+        }
+    }
 
     /* Why update() returned true with nothing to play: B on the libraries
      * or the profile menu's choice */

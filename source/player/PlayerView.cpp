@@ -7,6 +7,7 @@
 #include "Trickplay.h"
 #include "Subtitles.h"
 #include "../input/Input.h"
+#include "../core/AppInternal.h"
 
 #include <ogc/lwp_watchdog.h>
 #include <math.h>
@@ -69,7 +70,10 @@ static std::string streamLabel(const MediaStream& s, int n)
 /* ------------------------------------------------------------------------ */
 
 bool PlayerView::askBeforeStop  = true;
+bool PlayerView::askBeforeNext  = true;
 bool PlayerView::episodeButtons = true;
+bool PlayerView::skipButton     = true;
+int  PlayerView::skipIntroAfter = 3;
 
 PlayerView::PlayerView(GRRLIB_ttfFont* f, GRRLIB_texImg* cursor, GRRLIB_texImg* ring)
     : font(f), cursorTex(cursor), ringTex(ring)
@@ -85,9 +89,11 @@ void PlayerView::setContext(const PlayerViewContext& c)
     skippedSegments = 0;
     focusSegment = -1;
     stopAsk      = false;
+    nextAsk      = false;
     seekPending  = false;
     seekInFlight = false;
     seekInPlaceSince = false;
+    hudHidden    = false;
     lastSeenPos  = -1.0f;
 }
 
@@ -139,13 +145,15 @@ const char* PlayerView::segmentLabel(int i) const
 
 bool PlayerView::controlsVisible() const
 {
+    if (hudHidden) return false;
     /* A pause held for rebuffering is not the user's: keep the picture clean */
     return panel != Panel::None || (g_mplayer_paused && rebufPercent < 0) ||
-           nowMs() < controlsUntil;
+           nowMs() < controlsUntil || stopAsk || nextAsk;
 }
 
 void PlayerView::showControls(int ms)
 {
+    hudHidden = false;
     controlsUntil = nowMs() + ms;
 }
 
@@ -400,7 +408,7 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         if (lastIrX < 0.0f || now - irAnchorMs > 500) { lastIrX = ir.x; lastIrY = ir.y; irAnchorMs = now; }
         float dx = ir.x - lastIrX, dy = ir.y - lastIrY;
         float need = controlsVisible() ? 4.0f : 24.0f;
-        if (dx * dx + dy * dy > need * need) {
+        if (!hudHidden && (dx * dx + dy * dy > need * need)) {
             showControls();
             lastIrX = ir.x; lastIrY = ir.y; irAnchorMs = now;
         }
@@ -418,6 +426,12 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
     }
 
     if (down & WPAD_BUTTON_HOME) return Action::Home;
+    if (hudHidden) {
+        if (down != 0) {
+            showControls();
+        }
+        return Action::None;
+    }
     if (!busyMsg.empty()) return Action::None;   /* switching streams */
     if (injected != Action::None) { Action a = injected; injected = Action::None; return a; }
 
@@ -426,8 +440,17 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
     /* |< >| past the chapters, and + / -: the episodes, unless turned off */
     auto toEpisode = [&](int dir, Action& act) {
         if (!episodeButtons)                 toast(tr("Episode buttons are off in Settings"));
-        else if (dir > 0 ? hasNext : hasPrev) act = dir > 0 ? Action::Next : Action::Prev;
-        else                                 toast(dir > 0 ? tr("No next episode") : tr("No previous episode"));
+        else if (dir > 0 ? hasNext : hasPrev) {
+            if (dir > 0 && askBeforeNext) {
+                nextAsk   = true;
+                nextSel   = 0;
+                nextHover = -1;
+                showControls();
+            } else {
+                act = dir > 0 ? Action::Next : Action::Prev;
+            }
+        }
+        else toast(dir > 0 ? tr("No next episode") : tr("No previous episode"));
     };
 
     if (seekPending && nowMs() >= seekCommitAt) {
@@ -437,6 +460,7 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         return Action::SeekTo;
     }
     if (stopAsk) return updateStopAsk(down, ir);
+    if (nextAsk) return updateNextAsk(down, ir);
 
     /* ---- Track picker ---- */
     if (panel != Panel::None) {
@@ -444,6 +468,21 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         if (hoverRow >= 0 && hoverRow != prevHoverRow) panelSel = hoverRow;
         prevHoverRow = hoverRow;
         if (down & WPAD_BUTTON_B) { panel = Panel::None; showControls(); return Action::None; }
+        if (down & WPAD_BUTTON_1) {
+            panel = Panel::None;
+            hudHidden = true;
+            controlsUntil = 0;
+            return Action::None;
+        }
+        if (down & WPAD_BUTTON_2) {
+            if (panel == Panel::Sub && ctx.audioStreams.size() > 1) {
+                openPanel(Panel::Audio);
+            } else {
+                panel = Panel::None;
+                showControls();
+            }
+            return Action::None;
+        }
         const u32 upBits = WPAD_BUTTON_UP | Input::BTN_DPAD_UP | Input::BTN_STICK_UP;
         const u32 dnBits = WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN | Input::BTN_STICK_DOWN;
         if ((down & upBits) && panelSel > 0)     --panelSel;
@@ -748,13 +787,24 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
     if (down & WPAD_BUTTON_PLUS)  toEpisode(+1, act);
     if (down & WPAD_BUTTON_MINUS) toEpisode(-1, act);
     if (down & Input::BTN_ZOOM) toggleZoom();   /* Classic ZL/ZR, GameCube Z */
+    /* Button Y (1 on Wii Remote): Hide HUD */
     if (down & WPAD_BUTTON_1) {
-        if (ctx.audioStreams.size() > 1) openPanel(Panel::Audio);
-        else toast(tr("No other audio track"));
+        panel = Panel::None;
+        hudHidden = true;
+        controlsUntil = 0;
+        return Action::None;
     }
+
+    /* Button X (2 on Wii Remote): Adjust Subtitles & Audio */
     if (down & WPAD_BUTTON_2) {
-        if (!ctx.subStreams.empty()) openPanel(Panel::Sub);
-        else toast(tr("No subtitles available"));
+        if (!ctx.subStreams.empty()) {
+            openPanel(Panel::Sub);
+        } else if (ctx.audioStreams.size() > 1) {
+            openPanel(Panel::Audio);
+        } else {
+            toast(tr("No subtitles or extra audio tracks"));
+        }
+        return Action::None;
     }
     return act;
 }
@@ -842,7 +892,7 @@ void PlayerView::render(const ir_t& ir)
              * keyboard (F3) only */
             const Ui::ButtonStyle bs = Ui::buttonStyle();
             const Ui::Hint all[] = { { "ZR", N_("Zoom") },
-                                     { "1", N_("Audio") }, { "2", N_("Subtitles") }, { "B", N_("Back") } };
+                                     { "1", N_("Hide") }, { "2", N_("Tracks") }, { "B", N_("Back") } };
             const Ui::Hint* hints = bs == Ui::ButtonStyle::WiiRemote ? all + 1 : all;
             const int nHints = bs == Ui::ButtonStyle::WiiRemote ? 3 : 4;
             float hw = 0;
@@ -1009,6 +1059,13 @@ void PlayerView::render(const ir_t& ir)
         Ui::card(LIST_X, LIST_Y, LIST_W, h, 16, 0.0f);
         Ui::text(LIST_X + 18, LIST_Y + 12, panel == Panel::Audio ? tr("Audio track") : tr("Subtitles"),
                  18, p.accentDark);
+        if (panel == Panel::Sub && ctx.audioStreams.size() > 1) {
+            const Ui::Hint switchHint = { "2", N_("Audio") };
+            Ui::hint(LIST_X + LIST_W - Ui::hintWidth(switchHint) - 14, LIST_Y + 13, switchHint);
+        } else if (panel == Panel::Audio && !ctx.subStreams.empty()) {
+            const Ui::Hint switchHint = { "2", N_("Subtitles") };
+            Ui::hint(LIST_X + LIST_W - Ui::hintWidth(switchHint) - 14, LIST_Y + 13, switchHint);
+        }
         Ui::roundRect(LIST_X + 14, LIST_Y + 38, LIST_W - 28, 1.5f, 0.75f, Ui::alpha(p.cardBorder, 0.6f));
         for (int i = 0; i < rows; ++i) {
             int row = panelTop + i;
@@ -1028,6 +1085,7 @@ void PlayerView::render(const ir_t& ir)
     }
 
     if (stopAsk) drawStopAsk();
+    if (nextAsk) drawNextAsk();
 
     /* ---- Toast ---- */
     if (!toastMsg.empty() && nowMs() < toastUntil)
@@ -1068,7 +1126,7 @@ void PlayerView::render(const ir_t& ir)
     }
 
     /* ---- Pointer ---- */
-    if (ir.valid && cursorTex && (k > 0.5f || panel != Panel::None || introVisible() || stopAsk))
+    if (ir.valid && cursorTex && (k > 0.5f || panel != Panel::None || introVisible() || stopAsk || nextAsk))
         if (!Ui::mouseCursor(ir.x, ir.y)) GRRLIB_DrawImg((int)ir.x - 20, (int)ir.y - 4, cursorTex, ir.angle, 1.0f, 1.0f, 0xFFFFFFFF);
 }
 
@@ -1102,4 +1160,112 @@ void PlayerView::drawStopAsk()
     for (int i = 0; i < 2; ++i)
         Ui::button(ASK_BX + i * (ASK_BW + ASK_GAP), ASK_BY, ASK_BW, ASK_BH, tr(labels[i]), 16,
                    i == stopSel ? Ui::pulse() : 0.0f);
+}
+
+/* ---- Ask Before Next Episode ----------------------------------------- */
+
+PlayerView::Action PlayerView::updateNextAsk(u32 down, const ir_t& ir)
+{
+    showControls();
+    nextHover = -1;
+    for (int i = 0; i < 2; ++i)
+        if (inRect(ir, ASK_BX + i * (ASK_BW + ASK_GAP), ASK_BY, ASK_BW, ASK_BH)) nextHover = i;
+    if (nextHover >= 0) nextSel = nextHover;
+    if (down & DIR_LEFT)  nextSel = 0;
+    if (down & DIR_RIGHT) nextSel = 1;
+    if (down & WPAD_BUTTON_B) { nextAsk = false; return Action::None; }
+    if ((down & WPAD_BUTTON_A) && (!ir.valid || nextHover >= 0)) {
+        nextAsk = false;
+        if (nextSel == 0) return Action::Next;
+    }
+    return Action::None;
+}
+
+void PlayerView::drawNextAsk()
+{
+    const Ui::Palette& p = Ui::pal();
+    Ui::card(ASK_X, ASK_Y, ASK_W, ASK_H, 16, 0.0f);
+    Ui::textCentered(320, ASK_Y + 22, tr("Skip to next episode?"), 20, p.text);
+    const char* const labels[2] = { N_("Skip"), N_("Keep watching") };
+    for (int i = 0; i < 2; ++i)
+        Ui::button(ASK_BX + i * (ASK_BW + ASK_GAP), ASK_BY, ASK_BW, ASK_BH, tr(labels[i]), 16,
+                   i == nextSel ? Ui::pulse() : 0.0f);
+}
+
+/* ---- Ask Resume Checkpoint ------------------------------------------- */
+
+long long PlayerView::askResume(ir_t& ir, long long resumeTicks, const std::string& epTitle)
+{
+    int sel = 0; // 0 = Continue, 1 = From Start
+    const Ui::Palette& p = Ui::pal();
+
+    const int DW = 380, DH = 144;
+    const int DX = (640 - DW) / 2;
+    const int DY = (480 - DH) / 2;
+    const int BW = 130, BH = 36, BGAP = 16;
+    const int bTotalW = BW * 2 + BGAP;
+    const int bStartX = DX + (DW - bTotalW) / 2;
+    const int bY      = DY + DH - BH - 16;
+
+    int secs = (int)(resumeTicks / 10000000LL);
+    int rh = secs / 3600, rm = (secs % 3600) / 60, rs = secs % 60;
+    char hint[64];
+    if (rh > 0) snprintf(hint, sizeof(hint), tr("Resume at %d:%02d:%02d"), rh, rm, rs);
+    else        snprintf(hint, sizeof(hint), tr("Resume at %d:%02d"), rm, rs);
+
+    while (!g_app_powerOff && !g_app_reset) {
+        Input::update();
+        u32 down = Input::rawDown();
+        Input::readIR(ir);
+
+        if (ir.valid) {
+            for (int i = 0; i < 2; ++i) {
+                int bx = bStartX + i * (BW + BGAP);
+                if (ir.x >= bx && ir.x < bx + BW && ir.y >= bY && ir.y < bY + BH) {
+                    sel = i;
+                    break;
+                }
+            }
+        }
+        if (down & (Input::BTN_STICK_LEFT | Input::BTN_DPAD_LEFT | Input::BTN_C_LEFT | WPAD_BUTTON_LEFT |
+                    Input::BTN_STICK_RIGHT | Input::BTN_DPAD_RIGHT | Input::BTN_C_RIGHT | WPAD_BUTTON_RIGHT)) {
+            sel ^= 1;
+        }
+        if ((down & WPAD_BUTTON_A) || (down & WPAD_BUTTON_2)) {
+            return sel == 0 ? resumeTicks : 0LL;
+        }
+        if (down & WPAD_BUTTON_B) {
+            return resumeTicks;
+        }
+
+        GRRLIB_FillScreen(0x000000FF);
+        VideoSurface::draw();
+        GRRLIB_Rectangle(Ui::screenLeft(), 0, Ui::screenWidth(), 480, p.dim, 1);
+
+        Ui::shadow(DX, DY, DW, DH, 18, 8.0f, p.shadow);
+        Ui::card(DX, DY, DW, DH, 18, 0.0f);
+
+        Ui::textCentered(320, DY + 18, tr("Resume playback?"), 18, p.text);
+        if (!epTitle.empty()) {
+            Ui::textCentered(320, DY + 42, fitText(epTitle, 14, DW - 32).c_str(), 14, p.textDim);
+            Ui::textCentered(320, DY + 62, hint, 14, p.accentDark);
+        } else {
+            Ui::textCentered(320, DY + 48, hint, 15, p.accentDark);
+        }
+
+        const char* const labels[2] = { N_("Continue"), N_("From Start") };
+        for (int i = 0; i < 2; ++i) {
+            Ui::button(bStartX + i * (BW + BGAP), bY, BW, BH, tr(labels[i]), 16,
+                       sel == i ? Ui::pulse() : 0.0f);
+        }
+
+        if (ir.valid && cursorTex) {
+            if (!Ui::mouseCursor(ir.x, ir.y))
+                GRRLIB_DrawImg((int)ir.x - 20, (int)ir.y - 4, cursorTex, ir.angle, 1.0f, 1.0f, 0xFFFFFFFF);
+        }
+
+        GRRLIB_Render();
+        VideoSurface::endFrame();
+    }
+    return 0LL;
 }

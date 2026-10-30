@@ -100,6 +100,13 @@ void App::loadSettings() {
             PlayerView::episodeButtons = atoi(val) != 0;
         } else if (strcmp(key, "ask_before_stop") == 0) {
             PlayerView::askBeforeStop = atoi(val) != 0;
+        } else if (strcmp(key, "ask_before_next") == 0) {
+            PlayerView::askBeforeNext = atoi(val) != 0;
+        } else if (strcmp(key, "skip_button") == 0) {
+            PlayerView::skipButton = atoi(val) != 0;
+        } else if (strcmp(key, "skip_intro_after") == 0) {
+            const int n = atoi(val);
+            if (n >= 0 && n <= PlayerView::SKIP_AFTER_MAX) PlayerView::skipIntroAfter = n;
         } else if (strcmp(key, "disc_light") == 0) {
             g_wiifin_disc_light = atoi(val) != 0;
         } else if (strcmp(key, "video_zoom") == 0) {
@@ -324,6 +331,9 @@ void App::saveSettings() {
     fprintf(f, "controller_volume=%s\n", volVal);
     fprintf(f, "episode_buttons=%d\n", PlayerView::episodeButtons ? 1 : 0);
     fprintf(f, "ask_before_stop=%d\n", PlayerView::askBeforeStop ? 1 : 0);
+    fprintf(f, "ask_before_next=%d\n", PlayerView::askBeforeNext ? 1 : 0);
+    fprintf(f, "skip_button=%d\n",     PlayerView::skipButton ? 1 : 0);
+    fprintf(f, "skip_intro_after=%d\n", PlayerView::skipIntroAfter);
     fprintf(f, "disc_light=%d\n",     g_wiifin_disc_light ? 1 : 0);
     fprintf(f, "video_zoom=%d\n",       (int)VideoSurface::zoom());
     fprintf(f, "exit_to_loader=%d\n",   g_app_exitToLoader ? 1 : 0);
