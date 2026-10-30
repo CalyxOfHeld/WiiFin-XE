@@ -41,7 +41,7 @@ The rows home has two pages:
 
 **Other Rows** (Settings > View): **Shaded** fades the rows under the one you're on. **Shown** draws every row plainly.
 
-**Start Screen** (Settings > View) sets which page the rows home opens on.
+**Start Screen** sets which page the rows home opens on. It's in a profile's Sign-In settings, and under View in WiiFin's main menu settings.
 
 ## Settings
 
@@ -81,7 +81,7 @@ Theme files are short text files in `sd:/apps/WiiFin/themes/`, easy to share and
 - **Server URL**, **Username** and **Password:** open the sign-in screen with the server and user name filled in. The password isn't kept on the Wii, so changing any of the three signs in again. Save keeps the profile's nickname, picture, look and passcode. Signing in as another account also clears its hidden libraries.
 - **Picture:** the same picker as 2.
 
-**Open at Start-Up** (a profile's Sign-In settings) opens that profile's home when WiiFin starts. Hold B while WiiFin starts to skip it.
+**Open at Start-Up** (a profile's Sign-In settings) skips the profile list and opens that profile's home when WiiFin starts. Hold B while WiiFin starts to pick another.
 
 **Deleting a profile** asks first. Cancel is highlighted, and Left/Right picks between the two.
 
@@ -106,6 +106,12 @@ The **profile menu** has an icon on each entry. It also has **Local Media (WiiMC
 - **Playback Controller Settings:**
   - **Episode Buttons** (Settings > Playback > Controller): on by default. When turned off, + and − no longer change the episode, and |◀◀ / ▶▶| only skip between chapters.
   - **Ask Before Stopping** (Settings > Playback > Controller): on by default. Pressing B prompts with "Stop watching?" and Stop / Keep watching choices to prevent accidental exits.
+  - **Ask Before Next Episode** (Settings > Playback > Controller): going to the next or the previous episode asks first.
+  - An episode you already started asks **Continue** or **From Start** when you go to it.
+  - **1** hides the player's controls; **2** opens the subtitle tracks, then the audio tracks.
+- **Skip Intro settings** (Settings > Playback > Skip Intro):
+  - **Skip Intro Button** turns the skip intro / recap / credits button on or off. It needs the Intro Skipper plugin on your server ([how to set it up](FAQ.md#skip-intro-doesnt-appear)).
+  - **Show Skip Intro After** keeps the button hidden until you've watched that many episodes of the series (Always, or 1 to 10; default 3), so a new show's opening plays the first few times.
 - **Live Volume HUD:** adjusting volume or muting displays a floating on-screen card showing the exact volume percentage (0–100%) and mute indicator (`×`), mirrored by a live volume badge on the transport bar.
 - **Nunchuk:** the stick works as the D-pad, C is − and Z is +.
 - **C-Stick** (GameCube / Gamepad Right Stick) works as the D-pad everywhere in menus.
@@ -181,7 +187,10 @@ The DVD, VHS and CD logos are WiiFin's own drawings in that style, not the trade
   - Started as a channel, "Homebrew Channel" finds HBC's channel.
   - If WiiFin is ever stuck, the Power button still turns the Wii off after a few seconds.
 - **Wii Remote Speaker** (Playback): Off, Wii Remote only, or TV + Remote. Still being worked on: see [known issues](#known-issues).
-- **HOME menu:** Reset is now **Restart**.
+- **HOME menu:** its buttons are in a column:
+  - **Profile Menu** (with a profile open): closes what's on screen and opens the profile menu (Back to Jellyfin, Switch Profile, Settings...). A video stops and keeps its place; music keeps playing.
+  - **WiiFin Main Menu**: asks first, then closes the profile and goes back to the start, where profiles are picked.
+  - **Homebrew Channel** (or **Wii Menu**, as Exit To says) and **Restart WiiFin**.
 
 ## WiiMC for local media
 

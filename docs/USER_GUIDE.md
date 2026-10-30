@@ -53,6 +53,7 @@ WiiFin-XE uses the same folder as WiiFin and replaces it. It keeps its settings,
 - **Live Volume HUD**: real-time floating volume card (0–100% and mute cross) and transport bar volume badge during adjustments.
 - **Subtitles**: OFF by default, with automatic preferred language matching against media tracks.
 - **Skip intro / recap / credits** buttons from the server's media segments (Jellyfin 10.10+ with a plugin such as Intro Skipper), and **Next episode** during the credits; skip buttons automatically take controller focus so pressing **A** triggers them immediately
+- **Next / previous episode**: an episode you started asks Continue or From Start; with Ask Before Next Episode on, it asks before changing episode at all
 - **Resume** where you left off; progress, pauses and the play method (direct or transcoded) reported to the server, each console a device of its own
 - A slow connection lowers the quality by itself; a picture that gets stuck is retried another way, with a message that says what happens
 
@@ -91,8 +92,8 @@ The pointer is optional: every screen works completely with the D-pad and analog
 | A / B | A / B | A / B | ✕ / ○ | Button 1 (A) / Button 2 (B) | A / B | Select / Back |
 | D-pad | D-pad or Left Stick | D-pad or Left Stick | D-pad or Left Stick | D-pad or Left Stick | D-pad or Stick | Move (hold to repeat); left / right: A-Z in lists, −10 / +10 s in player |
 | − / + | − / + or L / R | LB / RB or LT / RT | L1 / R1 or L2 / R2 | L1 / R1 (Btn 5/6) or L2 / R2 (Btn 7/8) | L / R | Tabs, pages, previous / next episode or track; + : mark watched; − : full synopsis |
-| 1 | Y | X | □ | Button 4 (Y / X) | Y | Search (home), favourite (film/series), audio track (player), Up Next (music) |
-| 2 | X | Y | △ | Button 3 (X / Y) | X | Sort & filter, special features, shuffle, subtitles (player) |
+| 1 | Y | X | □ | Button 4 (Y / X) | Y | Search (home), favourite (film/series), hide the controls (player), Up Next (music) |
+| 2 | X | Y | △ | Button 3 (X / Y) | X | Sort & filter, special features, shuffle, subtitles then audio tracks (player) |
 | HOME | HOME | Xbox Guide (or View + Menu) | PS Button (or Share + Options) | Select + Start | START | HOME menu overlay |
 | pointer | ZL / ZR | RS (Right Stick Click) | R3 (Right Stick Click) | R3 (Button 12) | Z | Video zoom (fit / fill); in menus: toggle browse page, Enter |
 
@@ -102,6 +103,7 @@ The pointer is optional: every screen works completely with the D-pad and analog
 - **GameCube Controllers:** dual-analog sticks are fully utilized. By default, C-Stick scrubs playback (left/right ±10 s, held seeks continuously) and D-Pad controls volume (up/down). Roles can be customized in `Settings > Playback > Controller`.
 - **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons (|◀◀, −10s, Play/Pause, +10s, ▶▶|, Zoom, and Skip Intro / Next Episode) with a pulsing ring, and **A** executes the button. Pressing Up moves onto the seek bar. When a skip button appears (Skip Intro, Next Episode), it automatically takes focus so pressing **A** activates it. When controls are hidden, Left / Right instantly skips backward / forward 10 seconds (holding performs continuous scrub). Press **B** to hide the overlay.
 - **Seek bar:** when controls are visible, pressing Up moves selection to the seek bar. Left/Right move 30 seconds at a time; holding down accelerates (60 seconds, then 3 minutes per step). Pressing **A** seeks immediately (or wait 2 seconds after the last press); pressing **B** returns the marker to where playback was without seeking. The stream restarts only once. While controls are visible, Up/Down navigate between skip buttons, seek bar, and transport buttons.
+- **HOME menu:** with a profile open, **Profile Menu** closes what's on screen (a video stops and keeps its place; music keeps playing) and opens the profile menu: Back to Jellyfin, Switch Profile, Settings... **WiiFin Main Menu** asks first, then closes the profile and goes back to the start, where profiles are picked. Below them: Homebrew Channel (or Wii Menu, as Exit To says) and Restart WiiFin.
 - **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right cycle through the header buttons.
 - **On-screen keyboard shortcuts:**
   - **Delete:** − on Wii Remote / Classic, LB on Xbox, Square (□) or L1 on PlayStation, Button 5 on Generic, X on GameCube. B also deletes (leaves when empty).
@@ -149,7 +151,7 @@ From a profile's menu, View holds that profile's own look. From WiiFin's main me
 | Home and Libraries | Home Screen * | Rows or a grid |
 | | Library View * | Posters, a list, or a list with the cover |
 | | Display Libraries * | The libraries shown on your home |
-| | Start Screen | The page the rows home opens on: Browse or Home |
+| | Start Screen | The page the rows home opens on: Browse or Home (in a profile's settings, it's under Sign-In) |
 | | Other Rows | Shaded under the row you're on, or all shown plainly |
 | | Header Buttons | Icons (Search, Home, Browse, Menu) or Classic |
 | Screen and Keyboard | Screen Area | Shrink the interface when the TV crops its edges; save one per TV |
@@ -166,8 +168,12 @@ From a profile's menu, View holds that profile's own look. From WiiFin's main me
 | | Smooth Motion | Blend frames on picture changes, so 24 fps films move evenly on 60 Hz TVs |
 | Controller | Scrub Control | Choose which control scrubs playback on GameCube controllers: C-Stick (default) or D-Pad |
 | | Volume Control | Choose which control adjusts volume on GameCube controllers: D-Pad (default) or C-Stick |
-| | Episode Buttons | Whether + and − change episodes (default On); when Off, |◀◀ / ▶▶| only skip chapters |
+| | Episode Buttons | Whether + and − change episodes (default On); when Off, \|◀◀ / ▶▶\| only skip chapters |
 | | Ask Before Stopping | Whether pressing B asks "Stop watching?" with Stop / Keep watching choices (default On) |
+| | Ask Before Next Episode | Whether going to the next or previous episode (+ / − or \|◀◀ / ▶▶\|) asks first |
+| Skip Intro | Skip Intro Button | Whether the Skip Intro / Recap / Credits button shows (needs the Intro Skipper plugin on the server, see the [FAQ](FAQ.md#skip-intro-doesnt-appear)) |
+| | Show Skip Intro After | Show the button only once you've watched this many episodes of the series: Always, or 1 to 10 (default 3) |
+| | Intro Skipper Plugin | A says how to set the plugin up on your server |
 | Subtitles | Subtitles Default | Whether subtitles are Off (default) or On when playback begins |
 | | Preferred Subtitle Language | Preferred language to match against stream subtitle tracks (Any, English, French, Spanish, German, Italian, etc.) |
 | Speaker and Disc Light | Wii Remote Speaker | Off, Wii Remote only, or TV + Remote |
@@ -193,7 +199,8 @@ From a profile's menu, View holds that profile's own look. From WiiFin's main me
 | Setting | |
 |---|---|
 | Sign-In | At once, a four-digit passcode, or the password each time; it applies when you leave Settings |
-| Open at Start-Up | Open this profile when WiiFin starts (hold B at start to skip) |
+| Open at Start-Up | Skip the profile list and open this profile when WiiFin starts (hold B at start to pick another) |
+| Start Screen | The page the rows home opens on: Browse or Home |
 
 ## 🔊 Custom sounds
 

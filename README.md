@@ -26,7 +26,7 @@ It's a modified version of <a href="https://github.com/fabienmillet/WiiFin">WiiF
 
 ## 📦 Install
 
-Download the files from the latest [WiiFin-XE release (v1.0.0-rc3-xe.1)](https://github.com/CalyxOfHeld/WiiFin-XE/releases/tag/v1.0.0-rc3-xe.1):
+Download the files from the latest [WiiFin-XE release (v1.0.0-rc3-xe.2)](https://github.com/CalyxOfHeld/WiiFin-XE/releases/tag/v1.0.0-rc3-xe.2):
 
 - **Homebrew Channel:** unzip `WiiFin-apps.zip` (or `WiiFin-hbc.zip`) at the root of your SD card or USB drive (or transfer it over your network using ftpii). It extracts directly into `apps/WiiFin/` with `boot.dol`, `icon.png`, and `meta.xml`.
 - **Wii Menu channel:** install `WiiFin.wad` with a WAD manager (Wii and vWii). For Chinese or Korean, also copy `apps/WiiFin/fonts/` from the zip to the SD card.

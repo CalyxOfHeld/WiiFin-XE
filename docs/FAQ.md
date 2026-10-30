@@ -63,6 +63,8 @@ The Skip Intro button appears only when the Jellyfin server has intro times. Jel
 
 Once intro times exist on the server, WiiFin-XE shows the Skip Intro button during the intro, and the button takes controller focus so pressing **A** skips it.
 
+In WiiFin-XE, check Settings > Playback > Skip Intro too: **Skip Intro Button** must be on, and **Show Skip Intro After** hides it until you've watched that many episodes of the series (3 at first). Set it to Always to see it from the first episode.
+
 ### No sound from the Wii Remote's speaker
 
 The **Wii Remote Speaker** setting doesn't make a sound yet. It's a known issue.
@@ -100,7 +102,7 @@ On "Who's watching?", press 1 (Y on a Classic Controller or GameCube controller)
 
 ### A profile opens on its own at start
 
-That profile has **Open at Start-Up** on. Hold B while WiiFin-XE starts to go to the menu instead, or turn it off in that profile's Sign-In settings.
+That profile has **Open at Start-Up** on. Hold B while WiiFin-XE starts to go to the menu instead, or turn it off in that profile's Sign-In settings. Once it's open, HOME > **WiiFin Main Menu** also takes you back to the profile list.
 
 ### I removed a theme by mistake
 

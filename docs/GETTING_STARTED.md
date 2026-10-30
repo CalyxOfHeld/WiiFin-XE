@@ -33,7 +33,7 @@ You don't need to convert any files. The server converts what the Wii can't play
 
 ## Installing on the Wii
 
-Download the latest [WiiFin-XE release (v1.0.0-rc3-xe.1)](https://github.com/CalyxOfHeld/WiiFin-XE/releases/tag/v1.0.0-rc3-xe.1), then pick one:
+Download the latest [WiiFin-XE release (v1.0.0-rc3-xe.2)](https://github.com/CalyxOfHeld/WiiFin-XE/releases/tag/v1.0.0-rc3-xe.2), then pick one:
 
 - **Homebrew Channel:** unzip `WiiFin-hbc.zip` at the root of the SD card (or transfer it over your network using ftpii). It puts everything in `apps/WiiFin/`, including the Chinese and Korean font.
 - **A channel on the Wii Menu:** install `WiiFin.wad` with a WAD manager (Wii and vWii). For Chinese or Korean, also copy `apps/WiiFin/fonts/` from the zip to the SD card.
