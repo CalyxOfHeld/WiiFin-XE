@@ -174,6 +174,7 @@ From a profile's menu, View holds that profile's own look. From WiiFin's main me
 | Skip Intro | Skip Intro Button | Whether the Skip Intro / Recap / Credits button shows (needs the Intro Skipper plugin on the server, see the [FAQ](FAQ.md#skip-intro-doesnt-appear)) |
 | | Show Skip Intro After | Show the button only once you've watched this many episodes of the series: Always, or 1 to 10 (default 3) |
 | | Intro Skipper Plugin | A says how to set the plugin up on your server |
+| | (per series) | 2 in a series' episode list: **Skip Intro (this show)** overrides these two for that series (My Setting, Off, Always, After 1 to 10) |
 | Subtitles | Subtitles Default | Whether subtitles are Off (default) or On when playback begins |
 | | Preferred Subtitle Language | Preferred language to match against stream subtitle tracks (Any, English, French, Spanish, German, Italian, etc.) |
 | Speaker and Disc Light | Wii Remote Speaker | Off, Wii Remote only, or TV + Remote |

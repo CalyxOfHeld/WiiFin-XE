@@ -4,6 +4,7 @@
 #include <wiiuse/wpad.h>
 #include <string>
 #include <vector>
+#include <map>
 #include "../jellyfin/JellyfinClient.h"
 
 class Trickplay;
@@ -71,6 +72,15 @@ public:
     static bool skipButton;
     static int  skipIntroAfter;
     static const int SKIP_AFTER_MAX = 10;
+    /* a series' own choice over those two (2 in its episodes), the open
+     * profile's: SKIP_OFF no button, 0 from the first episode, n once n
+     * were watched; a series not in it follows the settings */
+    static const int SKIP_OFF = -1;
+    static std::map<std::string, int> seriesSkip;
+    static bool seriesSkipChanged;   /* to be saved with the profile */
+    static void skipFor(const std::string& seriesId, bool& on, int& after);
+    static void loadSeriesSkip(const std::string& s);   /* "id:n,id:n" */
+    static std::string seriesSkipString();
 
     void setContext(const PlayerViewContext& c);
 

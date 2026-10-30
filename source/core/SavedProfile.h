@@ -24,6 +24,10 @@ struct SavedProfile {
      * still lists and opens them */
     std::string hiddenLibs;
 
+    /* Skip Intro chosen for a series, over the settings' (2 in its
+     * episodes): "seriesId:n,..." as PlayerView::seriesSkip */
+    std::string skipSeries;
+
     /* the name it goes by in WiiFin (the profiles, the menu), set on the
      * profile screen; empty: the account's user name */
     std::string nickname;

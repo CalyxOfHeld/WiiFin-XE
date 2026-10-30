@@ -74,6 +74,45 @@ bool PlayerView::askBeforeNext  = true;
 bool PlayerView::episodeButtons = true;
 bool PlayerView::skipButton     = true;
 int  PlayerView::skipIntroAfter = 3;
+std::map<std::string, int> PlayerView::seriesSkip;
+bool PlayerView::seriesSkipChanged = false;
+
+void PlayerView::skipFor(const std::string& seriesId, bool& on, int& after)
+{
+    on = skipButton;
+    after = skipIntroAfter;
+    auto it = seriesId.empty() ? seriesSkip.end() : seriesSkip.find(seriesId);
+    if (it == seriesSkip.end()) return;
+    on = it->second != SKIP_OFF;
+    after = on ? it->second : 0;
+}
+
+void PlayerView::loadSeriesSkip(const std::string& s)
+{
+    seriesSkip.clear();
+    size_t a = 0;
+    while (a < s.size()) {
+        size_t b = s.find(',', a);
+        if (b == std::string::npos) b = s.size();
+        const std::string e = s.substr(a, b - a);
+        const size_t c = e.find(':');
+        if (c != std::string::npos && c > 0) {
+            const int n = atoi(e.c_str() + c + 1);
+            if (n >= SKIP_OFF && n <= SKIP_AFTER_MAX) seriesSkip[e.substr(0, c)] = n;
+        }
+        a = b + 1;
+    }
+}
+
+std::string PlayerView::seriesSkipString()
+{
+    std::string s;
+    for (const auto& e : seriesSkip) {
+        if (!s.empty()) s += ',';
+        s += e.first + ':' + std::to_string(e.second);
+    }
+    return s;
+}
 
 PlayerView::PlayerView(GRRLIB_ttfFont* f, GRRLIB_texImg* cursor, GRRLIB_texImg* ring)
     : font(f), cursorTex(cursor), ringTex(ring)

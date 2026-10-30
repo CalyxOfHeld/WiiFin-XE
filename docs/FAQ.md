@@ -63,7 +63,7 @@ The Skip Intro button appears only when the Jellyfin server has intro times. Jel
 
 Once intro times exist on the server, WiiFin-XE shows the Skip Intro button during the intro, and the button takes controller focus so pressing **A** skips it.
 
-In WiiFin-XE, check Settings > Playback > Skip Intro too: **Skip Intro Button** must be on, and **Show Skip Intro After** hides it until you've watched that many episodes of the series (3 at first). Set it to Always to see it from the first episode.
+In WiiFin-XE, check Settings > Playback > Skip Intro too: **Skip Intro Button** must be on, and **Show Skip Intro After** hides it until you've watched that many episodes of the series (3 at first). Set it to Always to see it from the first episode. A series can have its own choice too: press 2 in its episode list and check **Skip Intro (this show)**.
 
 ### No sound from the Wii Remote's speaker
 

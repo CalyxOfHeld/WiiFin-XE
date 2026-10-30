@@ -3203,16 +3203,23 @@ bool JellyfinClient::getIntroTimestamps(const std::string& serverUrl,
 //   GET /Users/{u}/Items?ParentId={series}&Recursive=true&IsPlayed=true&Limit=0
 // -1: not an episode, or the server didn't say.
 // ---------------------------------------------------------------------------
-int JellyfinClient::playedInSeries(const std::string& serverUrl,
-                                   const JellyfinAuth& auth,
-                                   const std::string& episodeId)
+std::string JellyfinClient::seriesOf(const std::string& serverUrl,
+                                     const JellyfinAuth& auth,
+                                     const std::string& episodeId)
 {
     std::string resp;
     if (httpRequest(serverUrl + "/Users/" + auth.userId + "/Items/" + episodeId, "GET", "", "",
                     auth.accessToken, resp) != 200)
-        return -1;
-    const std::string seriesId = jsonGetString(resp, "SeriesId");
+        return "";
+    return jsonGetString(resp, "SeriesId");
+}
+
+int JellyfinClient::playedInSeries(const std::string& serverUrl,
+                                   const JellyfinAuth& auth,
+                                   const std::string& seriesId)
+{
     if (seriesId.empty()) return -1;
+    std::string resp;
     char qs[512];
     snprintf(qs, sizeof(qs),
         "/Users/%s/Items?ParentId=%s&Recursive=true&IncludeItemTypes=Episode"

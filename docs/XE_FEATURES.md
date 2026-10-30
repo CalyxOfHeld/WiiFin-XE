@@ -112,6 +112,7 @@ The **profile menu** has an icon on each entry. It also has **Local Media (WiiMC
 - **Skip Intro settings** (Settings > Playback > Skip Intro):
   - **Skip Intro Button** turns the skip intro / recap / credits button on or off. It needs the Intro Skipper plugin on your server ([how to set it up](FAQ.md#skip-intro-doesnt-appear)).
   - **Show Skip Intro After** keeps the button hidden until you've watched that many episodes of the series (Always, or 1 to 10; default 3), so a new show's opening plays the first few times.
+  - **Skip Intro (this show)**, in a series' episode list (2, Options), overrides both for that series: My Setting (follow Settings), Off, Always, or After 1 to 10. Each profile keeps its own.
 - **Live Volume HUD:** adjusting volume or muting displays a floating on-screen card showing the exact volume percentage (0–100%) and mute indicator (`×`), mirrored by a live volume badge on the transport bar.
 - **Nunchuk:** the stick works as the D-pad, C is − and Z is +.
 - **C-Stick** (GameCube / Gamepad Right Stick) works as the D-pad everywhere in menus.
@@ -177,7 +178,7 @@ The DVD, VHS and CD logos are WiiFin's own drawings in that style, not the trade
 - **In the episode list:**
   - Left/Right or −/+ move a page.
   - 1 marks an episode watched or not.
-  - 2 opens Options: Sort by (Episode, Title A-Z, Last Watched, Watched Status, Rating, Length), Order, Search (by name or episode number), Mark Season Watched, Shuffle Season.
+  - 2 opens Options: Sort by (Episode, Title A-Z, Last Watched, Watched Status, Rating, Length), Order, Search (by name or episode number), Mark Season Watched, Shuffle Season, Skip Intro (this show).
   - B clears a search first, then goes back.
 
 ## The Wii itself

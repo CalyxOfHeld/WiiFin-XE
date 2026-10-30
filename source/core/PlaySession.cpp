@@ -261,18 +261,24 @@ bool runPlaySession(JellyfinClient& client,
         if (!introFetched) {
             runWithPlayerUI(view, ir, N_("Loading..."), [&]() {
                 intro = IntroInfo();
-                if (PlayerView::skipButton) client.getIntroTimestamps(serverUrl, auth, itemId, intro);
+                /* the settings', or the series' own (2 in its episodes) */
+                const std::string seriesId = client.seriesOf(serverUrl, auth, itemId);
+                bool skipOn; int skipAfter;
+                PlayerView::skipFor(seriesId, skipOn, skipAfter);
+                if (PlayerView::seriesSkip.count(seriesId))
+                    SYS_Report("[Segments] the series' own: %s, after %d\n", skipOn ? "on" : "off", skipAfter);
+                if (skipOn) client.getIntroTimestamps(serverUrl, auth, itemId, intro);
                 /* a series new to the user: its intro and recap watched, not
                  * skipped, for the first few episodes */
                 auto& segs = intro.segments;
                 auto opening = [](const MediaSegment& m) {
                     return m.kind == MediaSegment::Intro || m.kind == MediaSegment::Recap;
                 };
-                if (PlayerView::skipIntroAfter > 0 && std::any_of(segs.begin(), segs.end(), opening)) {
-                    const int seen = client.playedInSeries(serverUrl, auth, itemId);
-                    if (seen >= 0 && seen < PlayerView::skipIntroAfter) {
+                if (skipAfter > 0 && std::any_of(segs.begin(), segs.end(), opening)) {
+                    const int seen = client.playedInSeries(serverUrl, auth, seriesId);
+                    if (seen >= 0 && seen < skipAfter) {
                         SYS_Report("[Segments] %d of the series watched (%d asked): no intro skip\n",
-                                   seen, PlayerView::skipIntroAfter);
+                                   seen, skipAfter);
                         segs.erase(std::remove_if(segs.begin(), segs.end(), opening), segs.end());
                     }
                 }

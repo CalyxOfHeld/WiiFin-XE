@@ -199,6 +199,7 @@ void App::loadSettings() {
             if (strcmp(field, "pass_salt")     == 0) profiles[idx].passSalt     = val;
             if (strcmp(field, "pass_hash")     == 0) profiles[idx].passHash     = val;
             if (strcmp(field, "hidden_libs")   == 0) profiles[idx].hiddenLibs   = val;
+            if (strcmp(field, "skip_series")   == 0) profiles[idx].skipSeries   = val;
             if (strcmp(field, "nickname")      == 0) profiles[idx].nickname     = val;
             if (strcmp(field, "picture")       == 0) profiles[idx].picture      = val;
         } else {
@@ -373,6 +374,8 @@ void App::saveSettings() {
         }
         if (!p.hiddenLibs.empty())
             fprintf(f, "profile.%d.hidden_libs=%s\n", i, sanitizeConfigValue(p.hiddenLibs).c_str());
+        if (!p.skipSeries.empty())
+            fprintf(f, "profile.%d.skip_series=%s\n", i, sanitizeConfigValue(p.skipSeries).c_str());
         if (!p.nickname.empty())
             fprintf(f, "profile.%d.nickname=%s\n", i, sanitizeConfigValue(p.nickname).c_str());
         if (!p.picture.empty())

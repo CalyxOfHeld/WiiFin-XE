@@ -5,6 +5,7 @@
 #include "../input/Input.h"
 #include "../core/Lang.h"
 #include "../core/SoundFX.h"
+#include "../player/PlayerView.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -254,7 +255,26 @@ void LibraryView::buildEpisodeView()
 
 /* the options: 2 in the episodes */
 static const float EPP_W = 400, EPP_X = 320 - EPP_W / 2, EPP_Y = 82, EPP_STEP = 42;
-static const int   EPP_ROWS = 5;
+static const int   EPP_ROWS = 6;
+
+/* the series' Skip Intro, in turn: the settings', no button, from the
+ * first episode, after 1 to SKIP_AFTER_MAX watched */
+static const int SKIP_SETTINGS = -2;
+static int seriesSkipOf(const std::string& seriesId)
+{
+    auto it = PlayerView::seriesSkip.find(seriesId);
+    return it == PlayerView::seriesSkip.end() ? SKIP_SETTINGS : it->second;
+}
+static std::string seriesSkipName(int v)
+{
+    if (v == SKIP_SETTINGS)        return tr("My Setting");
+    if (v == PlayerView::SKIP_OFF) return tr("Off");
+    if (v == 0)                    return tr("Always");
+    char b[48];
+    /* TRANSLATORS: Skip Intro for a series: shown once this many episodes were watched */
+    snprintf(b, sizeof(b), tr("After %d"), v);
+    return b;
+}
 
 bool LibraryView::updateEpisodePanel(ir_t& ir)
 {
@@ -286,6 +306,17 @@ bool LibraryView::updateEpisodePanel(ir_t& ir)
         SoundFX::play(SoundFX::FX::Move);
     }
     if (d && epPanelRow == 1) { episodeDesc = !episodeDesc; buildEpisodeView(); SoundFX::play(SoundFX::FX::Move); }
+    const bool aSkip = epPanelRow == 5 && Input::isAJustPressed() && !(ir.valid && hover < 0);
+    if ((d || aSkip) && epPanelRow == 5 && !currentSeriesId.empty()) {
+        const int lo = SKIP_SETTINGS, hi = PlayerView::SKIP_AFTER_MAX, n = hi - lo + 1;
+        const int v = lo + ((seriesSkipOf(currentSeriesId) - lo + (d ? d : 1)) % n + n) % n;
+        if (v == SKIP_SETTINGS) PlayerView::seriesSkip.erase(currentSeriesId);
+        else                    PlayerView::seriesSkip[currentSeriesId] = v;
+        PlayerView::seriesSkipChanged = true;
+        SYS_Report("[Segments] the series' own skip intro: %d\n", v);
+        SoundFX::play(SoundFX::FX::Move);
+        return false;
+    }
     if (!Input::isAJustPressed() || (ir.valid && hover < 0)) return false;
     switch (epPanelRow) {
     case 2:
@@ -337,17 +368,19 @@ void LibraryView::renderEpisodePanel(ir_t& ir)
     Ui::roundRect(EPP_X, EPP_Y, EPP_W, H, 16, p.cardTop, p.cardBottom);
     Ui::roundBorder(EPP_X, EPP_Y, EPP_W, H, 16, 1.5f, p.cardBorder);
     Ui::textCentered(320, EPP_Y + 14, fitText(font, filterDejaVu(currentSeasonName, 60), 19, (int)EPP_W - 40).c_str(), 19, p.text);
-    const char* labels[EPP_ROWS] = { N_("Sort by"), N_("Order"), N_("Search"), N_("Mark Season Watched"), N_("Shuffle Season") };
+    const char* labels[EPP_ROWS] = { N_("Sort by"), N_("Order"), N_("Search"), N_("Mark Season Watched"), N_("Shuffle Season"),
+                                     N_("Skip Intro (this show)") };
     for (int i = 0; i < EPP_ROWS; ++i) {
         const float ry = EPP_Y + 50 + i * EPP_STEP;
         const bool on = i == epPanelRow;
         Ui::card(EPP_X + 16, ry, EPP_W - 32, 34, 10, on ? Ui::pulse() : 0.0f);
-        Ui::text(EPP_X + 30, ry + 8, tr(labels[i]), 15, i >= 3 ? (on ? p.accentDark : p.text) : p.textDim);
+        Ui::text(EPP_X + 30, ry + 8, tr(labels[i]), 15, i == 3 || i == 4 ? (on ? p.accentDark : p.text) : p.textDim);
         std::string v;
         if (i == 0) v = tr(EP_SORTS[episodeSort]);
         if (i == 1) v = tr(orderName(episodeSort, episodeDesc));
         if (i == 2) v = episodeQuery.empty() ? std::string(tr("A to type")) : fitText(font, episodeQuery, 16, 170);
-        if (i <= 1 && on) v = "\xe2\x80\xb9  " + v + "  \xe2\x80\xba";
+        if (i == 5) v = seriesSkipName(seriesSkipOf(currentSeriesId));
+        if ((i <= 1 || i == 5) && on) v = "\xe2\x80\xb9  " + v + "  \xe2\x80\xba";
         if (!v.empty()) Ui::textRight(EPP_X + EPP_W - 30, ry + 7, v.c_str(), 16, on ? p.text : p.textDim);
     }
     const Ui::Hint l[] = { { "A", N_("Select") }, { "LR", N_("Change") } };

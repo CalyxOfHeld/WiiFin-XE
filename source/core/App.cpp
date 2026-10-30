@@ -15,6 +15,7 @@
 #include "SoundFX.h"
 #include "../ui/ConnectView.h"
 #include "../ui/MusicPlayerView.h"
+#include "../player/PlayerView.h"
 #include "../ui/ProfileView.h"
 #include "../ui/SettingsView.h"
 #include "../ui/LibraryView.h"
@@ -644,8 +645,9 @@ void App::loop() {
         /* the HOME menu offers its Profile Menu while it is open */
         struct ProfileOpen {
             ProfileOpen()  { g_app_profileOpen = true; }
-            ~ProfileOpen() { g_app_profileOpen = false; g_app_toProfileMenu = false; }
+            ~ProfileOpen() { g_app_profileOpen = false; g_app_toProfileMenu = false; PlayerView::loadSeriesSkip(""); }
         } profileOpen;
+        PlayerView::loadSeriesSkip(p.skipSeries);   /* its series' own Skip Intro */
         /* the HOME menu's Profile Menu: the profile menu over the libraries */
         auto toProfileMenu = [&]() {
             if (!g_app_toProfileMenu) return;
@@ -664,6 +666,11 @@ void App::loop() {
                     break;
                 }
                 if (lv.update(ir)) break;
+                if (PlayerView::seriesSkipChanged) {   /* a series' Skip Intro: the profile's */
+                    PlayerView::seriesSkipChanged = false;
+                    p.skipSeries = PlayerView::seriesSkipString();
+                    saveSettings();
+                }
                 if (lv.hiddenChanged) {   /* Display Libraries closed: the profile's from now on */
                     lv.hiddenChanged = false;
                     p.hiddenLibs = lv.hiddenLibraries();
