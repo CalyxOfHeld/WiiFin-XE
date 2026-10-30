@@ -1454,10 +1454,14 @@ bool homeMenu()
         { Guard g; frame(); }
         GRRLIB_Render();
     }
-    const bool leave = doShowHomeOverlay(Ui::font(), nullptr, S->cursor, false);
+    bool leave = doShowHomeOverlay(Ui::font(), nullptr, S->cursor, false);
+    /* Profile Menu: the page closes as with B, the music goes on */
+    const bool toProfileMenu = leave && g_app_toProfileMenu;
+    if (toProfileMenu) leave = false;
     if (!leave && !wasPaused && g_mplayer_paused) wii_player_pause_toggle();
     Guard g;
     S->lastInput = nowMs();
+    if (toProfileMenu) S->leavePage = true;
     return leave;
 }
 

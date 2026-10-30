@@ -55,6 +55,9 @@ public:
     void onSettingsClosed();
     /* Display Libraries chosen in those settings: the list, B back to them */
     void openLibrariesFromSettings() { openLibManager(true); }
+    /* the HOME menu's Profile Menu: the profile menu, once the screen under
+     * it has loaded (a page coming back after a video) */
+    void showProfileMenu() { wantProfileMenu = true; }
 
     /* the profile's libraries left off the home (ids, comma-separated);
      * hiddenChanged: Display Libraries closed with others, for the profile */
@@ -352,6 +355,7 @@ private:
     /* the profile menu (A on the avatar): back, switch profile, settings,
      * WiiFin's menu */
     bool  profileMenu        = false;
+    bool  wantProfileMenu    = false;   /* showProfileMenu: opened when nothing loads */
     int   profileMenuSel     = 0;
     float profileMenuFocus[7] = {};
     void openProfileMenu();

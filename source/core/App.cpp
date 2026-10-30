@@ -53,6 +53,8 @@ volatile bool g_app_powerOff = false;
 volatile bool g_app_reset    = false;
 volatile bool g_restartApp = false;
 volatile bool g_app_toMenu = false;
+volatile bool g_app_toProfileMenu = false;
+bool          g_app_profileOpen = false;
 bool g_app_shuttingDown = false;
 bool g_app_exitToLoader = true;
 int  g_app_powerAction = BTN_POWER_OFF;
@@ -639,12 +641,28 @@ void App::loop() {
         lv.setHiddenLibraries(p.hiddenLibs);
         /* the server's remote control, while this profile is open (started once libraries load) */
         struct RemoteOff { ~RemoteOff() { Remote::stop(); } } remoteOff;
+        /* the HOME menu offers its Profile Menu while it is open */
+        struct ProfileOpen {
+            ProfileOpen()  { g_app_profileOpen = true; }
+            ~ProfileOpen() { g_app_profileOpen = false; g_app_toProfileMenu = false; }
+        } profileOpen;
+        /* the HOME menu's Profile Menu: the profile menu over the libraries */
+        auto toProfileMenu = [&]() {
+            if (!g_app_toProfileMenu) return;
+            g_app_toProfileMenu = false;
+            lv.showProfileMenu();
+            SYS_Report("[WiiFin] HOME: the profile menu\n");
+        };
         for (;;) {
             while (true) {
                 Input::update();
                 Input::readIR(ir);
                 if (g_app_powerOff || g_app_reset) { running = false; break; }
-                if (Input::isHomePressed() && showHomeOverlay()) { if (!g_app_toMenu) running = false; break; }
+                if (Input::isHomePressed() && showHomeOverlay()) {
+                    if (g_app_toProfileMenu) { toProfileMenu(); continue; }
+                    if (!g_app_toMenu) running = false;
+                    break;
+                }
                 if (lv.update(ir)) break;
                 if (lv.hiddenChanged) {   /* Display Libraries closed: the profile's from now on */
                     lv.hiddenChanged = false;
@@ -677,15 +695,16 @@ void App::loop() {
                 if (g_app_powerOff || g_app_reset) { running = false; return; }
                 SoundFX::play(SoundFX::FX::Back);
                 if (wantsExit && homeToMenu()) return;
-                if (wantsExit) { running = false; return; }
+                if (wantsExit && !g_app_toProfileMenu) { running = false; return; }
                 lv.onPlaybackFinished("");
+                toProfileMenu();
             } else if (!lv.pendingPlayUrl.empty()) {
                 std::string lastItemId;
                 bool wantsExit = runPlaySession(jellyfinClient, auth, p.serverUrl, lv,
                                                 font, btnTex, cursorPointerTex, ringTex,
                                                 lastItemId);
                 if (g_app_powerOff || g_app_reset) { running = false; return; }
-                if (wantsExit) {
+                if (wantsExit && !g_app_toProfileMenu) {
                     saveSettings();
                     if (homeToMenu()) return;
                     running = false;
@@ -693,6 +712,7 @@ void App::loop() {
                 }
                 saveSettings();   /* the zoom may have changed during playback */
                 lv.onPlaybackFinished(lastItemId);
+                toProfileMenu();
             } else if (lv.exitTo == LibraryView::Exit::SignIn) {
                 lv.exitTo = LibraryView::Exit::Profiles;
                 tokenRefused = true;
@@ -704,8 +724,9 @@ void App::loop() {
                 if (g_app_powerOff || g_app_reset) { running = false; return; }
                 SoundFX::play(SoundFX::FX::Back);
                 if (wantsExit && homeToMenu()) return;
-                if (wantsExit) { running = false; return; }
+                if (wantsExit && !g_app_toProfileMenu) { running = false; return; }
                 lv.onPlaybackFinished("");
+                toProfileMenu();
             } else if (lv.exitTo == LibraryView::Exit::LocalMedia) {
                 lv.exitTo = LibraryView::Exit::Profiles;
                 if (startLocalMedia()) { MusicSession::stop(true); return; }
@@ -722,6 +743,7 @@ void App::loop() {
                 if (!running || homeToMenu()) return;
                 lv.onSettingsClosed();
                 if (libs) lv.openLibrariesFromSettings();
+                toProfileMenu();
             } else {
                 /* the profile closes: its music with it, the menu music back */
                 MusicSession::stop(true);
@@ -940,6 +962,7 @@ void App::loop() {
 
         /* back at WiiFin's menu: the HOME menu's WiiFin Menu is done */
         g_app_toMenu = false;
+        g_app_toProfileMenu = false;
 
         // --- Input: D-pad navigation ---
         if (g_app_reset) running = false;

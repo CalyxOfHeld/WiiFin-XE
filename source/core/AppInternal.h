@@ -47,6 +47,12 @@ bool showErrorScreen(const char* title, const std::string& line1,
  * also sets g_restartApp), or only as far as WiiFin's menu ("WiiFin Menu":
  * g_app_toMenu set, the screens under it close one by one) */
 extern volatile bool g_app_toMenu;
+/* "Profile Menu", offered while a profile is open (g_app_profileOpen): the
+ * screens over its libraries close, its menu opens (g_app_toProfileMenu) */
+extern volatile bool g_app_toProfileMenu;
+extern bool          g_app_profileOpen;
+/* the HOME menu closed a screen without leaving WiiFin */
+inline bool homeStaysInWiiFin() { return g_app_toMenu || g_app_toProfileMenu; }
 bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
                        GRRLIB_texImg* cursorPointerTex, bool musicEnabled);
 

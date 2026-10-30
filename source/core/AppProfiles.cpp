@@ -29,7 +29,7 @@ bool App::runSettings(SavedProfile* profile) {
         Input::readIR(ir);
         if (g_app_powerOff || g_app_reset) { running = false; break; }
         if (Input::isHomePressed() && doShowHomeOverlay(font, btnTex, cursorPointerTex, musicEnabled)) {
-            if (!g_app_toMenu) running = false;   /* WiiFin Menu: the settings close for it */
+            if (!homeStaysInWiiFin()) running = false;   /* WiiFin Main Menu, Profile Menu: the settings close for them */
             break;
         }
         if (sv.update(ir)) break;
@@ -43,7 +43,7 @@ bool App::runSettings(SavedProfile* profile) {
     saveSettings();
     logSettings();
     MusicBGM::setEnabled(musicEnabled);
-    return running && !g_app_toMenu && sv.wantsLibraries;
+    return running && !homeStaysInWiiFin() && sv.wantsLibraries;
 }
 
 bool App::askPasscode(const SavedProfile& p) {

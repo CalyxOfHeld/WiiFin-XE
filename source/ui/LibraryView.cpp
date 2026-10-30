@@ -1374,6 +1374,11 @@ bool LibraryView::update(ir_t& ir) {
     /* "Play on..." from the server, once no screen is fetching */
     Remote::PlayRequest play;
     if (!loadingState(state) && Remote::takePlay(play) && startRemotePlay(play)) return true;
+    if (wantProfileMenu && !loadingState(state)) {
+        wantProfileMenu = false;
+        openProfileMenu();
+        return false;
+    }
     if (profileMenu) return updateProfileMenu(ir);
     if (libManager)  return updateLibManager(ir);
 
