@@ -52,28 +52,33 @@ cfg clock_12h=0
 19400 DOWN
 19700 DOWN
 20000 DOWN
-20300 DOWN       Disc Slot Light
-20700 A          off
-21200 B          the sections
-21700 UP         View Settings
-22100 RIGHT
-22500 DOWN       Theme
-22900 A          Flix (home in rows)
-23300 DOWN
-23600 DOWN       Backgrounds
-24000 A          solid
-24400 DOWN
-24700 DOWN
-25000 DOWN
-25300 DOWN
-25600 DOWN
-25900 DOWN       Screen Area
-26300 A          the calibration
-27300 RIGHT      1 px from the left
-28000 B          done
-29000 B          the sections
-30000 B          leave
-31600 END
+20300 DOWN
+20600 DOWN
+20900 DOWN
+21200 DOWN
+21500 DOWN
+21800 DOWN       Disc Slot Light (past Skip Intro's 3 and Ask Before Next)
+22200 A          off
+22700 B          the sections
+23200 UP         View Settings
+23600 RIGHT
+24000 DOWN       Theme
+24400 A          Flix (home in rows)
+24800 DOWN
+25100 DOWN       Backgrounds
+25500 A          solid
+25900 DOWN
+26200 DOWN
+26500 DOWN
+26800 DOWN
+27100 DOWN
+27400 DOWN       Screen Area
+27800 A          the calibration
+28800 RIGHT      1 px from the left
+29500 B          done
+30500 B          the sections
+31500 B          leave
+33100 END
 expect logorder "musicLoop: exiting" "[Sound] move"
 expect nologafter "musicLoop: exiting" "ASND_End"
 expect nologafter "[TOUR] t=8" "[Sound]"

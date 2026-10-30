@@ -13,6 +13,7 @@ position "Shuffle Show S01E05" 2
 19000 A          Continue
 28000 PLUS       next episode: S02E01
 37000 MINUS      previous episode: S01E05
+39000 A          Continue (it was started)
 47000 END
 expect streams 3
 expect log [preparePlay] episode 5 of 10

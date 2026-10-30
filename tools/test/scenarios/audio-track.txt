@@ -18,7 +18,7 @@ position "Z7" 0
 19000 A          Z7 MKV Two Audio
 22500 RIGHT      second audio track (the audio row has the focus)
 23500 A          Play
-32000 1          the audio tracks
+32000 2          the audio tracks (no subtitles: straight to them)
 33000 UP         the first one (Japanese, AAC)
 33500 A
 48000 END
