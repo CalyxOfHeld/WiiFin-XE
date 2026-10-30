@@ -77,7 +77,7 @@ static std::vector<RowGroup> sectionGroups(int s, bool profile)
     case S_VIEW:
         /* the home and the libraries' look: a profile's (WiiFin's menu has neither) */
         return { { G_THEME,  { R_THEME, R_CUSTOMIZE, R_BACKGROUNDS } },
-                 { G_HOME,   profile ? std::vector<int>{ R_HOME, R_VIEW, R_LIBS, R_START, R_DIM, R_HEADER }
+                 { G_HOME,   profile ? std::vector<int>{ R_HOME, R_VIEW, R_LIBS, R_DIM, R_HEADER }
                                      : std::vector<int>{ R_START, R_DIM, R_HEADER } },
                  { G_SCREEN, { R_AREA, R_KB_SIZE } } };
     case S_PLAYBACK:
@@ -94,7 +94,9 @@ static std::vector<RowGroup> sectionGroups(int s, bool profile)
                  { G_BUTTONS,    { R_EXIT, R_POWER_BTN, R_RESET_BTN } },
                  { G_CONNECTION, { R_SSL } } };
     case S_SIGNIN:
-        return profile ? std::vector<RowGroup>{ { -1, { R_SIGNIN, R_STARTUP } } } : std::vector<RowGroup>{};
+        /* Start Screen here too: what opens when WiiFin starts (WiiFin's
+         * menu has no Sign-In: it keeps it under View) */
+        return profile ? std::vector<RowGroup>{ { -1, { R_SIGNIN, R_STARTUP, R_START } } } : std::vector<RowGroup>{};
     default:
         return {};
     }
@@ -555,9 +557,9 @@ SettingsView::RowInfo SettingsView::describe(int id)
     case R_STARTUP: {
         const bool on = profile && !profile->userId.empty() && g_app_startProfile == profile->userId;
         set(N_("Open at Start-Up"),
-            on ? N_("Opens when WiiFin starts; hold B at start to skip")
-            : g_app_startProfile.empty() ? N_("WiiFin starts at its own menu")
-                                         : N_("Another profile opens at start-up: A makes it this one"),
+            on ? N_("WiiFin skips the profile list and opens this profile when it starts. Hold B while it starts to pick another")
+            : g_app_startProfile.empty() ? N_("WiiFin starts on the profile list. Turn on to open this profile straight away instead")
+                                         : N_("WiiFin opens another profile when it starts. Turn on to open this one instead"),
             on ? N_("ON") : N_("OFF"), on ? p.ok : OFF);
         break;
     }
