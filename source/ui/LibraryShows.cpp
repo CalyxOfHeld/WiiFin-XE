@@ -712,7 +712,8 @@ void LibraryView::renderEpisodes(ir_t& ir) {
     const bool seenSel = e >= 0 && episodes[e].played;
     const Ui::Hint l[] = { { "A", N_("Details") }, { "1", seenSel ? N_("Unwatched") : N_("Watched") },
                            { "2", N_("Options") } };
-    const Ui::Hint r[] = { { "-/+", N_("Page") }, { "B", episodeQuery.empty() ? N_("Back") : N_("Clear") } };
+    /* Left / Right page (+ is Watched, as 1) */
+    const Ui::Hint r[] = { { "LR", N_("Page") }, { "B", episodeQuery.empty() ? N_("Back") : N_("Clear") } };
     Ui::footer(l, 3, r, 2, how.empty() ? nullptr : how.c_str());
 
     if (epPanel || epTyping) renderEpisodePanel(ir);

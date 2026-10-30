@@ -1441,10 +1441,13 @@ void LibraryView::openItem(const JellyfinItem& it, State returnState) {
         state = State::SeasonsLoad;
     } else if (it.type == "Season" && !it.seriesId.empty()) {
         // a new season shows up as its own item: go straight to its episodes
+        // (the seasons kept are another series' at times: 2 on an episode
+        // there must load this one's)
         currentSeriesId   = it.seriesId;
         currentSeriesName = it.seriesName;
         currentSeasonId   = it.id;
         currentSeasonName = it.name;
+        seasons.clear();
         episodesFromHome  = (returnState == State::LibsReady);
         state = State::EpisodesLoad;
     } else if (it.type == "MusicAlbum" || it.type == "Playlist") {
