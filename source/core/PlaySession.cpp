@@ -245,6 +245,14 @@ bool runPlaySession(JellyfinClient& client,
     int  reason       = PLAYER_STOP_EOF;
     bool reported     = false;   /* reportPlaybackStopped already sent */
     long long posTicks = 0;
+    /* Where it is, as told to the server.  Before the stream gives a time
+     * (still opening, or a file not yet sought to its start) the player
+     * says 0: the server would keep that as the resume point, the old one
+     * lost.  Where this stream was meant to start, then. */
+    auto reportSecs = [&]() {
+        const float p = view.position(), s = (float)(startTicks / 10000000.0);
+        return wii_player_time_pos() > 0.0f || p > s ? p : s;
+    };
 
     for (;;) {
         if (!episodes.empty() && episodeIdx < (int)episodes.size())
@@ -527,7 +535,7 @@ bool runPlaySession(JellyfinClient& client,
                 (now - lastProgressAt >= 10000 || g_mplayer_paused != lastPaused)) {
                 lastProgressAt = now;
                 lastPaused     = g_mplayer_paused;
-                s_progTicks    = (long long)(view.position() * 10000000.0f);
+                s_progTicks    = (long long)(reportSecs() * 10000000.0f);
                 s_progPaused   = lastPaused;
                 s_progWant     = true;
             }
@@ -655,8 +663,10 @@ bool runPlaySession(JellyfinClient& client,
         wiifin_video_report("session");
         g_stream_opened_cb = nullptr;
         client.dropConnection();
-        float posSecs = view.position();
+        float posSecs = reportSecs();
         posTicks = (long long)(posSecs * 10000000.0);
+        SYS_Report("[runPlay] stopped at %.1f s (started at %.1f s)\n",
+                   (double)posSecs, startTicks / 10000000.0);
 
         /* The stream died on its own (transcoder session expired, network
          * drop): pick up where it stopped, up to 3 times. */

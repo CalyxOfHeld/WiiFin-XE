@@ -26,17 +26,19 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
 {
     ir_t ir;
     ir.valid = false;
-    int   hmSel     = 0;    /* 0 = Wii Menu, 1 = Reset */
+    /* the buttons, top to bottom: WiiFin's menu (no question asked), leave
+     * (Wii Menu or Homebrew Channel, as Exit To says), restart */
+    enum { HM_MENU, HM_LEAVE, HM_RESTART, HM_COUNT };
+    int   hmSel     = HM_MENU;
     int   state     = 0;    /* 0 = home menu, 1 = confirm popup */
     int   confirmFor = 0;   /* which button triggered the popup */
 
-    /* Main button layout */
-    const int BTN_W = 230, BTN_H = 80;
-    const int BTN_Y = 195;
-    const int B0X   =  65;
-    const int B1X   = 345;
-    float bcx[2] = { B0X + BTN_W * 0.5f, B1X + BTN_W * 0.5f };
-    float bcy    = BTN_Y + BTN_H * 0.5f;
+    /* Main button layout: a column in the middle */
+    const int BTN_W = 300, BTN_H = 62, BTN_GAP = 16;
+    const int BTN_Y = 240 - (HM_COUNT * BTN_H + (HM_COUNT - 1) * BTN_GAP) / 2;
+    float bcx    = 320.0f;
+    float bcy[HM_COUNT];
+    for (int i = 0; i < HM_COUNT; i++) bcy[i] = BTN_Y + i * (BTN_H + BTN_GAP) + BTN_H * 0.5f;
 
     /* Confirmation dialog layout — centred on 640×480 */
     const int DW = 370, DH = 218;
@@ -51,7 +53,7 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
 
     /* Animation state */
     float openAnim      = 0.0f;
-    float hoverSc[2]    = { 1.0f, 1.0f };
+    float hoverSc[HM_COUNT] = { 1.0f, 1.0f, 1.0f };
     float popAnim       = 0.0f;
     int   popSel        = 1;             /* default: "No" */
     float popHoverSc[2] = { 1.0f, 1.0f };
@@ -91,11 +93,11 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
             }
 
             if (ir.valid) {
-                for (int i = 0; i < 2; i++) {
+                for (int i = 0; i < HM_COUNT; i++) {
                     float hw = BTN_W * hoverSc[i] * 0.5f;
                     float hh = BTN_H * hoverSc[i] * 0.5f;
-                    if (irX >= bcx[i] - hw && irX <= bcx[i] + hw &&
-                        irY >= bcy    - hh && irY <= bcy    + hh)
+                    if (irX >= bcx    - hw && irX <= bcx    + hw &&
+                        irY >= bcy[i] - hh && irY <= bcy[i] + hh)
                         hover = i;
                 }
             }
@@ -108,15 +110,22 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
             /* With the pointer on screen only a button under it counts;
              * the d-pad selection is used when pointing away. */
             if (Input::isAJustPressed() && (!ir.valid || hover >= 0)) {
-                SoundFX::play(SoundFX::FX::Start); /* clicking Wii Menu / Reset */
-                confirmFor = (hover >= 0) ? hover : hmSel;
+                const int chosen = (hover >= 0) ? hover : hmSel;
+                if (chosen == HM_MENU) {   /* nothing is lost: no question */
+                    SoundFX::play(SoundFX::FX::Back);
+                    if (musicEnabled) MusicBGM::resume();
+                    g_app_toMenu = true;
+                    return true;
+                }
+                SoundFX::play(SoundFX::FX::Start); /* clicking leave / restart */
+                confirmFor = chosen;
                 state      = 1;
                 popAnim    = 0.0f;
                 popSel     = 1;
             }
-            if (Input::isLeftPressed()  || Input::isUpPressed())   hmSel = 0;
-            if (Input::isRightPressed() || Input::isDownPressed())  hmSel = 1;
-            for (int i = 0; i < 2; i++) {
+            if (Input::isUpPressed()   && hmSel > 0)            { hmSel--; SoundFX::play(SoundFX::FX::Move); }
+            if (Input::isDownPressed() && hmSel < HM_COUNT - 1) { hmSel++; SoundFX::play(SoundFX::FX::Move); }
+            for (int i = 0; i < HM_COUNT; i++) {
                 float t = (hover == i) ? 1.10f : 1.0f;
                 hoverSc[i] += (t - hoverSc[i]) * 0.18f;
             }
@@ -141,7 +150,7 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
                 if (sel == 0) { /* Yes */
                     SoundFX::play(SoundFX::FX::MenuExit);
                     SoundFX::waitDone(SoundFX::FX::MenuExit);
-                    if (confirmFor == 1) g_restartApp = true;
+                    if (confirmFor == HM_RESTART) g_restartApp = true;
                     return true;
                 } else {        /* No */
                     SoundFX::play(SoundFX::FX::Back);
@@ -190,14 +199,16 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
         }
         Ui::popOffset();
 
-        /* Wii Menu (or Homebrew Channel, as Exit To says) / Reset buttons */
+        /* WiiFin Menu / Wii Menu (or Homebrew Channel, as Exit To says) / Restart WiiFin */
         const bool toLoader = appExitsToLoader();
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < HM_COUNT; i++) {
             float sc = hoverSc[i];
             float dw = BTN_W * sc, dh = BTN_H * sc;
             bool  sel = (hmSel == i);
-            Ui::button(bcx[i] - dw * 0.5f, bcy - dh * 0.5f, dw, dh,
-                       i == 1 ? N_("Restart") : toLoader ? N_("Homebrew Channel") : N_("Wii Menu"),
+            Ui::button(bcx - dw * 0.5f, bcy[i] - dh * 0.5f, dw, dh,
+                       i == HM_MENU    ? N_("WiiFin Menu")
+                       : i == HM_RESTART ? N_("Restart WiiFin")
+                       : toLoader      ? N_("Homebrew Channel") : N_("Wii Menu"),
                        (int)(22 * sc),
                        sel ? Ui::pulse() : 0.0f);
         }
@@ -212,7 +223,7 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
             float adx = 320 - adw * 0.5f, ady = 240 - adh * 0.5f;
             Ui::card(adx, ady, adw, adh, 20 * psc, 0.0f);
 
-            const char* line1 = (confirmFor == 1) ? tr("Restart WiiFin?")
+            const char* line1 = (confirmFor == HM_RESTART) ? tr("Restart WiiFin?")
                               : toLoader ? tr("Return to the Homebrew Channel?")
                                          : tr("Return to the Wii Menu?");
             Ui::textCentered(320, ady + 32 * psc, line1, (int)(20 * psc), P.text);

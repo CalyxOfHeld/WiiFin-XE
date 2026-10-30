@@ -42,8 +42,11 @@ const char* buttonActionName(int a);
 bool showErrorScreen(const char* title, const std::string& line1,
                      const std::string& line2, bool retry, ir_t& ir);
 
-/* HOME menu (HomeMenu.cpp).  Returns true when the user leaves WiiFin
- * ("Wii Menu", or "Reset" which also sets g_restartApp). */
+/* HOME menu (HomeMenu.cpp).  Returns true when the user leaves the screen
+ * it was opened over: WiiFin itself ("Wii Menu", or "Restart WiiFin" which
+ * also sets g_restartApp), or only as far as WiiFin's menu ("WiiFin Menu":
+ * g_app_toMenu set, the screens under it close one by one) */
+extern volatile bool g_app_toMenu;
 bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
                        GRRLIB_texImg* cursorPointerTex, bool musicEnabled);
 

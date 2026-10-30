@@ -553,7 +553,9 @@ void LibraryView::loadDetail() {
 
     state = State::DetailReady;
 
-    if (detail.playbackPositionTicks <= 0) {
+    /* the server not caught up with the position just played; not when it
+     * says the episode was watched to the end (its position cleared then) */
+    if (detail.playbackPositionTicks <= 0 && !detail.played) {
         for (const auto& ep : episodes) {
             if (ep.id == detailItemId && ep.playbackPositionTicks > 0) {
                 detail.playbackPositionTicks = ep.playbackPositionTicks;

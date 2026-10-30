@@ -52,6 +52,7 @@ extern unsigned int  data_ring_png_len;
 volatile bool g_app_powerOff = false;
 volatile bool g_app_reset    = false;
 volatile bool g_restartApp = false;
+volatile bool g_app_toMenu = false;
 bool g_app_shuttingDown = false;
 bool g_app_exitToLoader = true;
 int  g_app_powerAction = BTN_POWER_OFF;
@@ -643,7 +644,7 @@ void App::loop() {
                 Input::update();
                 Input::readIR(ir);
                 if (g_app_powerOff || g_app_reset) { running = false; break; }
-                if (Input::isHomePressed() && showHomeOverlay()) { running = false; break; }
+                if (Input::isHomePressed() && showHomeOverlay()) { if (!g_app_toMenu) running = false; break; }
                 if (lv.update(ir)) break;
                 if (lv.hiddenChanged) {   /* Display Libraries closed: the profile's from now on */
                     lv.hiddenChanged = false;
@@ -654,6 +655,16 @@ void App::loop() {
                 else               VIDEO_WaitVSync();   /* the previous picture stays */
             }
             if (!running) return;
+            /* the HOME menu's WiiFin Menu: the profile closes as with its
+             * own menu's (a video or music session stopped first) */
+            auto homeToMenu = [&]() {
+                if (!g_app_toMenu) return false;
+                MusicSession::stop(true);
+                toMainMenu = true;
+                SYS_Report("[WiiFin] HOME: back to the menu\n");
+                return true;
+            };
+            if (homeToMenu()) return;
             if (lv.pendingPlayIsMusic) {
                 lv.pendingPlayIsMusic = false;
                 SoundFX::play(SoundFX::FX::Play);
@@ -665,6 +676,7 @@ void App::loop() {
                 bool wantsExit = mpv.run();
                 if (g_app_powerOff || g_app_reset) { running = false; return; }
                 SoundFX::play(SoundFX::FX::Back);
+                if (wantsExit && homeToMenu()) return;
                 if (wantsExit) { running = false; return; }
                 lv.onPlaybackFinished("");
             } else if (!lv.pendingPlayUrl.empty()) {
@@ -672,7 +684,13 @@ void App::loop() {
                 bool wantsExit = runPlaySession(jellyfinClient, auth, p.serverUrl, lv,
                                                 font, btnTex, cursorPointerTex, ringTex,
                                                 lastItemId);
-                if (wantsExit || g_app_powerOff || g_app_reset) { running = false; return; }
+                if (g_app_powerOff || g_app_reset) { running = false; return; }
+                if (wantsExit) {
+                    saveSettings();
+                    if (homeToMenu()) return;
+                    running = false;
+                    return;
+                }
                 saveSettings();   /* the zoom may have changed during playback */
                 lv.onPlaybackFinished(lastItemId);
             } else if (lv.exitTo == LibraryView::Exit::SignIn) {
@@ -685,6 +703,7 @@ void App::loop() {
                 bool wantsExit = MusicSession::open();
                 if (g_app_powerOff || g_app_reset) { running = false; return; }
                 SoundFX::play(SoundFX::FX::Back);
+                if (wantsExit && homeToMenu()) return;
                 if (wantsExit) { running = false; return; }
                 lv.onPlaybackFinished("");
             } else if (lv.exitTo == LibraryView::Exit::LocalMedia) {
@@ -700,7 +719,7 @@ void App::loop() {
                     saveSettings();
                 }
                 const bool libs = runSettings(&p);
-                if (!running) return;
+                if (!running || homeToMenu()) return;
                 lv.onSettingsClosed();
                 if (libs) lv.openLibrariesFromSettings();
             } else {
@@ -726,7 +745,11 @@ void App::loop() {
             Input::update();
             Input::readIR(ir);
             if (g_app_powerOff || g_app_reset) { running = false; break; }
-            if (Input::isHomePressed() && showHomeOverlay()) { running = false; break; }
+            if (Input::isHomePressed() && showHomeOverlay()) {
+                if (g_app_toMenu) toMainMenu = true;
+                else              running = false;
+                break;
+            }
             res = cv.update(ir);
             cv.render(ir);
             GRRLIB_Render();
@@ -778,7 +801,11 @@ void App::loop() {
             Input::update();
             Input::readIR(ir);
             if (g_app_powerOff || g_app_reset) { running = false; break; }
-            if (Input::isHomePressed() && showHomeOverlay()) { running = false; break; }
+            if (Input::isHomePressed() && showHomeOverlay()) {
+                if (g_app_toMenu) toMainMenu = true;
+                else              running = false;
+                break;
+            }
             res = cv.update(ir);
             cv.render(ir);
             GRRLIB_Render();
@@ -818,7 +845,7 @@ void App::loop() {
                 Input::update();
                 Input::readIR(ir);
                 if (g_app_powerOff || g_app_reset) { running = false; return; }
-                if (Input::isHomePressed() && showHomeOverlay()) { running = false; return; }
+                if (Input::isHomePressed() && showHomeOverlay()) { if (!g_app_toMenu) running = false; return; }
                 res = pv.update(ir);
                 pv.render(ir);
                 GRRLIB_Render();
@@ -837,6 +864,7 @@ void App::loop() {
                 if (pv.selectedIdx >= 0 && pv.selectedIdx < (int)profiles.size()) {
                     editSignIn(profiles[pv.selectedIdx], pv.editField);
                     if (!running) return;
+                    if (toMainMenu) { toMainMenu = false; return; }
                     pickerFocus = pv.selectedIdx;
                 }
                 continue;
@@ -910,9 +938,12 @@ void App::loop() {
         Input::update();   // calls WPAD_ScanPads() internally
         Input::readIR(ir);
 
+        /* back at WiiFin's menu: the HOME menu's WiiFin Menu is done */
+        g_app_toMenu = false;
+
         // --- Input: D-pad navigation ---
         if (g_app_reset) running = false;
-        else if (Input::isHomePressed() && showHomeOverlay()) running = false;
+        else if (Input::isHomePressed() && showHomeOverlay() && !g_app_toMenu) running = false;
         if (g_app_powerOff) running = false;
         irMode = ir.valid;   /* no pointer on the screen: the D-pad drives, A acts on the highlighted item */
         if (Input::isUpPressed())   { selectedIndex = (selectedIndex - 1 + MENU_COUNT) % MENU_COUNT; irMode = false; }
