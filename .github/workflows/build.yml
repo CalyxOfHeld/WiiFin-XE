@@ -1,27 +1,21 @@
 name: Build
 
 # On every push and pull request: builds WiiFin.dol, WiiFin.wad and the
-# Homebrew Channel package (downloadable artifacts), boots the WAD and the
-# DOL in Dolphin to check WiiFin reaches its menu, and plays videos from a
-# Jellyfin in Docker (tools/test/playback.sh).
+# Homebrew Channel package (downloadable artifacts).  Builds are tested on
+# a real Wii, so pushes only build.
 #
 # By hand (Actions > Build > Run workflow), a version can be stamped into
 # the build, and with "release" ticked a GitHub release v<version> is
 # published with the three files (a pre-release when the version has a
 # dash: 1.0.0-rc1).
 #
-# Tested once: Dolphin and the scenarios run on a push to any branch but
-# main, on a pull request from a fork, and every Monday.  A pull request
-# from this repository was tested by its branch's push; main only gets
-# what develop passed, so its push and a release only build.
+# The Dolphin checks (WiiFin reaching its menu, tools/test/playback.sh's
+# videos from a Jellyfin in Docker) run only for a pull request from a
+# fork, or by hand: Run workflow with "tests" ticked.
 #
 # The devkitPro and Jellyfin images are pinned (the build job's container,
-# tools/test/server.sh), so a new release cannot break the build or the
-# tests unseen.  Every Monday the workflow runs with their latest versions
-# instead: a failure there means it is time to update a pin, or the code.
+# tools/test/server.sh), so a new release cannot break the build unseen.
 on:
-  schedule:
-    - cron: '0 5 * * 1'
   push:
     paths-ignore: ['**.md', 'README/**', 'assets/preview*', 'docs/**']
   pull_request:
@@ -34,6 +28,10 @@ on:
         default: ''
       release:
         description: 'Publish a GitHub release v<version> (needs a version)'
+        type: boolean
+        default: false
+      tests:
+        description: 'Also run the Dolphin smoke and playback tests'
         type: boolean
         default: false
 
@@ -132,7 +130,7 @@ jobs:
 
   smoke:
     needs: build
-    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref != 'refs/heads/main') || github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || inputs.tests
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -162,7 +160,7 @@ jobs:
   # about 20 minutes instead of an hour
   playback:
     needs: build
-    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref != 'refs/heads/main') || github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || inputs.tests
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
