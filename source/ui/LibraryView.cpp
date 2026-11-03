@@ -18,6 +18,7 @@
 #include "../core/Utils.h"
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <malloc.h>
 #include <ogc/lwp_watchdog.h> // gettime(), ticks_to_millisecs()
 #include <ogc/lwp.h>          // LWP_CreateThread / LWP_JoinThread
@@ -34,7 +35,65 @@ LibraryView::LibraryView(GRRLIB_ttfFont* f, GRRLIB_ttfFont* jf, GRRLIB_texImg* c
                           const JellyfinAuth& a, const std::string& url)
     : font(f), jpFont(jf), cursorTex(cursor), ringTex(ring), client(c), auth(a), serverUrl(url),
       browse(c, url, a), catalog(c, url, a, BrowseHome::Mode::Catalog), feed(c, url, a) {
-    browsePage = g_app_startBrowse;   /* Start Screen */
+    browsePage = g_app_startBrowse && !g_app_startLastShow;   /* Start Screen (Last Show: home under it) */
+}
+
+/* Start Screen: Last Show: a series not played for this long opens home */
+static const int LAST_SHOW_DAYS = 14;
+
+/* days since an ISO 8601 date ("2026-11-01T02:37:42Z"), by the Wii's
+ * clock; -1 unknown (no date, or the clock not set) */
+static int daysAgo(const std::string& iso)
+{
+    int y, m, d;
+    if (sscanf(iso.c_str(), "%d-%d-%d", &y, &m, &d) != 3) return -1;
+    auto days = [](int y, int m, int d) {   /* days from 1970-01-01 */
+        y -= m <= 2;
+        const int era = (y >= 0 ? y : y - 399) / 400, yoe = y - era * 400;
+        const int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+        return era * 146097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719468;
+    };
+    const time_t now = time(nullptr);
+    const int today = (int)(now / 86400);
+    if (today < days(2020, 1, 1)) return -1;
+    return today - days(y, m, d);
+}
+
+/* the series played last, at its season's episodes, the episode where it
+ * was left selected; home when there's none (or none for a while) */
+void LibraryView::openLastShow()
+{
+    JellyfinEpisode last;
+    bool found = false;
+    int ago = -1;
+    const bool done = runWithLoading([&]() {
+        if (!client.getLastPlayedEpisode(serverUrl, auth, last)) return;
+        ago = daysAgo(last.lastPlayed);
+        if (ago > LAST_SHOW_DAYS) return;
+        currentSeriesId = last.seriesId;
+        refreshSeriesNext();
+        found = seriesHasNext && !seriesNext.seasonId.empty();
+    });
+    if (!done || !found) {
+        SYS_Report("[Start] last show: %s, home\n",
+                   !done ? "cancelled" : last.id.empty() ? "none played" :
+                   ago > LAST_SHOW_DAYS ? "too long ago" : "nothing left to watch");
+        return;
+    }
+    SYS_Report("[Start] last show: S%d E%d, %d days ago\n", seriesNext.seasonNumber,
+               seriesNext.indexNumber, ago);
+    currentSeriesName = last.seriesName;
+    currentSeasonId   = seriesNext.seasonId;
+    currentSeasonName = seriesNext.seasonName;
+    if (currentSeasonName.empty()) {
+        char s[32];
+        snprintf(s, sizeof(s), tr("Season %d"), seriesNext.seasonNumber);
+        currentSeasonName = s;
+    }
+    episodeWant = seriesNext.id;
+    seasons.clear();
+    episodesFromHome = true;   /* B: home */
+    state = State::EpisodesLoad;
 }
 
 // ---------------------------------------------------------------------------
@@ -694,6 +753,10 @@ void LibraryView::loadLibraries() {
     activityLoaded = false;   /* the grid's Activity tab: fetched once opened */
     state = State::LibsReady;
     Remote::start(serverUrl, auth.accessToken, client.sslVerify);
+    if (g_app_startLastShow && !lastShowTried) {
+        lastShowTried = true;
+        openLastShow();
+    }
 }
 
 /* Continue Watching and Next Up of the grid home's Activity tab (the rows
@@ -742,6 +805,8 @@ void LibraryView::onPlaybackFinished(const std::string& lastItemId) {
     clearPendingPlay();
     browse.invalidate();   // resume positions / next up changed
     catalog.invalidate();
+    seriesNextStale = true;   // the series' page: where it was left
+    episodesStale = !episodes.empty();   // the season's list: watched, progress
     activityLoaded = false;
     if (state == State::DetailReady || state == State::ResumePrompt) {
         if (!lastItemId.empty()) detailItemId = lastItemId;
@@ -1049,6 +1114,7 @@ void LibraryView::loadSeasons() {
         /* the series' page: its overview, its poster */
         seriesDetail = JellyfinItemDetail();
         client.getItemDetail(serverUrl, auth, currentSeriesId, seriesDetail);
+        refreshSeriesNext();
         {
             std::string b;
             client.getItemImageBytes(serverUrl, auth, currentSeriesId, 170, 255, b);
@@ -1204,12 +1270,17 @@ void LibraryView::loadPlaylistsTab() {
 
 void LibraryView::loadEpisodes() {
     episodes.clear();
+    episodesStale = false;
     bool ok = false; std::string err;
     if (!runWithLoading([&]() {
         ok = client.getEpisodes(serverUrl, auth, currentSeriesId, currentSeasonId, episodes);
         if (!ok) err = client.lastError();
+        /* the episode left part watched, marked in the list */
+        if (ok && (seriesNextStale || seriesNextFor != currentSeriesId)) refreshSeriesNext();
     })) {
-        state = State::SeasonsReady;
+        episodeWant.clear();
+        if (episodesFromHome) { episodesFromHome = false; state = State::LibsReady; }
+        else                  state = State::SeasonsReady;
         return;
     }
     if (!ok) { errMsg = err; state = State::Error; }
@@ -1218,6 +1289,9 @@ void LibraryView::loadEpisodes() {
                    episodes.empty() ? 0 : episodes[0].seasonNumber);
         episodeQuery.clear(); epPanel = epTyping = false;
         episodeSel = 0; episodeTop = 0; buildEpisodeView();
+        for (int i = 0; !episodeWant.empty() && i < (int)episodeView.size(); ++i)
+            if (episodes[episodeView[i]].id == episodeWant) { episodeSel = i; clampEpisodeScroll(); }
+        episodeWant.clear();
         state = State::EpisodesReady;
     }
 }

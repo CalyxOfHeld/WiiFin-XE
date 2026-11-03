@@ -73,6 +73,7 @@ std::string g_app_startProfile;
 /* Local Media: the WiiMC-SS XE DOL started at the end, in WiiFin's place */
 static std::string s_localMedia;
 bool g_app_startBrowse = true;
+bool g_app_startLastShow = false;
 /* the loader's mark, read at start-up (main menu) before anything could
  * write over low memory */
 bool appFromLoader()
@@ -669,6 +670,10 @@ void App::loop() {
                 if (PlayerView::seriesSkipChanged) {   /* a series' Skip Intro: the profile's */
                     PlayerView::seriesSkipChanged = false;
                     p.skipSeries = PlayerView::seriesSkipString();
+                    saveSettings();
+                }
+                if (PlayerView::prefsChanged) {   /* the player's Options: subtitle size, audio timing */
+                    PlayerView::prefsChanged = false;
                     saveSettings();
                 }
                 if (lv.hiddenChanged) {   /* Display Libraries closed: the profile's from now on */

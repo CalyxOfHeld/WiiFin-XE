@@ -7,13 +7,39 @@
 #include "../core/SoundFX.h"
 #include "../core/Lang.h"
 #include "../core/MusicSession.h"
+#include "../jellyfin/RemoteControl.h"
+#include <ogc/lwp_watchdog.h>
 #include <cmath>
 
 using namespace LibDraw;
 
+/* Rows out of date (the server said its library changed, or built more
+ * than 10 minutes ago): forgotten when the home is shown again after
+ * another screen, so they never change under the pointer */
+void LibraryView::checkHomeFresh() {
+    if (Remote::takeLibraryChanged()) homeStale = true;
+    const unsigned long long now = ticks_to_millisecs(gettime());
+    const bool back = now - homeSeenMs > 1000;   /* not shown last frame */
+    homeSeenMs = now;
+    if (!back) return;
+    const BrowseHome& page = browsePage ? catalog : browse;
+    const bool old = page.built() && now - page.builtAt() > 10 * 60 * 1000;
+    if (!homeStale && !old) return;
+    SYS_Report("[Library] home rows %s: rebuilt\n", homeStale ? "changed on the server" : "10 minutes old");
+    refreshHome();
+}
+
+void LibraryView::refreshHome() {
+    homeStale = false;
+    browse.invalidate();
+    catalog.invalidate();
+    activityLoaded = false;   /* the grid's Activity tab */
+}
+
 bool LibraryView::updateHome(ir_t& ir, bool aPressed) {
     int n = (int)libraries.size();
     if (n == 0) return true;
+    checkHomeFresh();
 
     if (flixHome()) {
         BrowseHome& page = browsePage ? catalog : browse;
@@ -33,13 +59,7 @@ bool LibraryView::updateHome(ir_t& ir, bool aPressed) {
             }
             break;
         case BrowseHome::Action::Search:
-            searchQuery.clear();
-            searchResults.clear();
-            searchSel = 0; searchTop = 0;
-            searchKb.reset();
-            searchReturnState = State::LibsReady;
-            state = State::SearchInput;
-            irMode = false;
+            openSearch();
             break;
         case BrowseHome::Action::Browse:      // "browse" <-> "home"
             browsePage = !browsePage;
@@ -90,14 +110,7 @@ bool LibraryView::updateHome(ir_t& ir, bool aPressed) {
 
         // [1] (Classic / GameCube: Y) → open search
         if (Input::is1Pressed()) {
-            searchQuery.clear();
-            searchResults.clear();
-            searchSel       = 0;
-            searchTop       = 0;
-            searchKb.reset();
-            searchReturnState = State::LibsReady;
-            state = State::SearchInput;
-            irMode = false;
+            openSearch();
             return false;
         }
 
@@ -449,19 +462,20 @@ void LibraryView::renderGlobalFavorites(ir_t& ir) {
  * the settings (signed in still), WiiMC-SS XE (Local Media), or WiiFin's
  * own menu
  * --------------------------------------------------------------- */
-static const char* const PROFILE_MENU[6] = {
-    N_("Now Playing"), N_("Back to Jellyfin"), N_("Switch Profile"), N_("Settings"),
+static const char* const PROFILE_MENU[7] = {
+    N_("Now Playing"), N_("Back to Jellyfin"), N_("Refresh"), N_("Switch Profile"), N_("Settings"),
     N_("Local Media (WiiMC)"), N_("WiiFin Main Menu")
 };
-static const Ui::Icon PROFILE_ICONS[6] = {
-    Ui::Icon::Play, Ui::Icon::Back, Ui::Icon::Profile, Ui::Icon::Settings,
+static const Ui::Icon PROFILE_ICONS[7] = {
+    Ui::Icon::Play, Ui::Icon::Back, Ui::Icon::Refresh, Ui::Icon::Profile, Ui::Icon::Settings,
     Ui::Icon::Folder, Ui::Icon::Menu
 };
 /* Now Playing, first, while a music session plays */
 static int pmFirst() { return MusicSession::active() ? 0 : 1; }
-static int pmCount() { return 6 - pmFirst(); }
-static const int PM_W = 300, PM_BH = 42, PM_STEP = 54;
-static int pmTop() { return 240 - (pmCount() * PM_STEP + 50) / 2 + 50; }
+static int pmCount() { return 7 - pmFirst(); }
+static const int PM_W = 300, PM_BH = 42;
+static int pmStep() { return pmCount() > 6 ? 48 : 54; }   /* the card fits above the footer */
+static int pmTop() { return 240 - (pmCount() * pmStep() + 50) / 2 + 50; }
 
 void LibraryView::openProfileMenu() {
     profileMenu = true;
@@ -480,7 +494,7 @@ bool LibraryView::updateProfileMenu(ir_t& ir) {
     int hover = -1;
     if (ir.valid)
         for (int i = 0; i < n; ++i) {
-            const int by = pmTop() + i * PM_STEP;
+            const int by = pmTop() + i * pmStep();
             if (ir.x >= 320 - PM_W / 2 && ir.x <= 320 + PM_W / 2 && ir.y >= by && ir.y <= by + PM_BH) hover = i;
         }
     if (hover >= 0) profileMenuSel = hover;
@@ -491,27 +505,32 @@ bool LibraryView::updateProfileMenu(ir_t& ir) {
     switch (entry) {
     case 0: exitTo = Exit::NowPlaying; break;
     case 1: SoundFX::play(SoundFX::FX::Back); return false;
-    case 2: exitTo = Exit::Profiles;   break;
-    case 3: exitTo = Exit::Settings;   break;
-    case 4: exitTo = Exit::LocalMedia; break;
+    case 2:   /* the home's rows, fetched again */
+        SYS_Report("[Library] home rows: refresh\n");
+        refreshHome();
+        SoundFX::play(SoundFX::FX::Open);
+        return false;
+    case 3: exitTo = Exit::Profiles;   break;
+    case 4: exitTo = Exit::Settings;   break;
+    case 5: exitTo = Exit::LocalMedia; break;
     default: exitTo = Exit::WiiFinMenu; break;
     }
-    SoundFX::play(entry == 3 || entry == 0 || entry == 4 ? SoundFX::FX::Open : SoundFX::FX::Back);
+    SoundFX::play(entry == 4 || entry == 0 || entry == 5 ? SoundFX::FX::Open : SoundFX::FX::Back);
     return true;
 }
 
 void LibraryView::renderProfileMenu(ir_t& ir) {
     const Ui::Palette& p = Ui::pal();
     Ui::roundRect(Ui::screenLeft(), 0, Ui::screenWidth(), 480, 0, 0x00000090);
-    const int top = pmTop(), n = pmCount(), H = n * PM_STEP + 50 + 20;
+    const int top = pmTop(), n = pmCount(), H = n * pmStep() + 50 + 20;
     Ui::card(320 - PM_W / 2 - 24, top - 64, PM_W + 48, H, 18, 0.0f);
     Ui::avatar(320 - PM_W / 2 + 4, top - 38, 15.0f, userName.c_str(), 0.0f, Avatars::current());
     Ui::text(320 - PM_W / 2 + 28, top - 49, filterDejaVu(userName, 30).c_str(), 18, p.text);
     for (int i = 0; i < n; ++i) {
         profileMenuFocus[i] = Ui::approach(profileMenuFocus[i], i == profileMenuSel ? 1.0f : 0.0f);
         const float focus = profileMenuFocus[i] > 0.01f ? Ui::pulse() * profileMenuFocus[i] : 0.0f;
-        Ui::button(320 - PM_W / 2, top + i * PM_STEP, PM_W, PM_BH, PROFILE_MENU[pmFirst() + i], 18, focus);
-        Ui::icon(PROFILE_ICONS[pmFirst() + i], 320 - PM_W / 2 + 30, top + i * PM_STEP + PM_BH * 0.5f,
+        Ui::button(320 - PM_W / 2, top + i * pmStep(), PM_W, PM_BH, PROFILE_MENU[pmFirst() + i], 18, focus);
+        Ui::icon(PROFILE_ICONS[pmFirst() + i], 320 - PM_W / 2 + 30, top + i * pmStep() + PM_BH * 0.5f,
                  Ui::mix(p.text, p.accentDark, focus));
     }
     const Ui::Hint l[] = { { "A", N_("Select") } };

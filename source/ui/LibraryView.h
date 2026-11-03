@@ -293,6 +293,20 @@ private:
     bool  seriesTop = true;        /* the overview focused */
     float seriesScrollK = 0;       /* 0 the overview, 1 the seasons */
     bool  startSeriesFromStart();
+    /* where the series was left: its episode played last when part watched,
+     * else the next one; under the poster, before "Play from the start" */
+    JellyfinEpisode seriesNext;
+    bool  seriesHasNext = false, seriesNextResume = false;
+    bool  seriesNextStale = false;  /* played or marked since: fetched again */
+    std::string seriesNextFor;      /* the series seriesNext is of */
+    /* Start Screen: Last Show, tried once as the profile opens; the
+     * episode to select once its season loads */
+    bool  lastShowTried = false;
+    std::string episodeWant;
+    void  openLastShow();
+    int   seriesPlaySel = 0;        /* 0 where it was left, 1 from the start */
+    bool  startSeriesNext();
+    void  refreshSeriesNext();
     void  drawSeriesOverview(ir_t& ir);
     void  drawSeasonsBody(ir_t& ir);
     static const int SEASON_TEX_MAX = 20;
@@ -309,6 +323,9 @@ private:
     int         episodeSort = 0;              // EpisodeSort in LibraryShows.cpp
     bool        episodeDesc = false;
     std::string episodeQuery;                 // "" all of them
+    /* played since the season loaded: its watched marks and progress asked
+     * again as the list shows */
+    bool        episodesStale = false;
     void buildEpisodeView();                  // the selected one kept where it can
     int  shownEpisode() const;                // episodes index selected, -1 none
     /* 2 in the episodes: sort, search, the season marked watched, shuffle */
@@ -429,6 +446,13 @@ private:
     void buildActDisplayStrings(); // pre-compute truncated titles for activity cards
     void loadActivity();           // the two above and the titles, once the tab is shown
     bool activityLoaded = false;
+    /* the home out of date (the server's library changed, or rows older
+     * than 10 minutes): rebuilt when it's shown again, not under the
+     * pointer */
+    bool               homeStale  = false;
+    unsigned long long homeSeenMs = 0;   /* the home's last frame */
+    void checkHomeFresh();
+    void refreshHome();
     void freeCWTextures();
     void freeNextUpTextures();
     void loadItems();
@@ -479,6 +503,8 @@ private:
 
     // Search
     std::string               searchQuery;
+    bool                      searchKept = false;   // left with B before searching: shown again
+    void                      openSearch();         // the search keyboard, from the home
     std::vector<JellyfinItem> allSearchResults;
     std::vector<JellyfinItem> searchResults;
     int                       searchSel         = 0;
@@ -567,6 +593,8 @@ private:
     void        toggleFavorite(const std::string& id, bool& favorite);
     /* +: watched or not any more (the home rows follow: next up...) */
     void        togglePlayed(const std::string& id, bool& played);
+    /* Left / Right on an episode's Rating row: the next rating, on the server */
+    void        rateDetail(bool next);
     bool        sortable() const;       // this list can be sorted
     std::string sortQuery() const;      // "&SortBy=...&GenreIds=...", "" by name
     std::string sortSummary() const;    // "Year · Drama", "" by name with no filter

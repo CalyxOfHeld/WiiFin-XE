@@ -184,6 +184,7 @@ bool runPlaySession(JellyfinClient& client,
     MusicBGM::pause();
 
     PlayerView view(font, cursorTex, ringTex);
+    PlayerView::clearSleep();   /* a timer is set for this sitting */
     Trickplay trickplay;
     view.setTrickplay(&trickplay);
     ir_t ir;
@@ -682,7 +683,10 @@ bool runPlaySession(JellyfinClient& client,
          * next one of the list, season order or shuffled, as Jellyfin does. */
         bool finished = reason == PLAYER_STOP_EOF && !dropped && everPlayed &&
                         (!stopRequested || reachedEnd);
-        if (finished && episodeIdx + 1 < (int)episodes.size()) {
+        if (finished && PlayerView::sleepAfterThis()) {   /* Sleep Timer: End of episode */
+            SYS_Report("[Sleep] the video ended: stopping\n");
+            PlayerView::clearSleep();
+        } else if (finished && episodeIdx + 1 < (int)episodes.size()) {
             SYS_Report("[runPlay] episode finished, playing the next one\n");
             reason = PLAYER_STOP_NEXT;
         }

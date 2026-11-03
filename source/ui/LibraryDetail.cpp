@@ -98,12 +98,16 @@ bool LibraryView::updateDetail(ir_t& ir, bool aPressed) {
         if (!detail.audioStreams.empty())    rows.push_back(0);
         if (!detail.subtitleStreams.empty()) rows.push_back(1);
         if (!detail.chapters.empty())        rows.push_back(2);
+        if (!detail.seriesId.empty())        rows.push_back(3);
         int at = -1;
         for (int i = 0; i < (int)rows.size(); ++i) if (rows[i] == detailFocusRow) at = i;
         if (rows.empty()) detailFocusRow = 0;
         else if (at < 0) detailFocusRow = rows[0];
         else detailFocusRow = rows[Input::isUpPressed() ? (at > 0 ? at - 1 : 0)
                                                         : (at + 1 < (int)rows.size() ? at + 1 : at)];
+    } else if (detailFocusRow == 3 && !detail.seriesId.empty() &&
+               (Input::isLeftPressed() || Input::isRightPressed())) {
+        rateDetail(Input::isRightPressed());
     } else if (detailFocusRow < 0 && (Input::isLeftPressed() || Input::isRightPressed())) {
         const int n = (int)detail.versions.size();
         selectVersion((detailVersionSel + (Input::isLeftPressed() ? n - 1 : 1)) % n);
@@ -121,6 +125,17 @@ bool LibraryView::updateDetail(ir_t& ir, bool aPressed) {
         }
     }
     return false;
+}
+
+/* An episode's rating, Left / Right: Not rated, Liked, Disliked, round and round */
+void LibraryView::rateDetail(bool next) {
+    static const int ORDER[3] = { 0, 1, -1 };
+    int at = 0;
+    for (int i = 0; i < 3; ++i) if (ORDER[i] == detail.likes) at = i;
+    const int want = ORDER[(at + (next ? 1 : 2)) % 3];
+    bool ok = false;
+    runWithLoading([&]() { ok = client.setLikes(serverUrl, auth, detailItemId, want); });
+    if (ok) detail.likes = want;
 }
 
 bool LibraryView::updateResumePrompt(ir_t& ir, bool aPressed) {
@@ -239,6 +254,18 @@ void LibraryView::drawDetailView(ir_t& ir) {
 
     // ---- Title ----
     int y = POSTER_Y;
+    if (!detail.seriesName.empty()) {   /* an episode: its series (and its number) over it */
+        std::string s = filterDejaVu(detail.seriesName, 120);
+        if (detail.seasonNumber > 0 && detail.episodeNumber > 0) {
+            char se[32];
+            /* TRANSLATORS: over an episode's title, after its series: its season and episode numbers */
+            snprintf(se, sizeof(se), tr("S%d E%d"), detail.seasonNumber, detail.episodeNumber);
+            s += std::string("  \xc2\xb7  ") + se;
+        }
+        s = fitText(font, s, 15, INFO_W - 12);
+        Ui::text(INFO_X, y, s.c_str(), 15, p.accentDark);
+        y += 20;
+    }
     {
         /* Japanese in it: drawn with the Japanese font (Text's fallback) */
         const std::string title = filterDejaVu(detail.name, 200);
@@ -253,9 +280,13 @@ void LibraryView::drawDetailView(ir_t& ir) {
 
     // ---- Year  Runtime  Rating (chips) ----
     {
-        char chips[4][24];
+        char chips[4][32];
         int nChips = 0;
-        if (detail.year)
+        /* an episode: the day it aired, else the year */
+        const std::string aired = detail.seriesId.empty() ? std::string() : Ui::dateText(detail.premiereDate);
+        if (!aired.empty())
+            snprintf(chips[nChips++], sizeof(chips[0]), "%s", aired.c_str());
+        else if (detail.year)
             snprintf(chips[nChips++], sizeof(chips[0]), "%d", detail.year);
         if (detail.runtimeTicks > 0) {
             int secs = (int)(detail.runtimeTicks / 10000000LL);
@@ -325,14 +356,28 @@ void LibraryView::drawDetailView(ir_t& ir) {
         y += 6;
     }
 
+    // ---- Audio / Subtitle stream selectors: where they start ----
+    // Drawn at a fixed bottom-anchor position so they're always visible.
+    const int STREAM_ROW_H = 24;
+    const bool hasVersions = !detail.versions.empty();
+    const bool hasScenes   = !detail.chapters.empty();
+    const bool hasRating   = !detail.seriesId.empty();      /* an episode: Liked, Disliked */
+    const int STREAM_Y0 = 390 - (hasVersions ? STREAM_ROW_H : 0)    /* the version row first */
+                              - (hasScenes ? STREAM_ROW_H : 0)      /* the Scenes row */
+                              - (hasRating ? STREAM_ROW_H : 0);     /* the rating row last */
+    const bool hasAudio = !detail.audioStreams.empty();
+    const bool hasSub   = !detail.subtitleStreams.empty();
+    const bool hasRows  = hasAudio || hasSub || hasVersions || hasScenes || hasRating;
+    const int  castEnd  = hasRows ? STREAM_Y0 - 12 : 430;          /* the cast stops above them */
+
     // ---- Cast & crew (max 6) ----
-    if (!detail.people.empty()) {
+    if (!detail.people.empty() && y + 18 + 16 <= castEnd) {
         Ui::text(INFO_X, y, tr("Cast & crew"), 14, p.accentDark);
         y += 18;
         int shown = 0;
         for (const auto& pp : detail.people) {
             /* room for the "Read more" line and the version row */
-            if (shown >= 6 - (overviewCut ? 1 : 0) - (detail.versions.empty() ? 0 : 2)) break;
+            if (shown >= 6 - (overviewCut ? 1 : 0) - (detail.versions.empty() ? 0 : 2) || y + 16 > castEnd) break;
             if (pp.name.empty() && pp.character.empty()) continue;
             int rx = INFO_X + 8;
             {
@@ -357,15 +402,7 @@ void LibraryView::drawDetailView(ir_t& ir) {
     }
 
     // ---- Audio / Subtitle stream selectors ----
-    // Drawn at a fixed bottom-anchor position so they're always visible.
-    const int STREAM_ROW_H = 24;
-    const bool hasVersions = !detail.versions.empty();
-    const bool hasScenes   = !detail.chapters.empty();
-    const int STREAM_Y0 = 390 - (hasVersions ? STREAM_ROW_H : 0)    /* the version row first */
-                              - (hasScenes ? STREAM_ROW_H : 0);     /* the Scenes row last */
-    const bool hasAudio = !detail.audioStreams.empty();
-    const bool hasSub   = !detail.subtitleStreams.empty();
-    if (hasAudio || hasSub || hasVersions || hasScenes) {
+    if (hasRows) {
         Ui::roundRect(INFO_X, STREAM_Y0 - 8, INFO_W - 14, 1.5f, 0.75f, Ui::alpha(p.cardBorder, 0.6f));
 
         // Validate UTF-8 and truncate at a safe codepoint boundary so the
@@ -395,9 +432,24 @@ void LibraryView::drawDetailView(ir_t& ir) {
             return out;
         };
 
-        for (int row = hasVersions ? -1 : 0; row < 3; row++) {
+        for (int row = hasVersions ? -1 : 0; row < 4; row++) {
             if (row == 0 && !hasAudio) continue;
             if (row == 1 && !hasSub)   continue;
+            if (row == 3) {   /* an episode's rating: Left / Right */
+                if (!hasRating) continue;
+                int ry = STREAM_Y0 + (2 + (hasVersions ? 1 : 0) + (hasScenes ? 1 : 0)) * STREAM_ROW_H;
+                bool focused = detailFocusRow == 3;
+                if (focused)
+                    Ui::roundRect(INFO_X - 6, ry - 3, INFO_W - 8, STREAM_ROW_H - 3, (STREAM_ROW_H - 3) * 0.5f,
+                                  Ui::mix(p.accent, 0xFFFFFFFF, 0.2f), p.accentDark);
+                const char* v = detail.likes > 0 ? N_("Liked") : detail.likes < 0 ? N_("Disliked") : N_("Not rated");
+                char buf[64];
+                snprintf(buf, sizeof(buf), "\xe2\x80\xb9 %s \xe2\x80\xba", tr(v));
+                /* TRANSLATORS: an episode's page: the user's own rating of it (Liked, Disliked) */
+                Ui::text(INFO_X + 4, ry, tr("Rating"), 13, focused ? p.textOnAccent : p.textDim);
+                Text::print(INFO_X + 74, ry, font, buf, 13, focused ? p.textOnAccent : p.text);
+                continue;
+            }
             if (row == 2) {   /* the Scenes: A opens them */
                 if (!hasScenes) continue;
                 int ry = STREAM_Y0 + (2 + (hasVersions ? 1 : 0)) * STREAM_ROW_H;
@@ -451,7 +503,7 @@ void LibraryView::drawDetailView(ir_t& ir) {
     const Ui::Hint r[] = { { "UD", N_("Focus") }, { "LR", N_("Change") } };
     /* 2 does something (an episode's series, a film's extras): no room left for Focus */
     const bool full = !detail.seriesId.empty() || detail.specialFeatures > 0;
-    Ui::footer(l, full ? 5 : 4, full ? r + 1 : r, (hasAudio || hasSub || hasVersions || hasScenes) ? (full ? 1 : 2) : 0);
+    Ui::footer(l, full ? 5 : 4, full ? r + 1 : r, hasRows ? (full ? 1 : 2) : 0);
     if (overviewPanel) renderOverviewPanel();
 }
 

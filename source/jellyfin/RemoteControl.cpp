@@ -48,6 +48,7 @@ Remote::PlayRequest         s_play;
 u64                         s_playAt = 0;   /* when it came, 0 = none */
 volatile bool               s_playerActive = false;
 volatile bool               s_connected    = false;
+volatile bool               s_libChanged   = false;
 
 struct Lock {
     Lock()  { LWP_MutexLock(s_lock); }
@@ -350,6 +351,9 @@ void handle(const std::string& m, u64& keepAliveMs) {
     if (type == "ForceKeepAlive") {
         long secs = atol(jsonValue(m, "Data").c_str());
         keepAliveMs = (u64)(secs > 10 ? secs : 10) * 500;   /* half of it */
+    } else if (type == "LibraryChanged") {
+        if (!s_libChanged) SYS_Report("[Remote] library changed\n");
+        s_libChanged = true;
     } else if (type == "Playstate") {
         std::string c = jsonValue(m, "Command");
         static const struct { const char* name; Remote::Cmd cmd; } MAP[] = {
@@ -537,6 +541,12 @@ void Remote::stop() {
 }
 
 bool Remote::connected() { return s_connected; }
+
+bool Remote::takeLibraryChanged() {
+    if (!s_libChanged) return false;
+    s_libChanged = false;
+    return true;
+}
 
 /* a request still waiting (30 s at most) */
 static bool pending() {

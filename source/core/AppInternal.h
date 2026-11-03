@@ -26,6 +26,9 @@ extern std::string g_app_startProfile;
  * (Continue Watching...).  The setting Start Screen, wiifin.cfg's
  * start_browse */
 extern bool g_app_startBrowse;
+/* Start Screen: Last Show, over start_browse: a profile opens on the
+ * series played last, at its season's episodes (wiifin.cfg's start_last_show) */
+extern bool g_app_startLastShow;
 /* g_app_exitToLoader, when it can be: where leaving goes */
 inline bool appExitsToLoader() { return g_app_exitToLoader && appFromLoader(); }
 

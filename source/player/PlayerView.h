@@ -78,6 +78,23 @@ public:
     static const int SKIP_OFF = -1;
     static std::map<std::string, int> seriesSkip;
     static bool seriesSkipChanged;   /* to be saved with the profile */
+    /* the subtitles' size (SUB_SIZES of them, 1 the usual) and how much
+     * later the sound plays than the picture (s; a TV slow to show it),
+     * both kept in wiifin.cfg: prefsChanged until saved */
+    static const int SUB_SIZES = 4;
+    static int   subSize;
+    static const char* subSizeName(int size);   /* N_(): "Small"... */
+    static float audioShift;
+    static bool  prefsChanged;
+    /* Sleep Timer (the Options panel): the playback stops at sleepAt
+     * (ms, 0 none), or once this video ends (sleepAfterThis: no next
+     * episode); a session starts with none */
+    static int   sleepChoice;   /* 0 Off, 1-3 30/60/90 min, 4 end of this one */
+    static u64   sleepAt;
+    static bool  sleepWarned;
+    static bool  sleepAfterThis() { return sleepChoice == SLEEP_END; }
+    static void  clearSleep() { sleepChoice = 0; sleepAt = 0; sleepWarned = false; }
+    static const int SLEEP_END = 4;
     static void skipFor(const std::string& seriesId, bool& on, int& after);
     static void loadSeriesSkip(const std::string& s);   /* "id:n,id:n" */
     static std::string seriesSkipString();
@@ -131,7 +148,12 @@ public:
     void remoteTrack(bool audio, int index);
 
 private:
-    enum class Panel { None, Audio, Sub };
+    enum class Panel { None, Audio, Sub, Options };
+    /* the Options panel's rows: Left/Right (or A) change each */
+    enum { OPT_SLEEP, OPT_SUB_SIZE, OPT_SUB_SYNC, OPT_AUDIO_SYNC, OPT_COUNT };
+    float subShift = 0.0f;   /* this video's subtitles, how much later (s) */
+    std::string panelValue(int row) const;
+    void  adjustOption(int row, int dir);
 
     GRRLIB_ttfFont* font;
     GRRLIB_texImg*  cursorTex;

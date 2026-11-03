@@ -50,6 +50,8 @@ struct JellyfinEpisode {
     long long   runTimeTicks = 0;
     float       rating       = 0;   // CommunityRating
     std::string lastPlayed;         // UserData.LastPlayedDate
+    std::string seriesId, seriesName;   // where it is (Start Screen: Last Show)
+    std::string seasonId, seasonName;
 };
 
 struct JellyfinPerson {
@@ -98,6 +100,10 @@ struct JellyfinItemDetail {
     std::string seriesId;      // Episode only: its series and season, for
     std::string seasonId;      //   next / previous wherever it was opened
     std::string seriesName;    //   (and its seasons from it, with 2)
+    int         seasonNumber          = 0;     // Episode only: ParentIndexNumber
+    int         episodeNumber         = 0;     //   and IndexNumber (0: none)
+    std::string premiereDate;  // first aired / released (ISO 8601), "" unknown
+    int         likes                 = 0;     // UserData.Likes: 1 liked, -1 disliked, 0 neither
     std::vector<std::string>    genres;          // up to 4
     std::vector<JellyfinPerson> people;          // up to 6 (cast + director)
     std::vector<MediaStream>    audioStreams;    // audio tracks
@@ -421,6 +427,15 @@ public:
                            const std::string& seriesId,
                            std::vector<JellyfinEpisode>& out);
 
+    /* where to pick a series up: the episode played last when it is part
+     * watched (resume = true), else the first unwatched one after it; false
+     * when nothing of it was played, or all of it was */
+    bool getSeriesResume(const std::string& serverUrl, const JellyfinAuth& auth,
+                         const std::string& seriesId, JellyfinEpisode& out, bool& resume);
+    /* the episode played last, of any series; false when none was */
+    bool getLastPlayedEpisode(const std::string& serverUrl, const JellyfinAuth& auth,
+                              JellyfinEpisode& out);
+
     // Up to `limit` episodes in random order, shuffled by the server: the
     // whole series, or one season when seasonId is not empty.
     bool getShuffledEpisodes(const std::string& serverUrl,
@@ -509,6 +524,10 @@ public:
                      const JellyfinAuth& auth,
                      const std::string& itemId,
                      bool favorite);
+
+    // The user's rating of an item: 1 liked, -1 disliked, 0 neither.
+    bool setLikes(const std::string& serverUrl, const JellyfinAuth& auth,
+                  const std::string& itemId, int likes);
 
     // Tracks to play after itemId once the queue runs out: Jellyfin's
     // instant mix (same genres and artists), or when it has none (untagged

@@ -78,6 +78,12 @@ void App::loadSettings() {
             Subtitles::setDefaultEnabled(atoi(val) != 0);
         } else if (strcmp(key, "subtitle_language") == 0 || strcmp(key, "subtitle_lang") == 0) {
             Subtitles::setPreferredLanguage(val);
+        } else if (strcmp(key, "subtitle_size") == 0) {
+            const int n = atoi(val);
+            if (n >= 0 && n < PlayerView::SUB_SIZES) PlayerView::subSize = n;
+        } else if (strcmp(key, "audio_shift") == 0) {
+            const float s = (float)atof(val);
+            if (s >= -1.0f && s <= 1.0f) PlayerView::audioShift = s;
         } else if (strcmp(key, "controller_scrub") == 0 || strcmp(key, "pad_scrub") == 0) {
             if (strcmp(val, "main_stick") == 0 || strcmp(val, "main") == 0)
                 Input::setPadScrub(Input::PadScrub::MainStick);
@@ -122,6 +128,8 @@ void App::loadSettings() {
             g_app_startProfile = val;
         } else if (strcmp(key, "start_browse") == 0) {
             g_app_startBrowse = atoi(val) != 0;
+        } else if (strcmp(key, "start_last_show") == 0) {
+            g_app_startLastShow = atoi(val) != 0;
         } else if (strcmp(key, "language") == 0) {
             Lang::chooseKey(val);
         } else if (strcmp(key, "dim_rows") == 0) {
@@ -322,6 +330,8 @@ void App::saveSettings() {
     fprintf(f, "smooth_motion=%d\n",    g_wiifin_smooth_motion ? 1 : 0);
     fprintf(f, "subtitles=%d\n",        Subtitles::defaultEnabled() ? 1 : 0);
     fprintf(f, "subtitle_language=%s\n", Subtitles::preferredLanguage().c_str());
+    fprintf(f, "subtitle_size=%d\n",    PlayerView::subSize);
+    fprintf(f, "audio_shift=%.2f\n",    (double)PlayerView::audioShift);
     const char* scrubVal = Input::padScrub() == Input::PadScrub::CStick ? "c_stick" :
                            Input::padScrub() == Input::PadScrub::MainStick ? "main_stick" :
                            Input::padScrub() == Input::PadScrub::DPad ? "dpad" : "off";
@@ -340,6 +350,7 @@ void App::saveSettings() {
     fprintf(f, "exit_to_loader=%d\n",   g_app_exitToLoader ? 1 : 0);
     fprintf(f, "start_profile=%s\n",    sanitizeConfigValue(g_app_startProfile).c_str());
     fprintf(f, "start_browse=%d\n",     g_app_startBrowse ? 1 : 0);
+    fprintf(f, "start_last_show=%d\n",  g_app_startLastShow ? 1 : 0);
     {
         int l, t, r, b;
         Ui::safeArea(l, t, r, b);

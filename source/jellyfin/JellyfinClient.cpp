@@ -1659,6 +1659,15 @@ bool JellyfinClient::getItemDetail(const std::string& serverUrl,
     out.seriesId              = jsonGetString(resp, "SeriesId");
     out.seasonId              = jsonGetString(resp, "SeasonId");
     out.seriesName            = jsonGetString(resp, "SeriesName");
+    if (!out.seriesId.empty()) {
+        out.seasonNumber      = jsonGetInt(resp, "ParentIndexNumber");
+        out.episodeNumber     = jsonGetInt(resp, "IndexNumber");
+    }
+    out.premiereDate          = jsonGetString(resp, "PremiereDate");
+    {   /* UserData.Likes: true, false, or not there (not rated) */
+        size_t lp = resp.find("\"Likes\":");
+        if (lp != std::string::npos) out.likes = jsonGetBool(resp, "Likes") ? 1 : -1;
+    }
 
     // Genres array: ["Action","Comedy",...]
     {
@@ -1868,6 +1877,60 @@ bool JellyfinClient::getSeriesEpisodes(const std::string& serverUrl,
     return fetchEpisodes(serverUrl + qs, auth, out, 4u << 20);
 }
 
+/* the series' episode played last (any season), then from it on in order
+ * (StartItemId): the first one not watched. Jellyfin's Next Up is not used:
+ * it drops a series not played for a while (its "max days in Next Up"). */
+bool JellyfinClient::getSeriesResume(const std::string& serverUrl,
+                                      const JellyfinAuth& auth,
+                                      const std::string& seriesId,
+                                      JellyfinEpisode& out, bool& resume) {
+    resume = false;
+    char qs[512];
+    snprintf(qs, sizeof(qs),
+        "/Users/%s/Items?ParentId=%s&Recursive=true&IncludeItemTypes=Episode"
+        "&SortBy=DatePlayed&SortOrder=Descending&Limit=1&IsMissing=false"
+        "&Fields=IndexNumber,ParentIndexNumber,UserData&EnableImages=false",
+        auth.userId.c_str(), seriesId.c_str());
+    std::vector<JellyfinEpisode> last;
+    if (!fetchEpisodes(serverUrl + qs, auth, last) || last.empty() || last[0].lastPlayed.empty())
+        return false;
+    if (!last[0].played && last[0].playbackPositionTicks > 0) {
+        out = last[0];
+        resume = true;
+        return true;
+    }
+    snprintf(qs, sizeof(qs),
+        "/Shows/%s/Episodes?UserId=%s&StartItemId=%s&Limit=40&IsMissing=false"
+        "&Fields=IndexNumber,ParentIndexNumber,UserData&EnableImages=false",
+        seriesId.c_str(), auth.userId.c_str(), last[0].id.c_str());
+    std::vector<JellyfinEpisode> after;
+    if (!fetchEpisodes(serverUrl + qs, auth, after)) return false;
+    for (const JellyfinEpisode& e : after) {
+        if (e.id == last[0].id || e.played || e.seasonNumber == 0) continue;
+        out = e;
+        resume = e.playbackPositionTicks > 0;
+        return true;
+    }
+    return false;
+}
+
+bool JellyfinClient::getLastPlayedEpisode(const std::string& serverUrl,
+                                          const JellyfinAuth& auth,
+                                          JellyfinEpisode& out) {
+    char qs[384];
+    snprintf(qs, sizeof(qs),
+        "/Users/%s/Items?Recursive=true&IncludeItemTypes=Episode"
+        "&SortBy=DatePlayed&SortOrder=Descending&Limit=1&IsMissing=false"
+        "&Fields=IndexNumber,ParentIndexNumber,UserData&EnableImages=false",
+        auth.userId.c_str());
+    std::vector<JellyfinEpisode> last;
+    if (!fetchEpisodes(serverUrl + qs, auth, last) || last.empty() ||
+        last[0].lastPlayed.empty() || last[0].seriesId.empty())
+        return false;
+    out = last[0];
+    return true;
+}
+
 bool JellyfinClient::getShuffledEpisodes(const std::string& serverUrl,
                                           const JellyfinAuth& auth,
                                           const std::string& seriesId,
@@ -1908,6 +1971,10 @@ bool JellyfinClient::fetchEpisodes(const std::string& url, const JellyfinAuth& a
         e.runTimeTicks          = c->self->jsonGetLongLong(obj, "RunTimeTicks");
         e.rating                = jsonGetFloat(obj, "CommunityRating");
         e.lastPlayed            = c->self->jsonGetString(obj, "LastPlayedDate");
+        e.seriesId              = c->self->jsonGetString(obj, "SeriesId");
+        e.seriesName            = c->self->jsonGetString(obj, "SeriesName");
+        e.seasonId              = c->self->jsonGetString(obj, "SeasonId");
+        e.seasonName            = c->self->jsonGetString(obj, "SeasonName");
         if (!e.id.empty()) c->out->push_back(e);
     }, &ctx);
 
@@ -3192,6 +3259,20 @@ bool JellyfinClient::getIntroTimestamps(const std::string& serverUrl,
 
     std::sort(out.segments.begin(), out.segments.end(),
               [](const MediaSegment& a, const MediaSegment& b) { return a.start < b.start; });
+    /* credits come last: an earlier "Outro" is Intro Skipper taking a dark
+     * scene for them (The Texas Chain Saw Massacre: 71:18 to 71:34 of 83:22) */
+    auto lastOutro = std::find_if(out.segments.rbegin(), out.segments.rend(),
+                                  [](const MediaSegment& m) { return m.kind == MediaSegment::Outro; });
+    if (lastOutro != out.segments.rend()) {
+        const MediaSegment keep = *lastOutro;
+        const size_t before = out.segments.size();
+        out.segments.erase(std::remove_if(out.segments.begin(), out.segments.end(),
+                               [&](const MediaSegment& m) {
+                                   return m.kind == MediaSegment::Outro && m.start < keep.start;
+                               }), out.segments.end());
+        if (out.segments.size() < before)
+            SYS_Report("[Segments] %u earlier credits dropped\n", (unsigned)(before - out.segments.size()));
+    }
     if (!out.segments.empty())
         SYS_Report("[Segments] %u to skip\n", (unsigned)out.segments.size());
     return true;
@@ -3539,6 +3620,22 @@ bool JellyfinClient::setFavorite(const std::string& serverUrl,
         st = httpRequest(serverUrl + "/Users/" + auth.userId + "/FavoriteItems/" + itemId,
                          method, "", "", auth.accessToken, resp);
     SYS_Report("[Favorite] %s: HTTP %d\n", favorite ? "on" : "off", st);
+    return st == 200 || st == 204;
+}
+
+bool JellyfinClient::setLikes(const std::string& serverUrl, const JellyfinAuth& auth,
+                              const std::string& itemId, int likes)
+{
+    /* /UserItems/{id}/Rating since 10.9; the older route for older servers */
+    std::string resp;
+    const char* method = likes ? "POST" : "DELETE";
+    const std::string q = likes ? (likes > 0 ? "likes=true" : "likes=false") : "";
+    int st = httpRequest(serverUrl + "/UserItems/" + itemId + "/Rating?userId=" + auth.userId + (likes ? "&" + q : ""),
+                         method, "", "", auth.accessToken, resp);
+    if (st == 404)
+        st = httpRequest(serverUrl + "/Users/" + auth.userId + "/Items/" + itemId + "/Rating" + (likes ? "?" + q : ""),
+                         method, "", "", auth.accessToken, resp);
+    SYS_Report("[Rating] %s: HTTP %d\n", likes > 0 ? "liked" : likes < 0 ? "disliked" : "cleared", st);
     return st == 200 || st == 204;
 }
 

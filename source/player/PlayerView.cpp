@@ -26,7 +26,12 @@ static const int BTN_X0     = (640 - (BTN_COUNT * BTN_W + (BTN_COUNT - 1) * BTN_
 /* Zoom button (Fit / Fill), alone at the right end of the transport row */
 static const int BTN_ZOOM   = BTN_COUNT, ZOOM_W = 48;
 static float zoomX() { return Ui::screenRight() - 24 - ZOOM_W; }
-static const int INTRO_X    = 466, INTRO_Y = 312, INTRO_W = 150, INTRO_H = 40;
+/* the Skip button: in the bottom-right corner, risen over the bar and the
+ * buttons while they're up (k: how far up they are) */
+static const int INTRO_W    = 150, INTRO_H = 40;
+static const int INTRO_UP_Y = 312, INTRO_DOWN_Y = 480 - 24 - INTRO_H;
+static float introX() { return Ui::screenRight() - 24 - INTRO_W; }
+static float introY(float k) { return INTRO_DOWN_Y + (INTRO_UP_Y - INTRO_DOWN_Y) * k; }
 static const int LIST_X     = 150, LIST_W  = 340;
 static const int LIST_Y     = 112, ROW_H   = 34;
 static const int LIST_ROWS  = 7;
@@ -68,6 +73,29 @@ static std::string streamLabel(const MediaStream& s, int n)
 }
 
 /* ------------------------------------------------------------------------ */
+
+int   PlayerView::subSize      = 1;
+float PlayerView::audioShift   = 0.0f;
+bool  PlayerView::prefsChanged = false;
+int   PlayerView::sleepChoice  = 0;
+u64   PlayerView::sleepAt      = 0;
+bool  PlayerView::sleepWarned  = false;
+
+/* MPlayer's -delay: the picture this much later than the sound (s) */
+extern "C" float audio_delay;
+
+/* the subtitles' text size and line height for each subSize */
+static const int SUB_PX[PlayerView::SUB_SIZES]     = { 20, 24, 30, 36 };
+static const int SUB_LINE[PlayerView::SUB_SIZES]   = { 24, 29, 36, 43 };
+static const char* const SUB_SIZE_NAMES[PlayerView::SUB_SIZES] =
+    { N_("Small"), N_("Medium"), N_("Large"), N_("Extra Large") };
+const char* PlayerView::subSizeName(int size) { return SUB_SIZE_NAMES[size]; }
+/* the sleep timer's choices, in minutes (0: Off, -1: end of this one) */
+static const int SLEEP_MIN[] = { 0, 30, 60, 90, -1 };
+static const int SLEEP_CHOICES = (int)(sizeof(SLEEP_MIN) / sizeof(SLEEP_MIN[0]));
+/* the timing steps and how far they go (s) */
+static const float SUB_STEP = 0.25f, SUB_MAX = 15.0f;
+static const float AUDIO_STEP = 0.05f, AUDIO_MAX = 1.0f;
 
 bool PlayerView::askBeforeStop  = true;
 bool PlayerView::askBeforeNext  = true;
@@ -122,6 +150,8 @@ PlayerView::PlayerView(GRRLIB_ttfFont* f, GRRLIB_texImg* cursor, GRRLIB_texImg* 
 
 void PlayerView::setContext(const PlayerViewContext& c)
 {
+    /* another video (not this one again after a seek): its subtitles on time */
+    if (c.title != ctx.title || c.episodeIdx != ctx.episodeIdx) subShift = 0.0f;
     ctx          = c;
     pickAudio    = c.currentAudio;
     pickSub      = c.currentSub;
@@ -269,9 +299,10 @@ void PlayerView::seekInPlace()
  * (readable on any picture), its last line ending at y = bottom. */
 void PlayerView::drawSubtitle(float bottom)
 {
-    const Subtitles::Cue* cue = subtitles->at(position());
+    /* later by subShift: the cue of that much earlier */
+    const Subtitles::Cue* cue = subtitles->at(position() - subShift);
     if (!cue) return;
-    const int SIZE = 24, LINE_H = 29;
+    const int SIZE = SUB_PX[subSize], LINE_H = SUB_LINE[subSize];
     const float maxW = Ui::screenWidth() - 60;
     std::vector<std::string> lines;
     size_t p = 0;
@@ -335,20 +366,87 @@ void PlayerView::openPanel(Panel p)
 
 int PlayerView::panelCount() const
 {
-    if (panel == Panel::Audio) return (int)ctx.audioStreams.size();
-    if (panel == Panel::Sub)   return (int)ctx.subStreams.size() + 1;   /* + "Off" */
+    if (panel == Panel::Audio)   return (int)ctx.audioStreams.size();
+    if (panel == Panel::Sub)     return (int)ctx.subStreams.size() + 1;   /* + "Off" */
+    if (panel == Panel::Options) return OPT_COUNT;
     return 0;
 }
 
 std::string PlayerView::panelLabel(int row) const
 {
+    if (panel == Panel::Options) {
+        static const char* const names[OPT_COUNT] =
+            { N_("Sleep Timer"), N_("Subtitle Size"), N_("Subtitle Timing"), N_("Audio Timing") };
+        return tr(names[row]);
+    }
     if (panel == Panel::Audio) return streamLabel(ctx.audioStreams[row], row + 1);
     if (row == 0) return tr("Off");
     return streamLabel(ctx.subStreams[row - 1], row);
 }
 
+/* a timing: "Normal", "0.25 s later", "0.25 s earlier" */
+static std::string shiftText(float s)
+{
+    if (fabsf(s) < 0.001f) return tr("Normal");
+    char buf[48];
+    snprintf(buf, sizeof(buf), s > 0 ? tr("%.2f s later") : tr("%.2f s earlier"), (double)fabsf(s));
+    return buf;
+}
+
+std::string PlayerView::panelValue(int row) const
+{
+    switch (row) {
+    case OPT_SLEEP: {
+        if (sleepChoice == SLEEP_END)
+            return tr(ctx.episodes.empty() ? N_("End of movie") : N_("End of episode"));
+        if (!sleepAt) return tr("Off");
+        const u64 now = nowMs();
+        const int left = sleepAt > now ? (int)((sleepAt - now + 59999) / 60000) : 0;
+        char buf[32];
+        snprintf(buf, sizeof(buf), tr("%d min left"), left);
+        return buf;
+    }
+    case OPT_SUB_SIZE:   return tr(SUB_SIZE_NAMES[subSize]);
+    case OPT_SUB_SYNC:   return shiftText(subShift);
+    case OPT_AUDIO_SYNC: return shiftText(audioShift);
+    }
+    return "";
+}
+
+/* one step: Right (or A) the next choice or later, Left the one before or earlier */
+void PlayerView::adjustOption(int row, int dir)
+{
+    auto step = [&](float& v, float by, float max) {
+        v += dir * by;
+        if (v >  max) v =  max;
+        if (v < -max) v = -max;
+        if (fabsf(v) < by * 0.5f) v = 0.0f;
+    };
+    switch (row) {
+    case OPT_SLEEP:
+        sleepChoice = (sleepChoice + dir + SLEEP_CHOICES) % SLEEP_CHOICES;
+        sleepAt     = SLEEP_MIN[sleepChoice] > 0 ? nowMs() + (u64)SLEEP_MIN[sleepChoice] * 60000 : 0;
+        sleepWarned = false;
+        SYS_Report("[Sleep] %d min\n", SLEEP_MIN[sleepChoice]);
+        break;
+    case OPT_SUB_SIZE:
+        subSize = (subSize + dir + SUB_SIZES) % SUB_SIZES;
+        prefsChanged = true;
+        break;
+    case OPT_SUB_SYNC:
+        step(subShift, SUB_STEP, SUB_MAX);
+        break;
+    case OPT_AUDIO_SYNC:
+        step(audioShift, AUDIO_STEP, AUDIO_MAX);
+        prefsChanged = true;
+        SYS_Report("[Audio] %.2f s later\n", (double)audioShift);
+        break;
+    }
+}
+
 bool PlayerView::panelRowIsCurrent(int row) const
 {
+    if (panel == Panel::Options) return false;
     if (panel == Panel::Audio) return ctx.audioStreams[row].index == ctx.currentAudio;
     if (row == 0) return ctx.currentSub < 0;
     return ctx.subStreams[row - 1].index == ctx.currentSub;
@@ -357,6 +455,10 @@ bool PlayerView::panelRowIsCurrent(int row) const
 PlayerView::Action PlayerView::activatePanelRow(int row)
 {
     if (row < 0 || row >= panelCount()) return Action::None;
+    if (panel == Panel::Options) {   /* A: the next choice; the panel stays */
+        adjustOption(row, +1);
+        return Action::None;
+    }
     bool current = panelRowIsCurrent(row);
     Panel p = panel;
     panel = Panel::None;
@@ -375,7 +477,7 @@ void PlayerView::hitTest(const ir_t& ir)
     hoverButton = -1;
     hoverBar    = false;
     hoverRow    = -1;
-    hoverIntro  = introVisible() && ir.valid && inRect(ir, INTRO_X, INTRO_Y, INTRO_W, INTRO_H);
+    hoverIntro  = introVisible() && ir.valid && inRect(ir, (int)introX(), (int)introY(controlsAlpha), INTRO_W, INTRO_H);
 
     /* a skip button coming up takes the focus (once each), as Netflix's
      * does: with the controls still up from the last one, A paused
@@ -438,6 +540,23 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         }
     }
 
+    /* a skip button up (alone, or focused or pointed at with the
+     * controls): B says no thanks, and it goes for that segment.  Before
+     * anything else: the hand pressing B shakes the pointer enough to
+     * bring the controls up, and a hidden HUD would take B for "show" */
+    if ((down & WPAD_BUTTON_B) && introVisible() && busyMsg.empty() && !stopAsk && !nextAsk &&
+        panel == Panel::None) {
+        const bool up = controlsVisible() || controlsAlpha >= 0.3f;
+        const bool pointed = ir.valid && inRect(ir, (int)introX(), (int)introY(controlsAlpha), INTRO_W, INTRO_H);
+        if (!up || focusedButton == 6 || pointed) {
+            const int i = activeSegment();
+            skippedSegments |= 1u << i;
+            SYS_Report("[Segments] %s: hidden\n", segmentLabel(i));
+            if (focusedButton == 6) focusedButton = 2;
+            return Action::None;
+        }
+    }
+
     /* Pointer movement reveals the controls.  A hand holding the remote
      * shakes the pointer a few pixels all the time: while they are hidden,
      * only a real move brings them back (24 px from where the pointer was
@@ -465,6 +584,25 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
     }
 
     if (down & WPAD_BUTTON_HOME) return Action::Home;
+
+    /* the sound later than the picture: MPlayer's delay, the other way
+     * round (set again each frame: a new stream may start from 0) */
+    audio_delay = -audioShift;
+
+    /* Sleep Timer: a minute's warning, then stopped as with B */
+    if (sleepAt) {
+        const u64 now = nowMs();
+        if (now >= sleepAt) {
+            SYS_Report("[Sleep] time's up: stopping\n");
+            clearSleep();
+            return Action::Back;
+        }
+        if (!sleepWarned && sleepAt - now <= 60000) {
+            sleepWarned = true;
+            toast(tr("Sleep Timer: stopping in a minute"), 5000);
+        }
+    }
+
     if (hudHidden) {
         if (injected != Action::None) {
             showControls();   /* a track changed from the server: its panel shows */
@@ -523,9 +661,12 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
             controlsUntil = 0;
             return Action::None;
         }
+        /* 2: subtitles, audio, the options, closed */
         if (down & WPAD_BUTTON_2) {
             if (panel == Panel::Sub && ctx.audioStreams.size() > 1) {
                 openPanel(Panel::Audio);
+            } else if (panel != Panel::Options) {
+                openPanel(Panel::Options);
             } else {
                 panel = Panel::None;
                 showControls();
@@ -536,6 +677,10 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         const u32 dnBits = WPAD_BUTTON_DOWN | Input::BTN_DPAD_DOWN | Input::BTN_STICK_DOWN;
         if ((down & upBits) && panelSel > 0)     --panelSel;
         if ((down & dnBits) && panelSel + 1 < n) ++panelSel;
+        if (panel == Panel::Options) {
+            if (down & DIR_LEFT)  adjustOption(panelSel, -1);
+            if (down & DIR_RIGHT) adjustOption(panelSel, +1);
+        }
         if (panelSel < panelTop) panelTop = panelSel;
         if (panelSel >= panelTop + LIST_ROWS) panelTop = panelSel - LIST_ROWS + 1;
         if (down & WPAD_BUTTON_A) return activatePanelRow(panelSel);
@@ -844,15 +989,11 @@ PlayerView::Action PlayerView::update(u32 down, const ir_t& ir)
         return Action::None;
     }
 
-    /* Button X (2 on Wii Remote): Adjust Subtitles & Audio */
+    /* Button X (2 on Wii Remote): Subtitles, Audio, then the Options */
     if (down & WPAD_BUTTON_2) {
-        if (!ctx.subStreams.empty()) {
-            openPanel(Panel::Sub);
-        } else if (ctx.audioStreams.size() > 1) {
-            openPanel(Panel::Audio);
-        } else {
-            toast(tr("No subtitles or extra audio tracks"));
-        }
+        if (!ctx.subStreams.empty())          openPanel(Panel::Sub);
+        else if (ctx.audioStreams.size() > 1) openPanel(Panel::Audio);
+        else                                  openPanel(Panel::Options);
         return Action::None;
     }
     return act;
@@ -941,7 +1082,7 @@ void PlayerView::render(const ir_t& ir)
              * keyboard (F3) only */
             const Ui::ButtonStyle bs = Ui::buttonStyle();
             const Ui::Hint all[] = { { "ZR", N_("Zoom") },
-                                     { "1", N_("Hide") }, { "2", N_("Tracks") }, { "B", N_("Back") } };
+                                     { "1", N_("Hide") }, { "2", N_("Options") }, { "B", N_("Back") } };
             const Ui::Hint* hints = bs == Ui::ButtonStyle::WiiRemote ? all + 1 : all;
             const int nHints = bs == Ui::ButtonStyle::WiiRemote ? 3 : 4;
             float hw = 0;
@@ -1096,8 +1237,14 @@ void PlayerView::render(const ir_t& ir)
 
     /* ---- Skip intro ---- */
     if (introVisible()) {
-        Ui::button(INTRO_X, INTRO_Y, INTRO_W, INTRO_H, segmentLabel(activeSegment()), 16,
+        const float ix = introX(), iy = introY(k);
+        Ui::button(ix, iy, INTRO_W, INTRO_H, segmentLabel(activeSegment()), 16,
                    hoverIntro ? Ui::pulse() : 0.35f);
+        /* B hides it */
+        const Ui::Hint hide = { "B", N_("Hide") };
+        const float hw = Ui::hintWidth(hide), hx = ix - hw - 10, hy = iy + INTRO_H / 2 - 9;
+        Ui::roundRect(hx - 4, hy - 4, hw + 4, 26, 13, Ui::alpha(p.cardTop, 0.85f), Ui::alpha(p.cardBottom, 0.85f));
+        Ui::hint(hx + 2, hy, hide);
     }
 
     /* ---- Track picker ---- */
@@ -1106,13 +1253,12 @@ void PlayerView::render(const ir_t& ir)
         int rows = n - panelTop < LIST_ROWS ? n - panelTop : LIST_ROWS;
         int h = 44 + rows * ROW_H + 12;
         Ui::card(LIST_X, LIST_Y, LIST_W, h, 16, 0.0f);
-        Ui::text(LIST_X + 18, LIST_Y + 12, panel == Panel::Audio ? tr("Audio track") : tr("Subtitles"),
+        Ui::text(LIST_X + 18, LIST_Y + 12, panel == Panel::Audio   ? tr("Audio track")
+                                         : panel == Panel::Options ? tr("Options") : tr("Subtitles"),
                  18, p.accentDark);
-        if (panel == Panel::Sub && ctx.audioStreams.size() > 1) {
-            const Ui::Hint switchHint = { "2", N_("Audio") };
-            Ui::hint(LIST_X + LIST_W - Ui::hintWidth(switchHint) - 14, LIST_Y + 13, switchHint);
-        } else if (panel == Panel::Audio && !ctx.subStreams.empty()) {
-            const Ui::Hint switchHint = { "2", N_("Subtitles") };
+        {   /* where 2 goes next: audio, the options, closed */
+            const Ui::Hint switchHint = { "2", panel == Panel::Sub && ctx.audioStreams.size() > 1 ? N_("Audio")
+                                             : panel == Panel::Options ? N_("Close") : N_("Options") };
             Ui::hint(LIST_X + LIST_W - Ui::hintWidth(switchHint) - 14, LIST_Y + 13, switchHint);
         }
         Ui::roundRect(LIST_X + 14, LIST_Y + 38, LIST_W - 28, 1.5f, 0.75f, Ui::alpha(p.cardBorder, 0.6f));
@@ -1124,9 +1270,17 @@ void PlayerView::render(const ir_t& ir)
                 Ui::roundRect(LIST_X + 8, y, LIST_W - 16, ROW_H - 4, (ROW_H - 4) * 0.5f,
                               Ui::mix(p.accent, 0xFFFFFFFF, 0.2f), p.accentDark);
             bool current = panelRowIsCurrent(row);
-            int  maxW = LIST_W - 48 - (current ? 70 : 0);
+            /* an option: its value on the right, < > around it when picked */
+            std::string value;
+            if (panel == Panel::Options)
+                value = sel ? "< " + panelValue(row) + " >" : panelValue(row);
+            const int valueW = value.empty() ? 0 : Ui::textWidth(value.c_str(), 15) + 12;
+            int  maxW = LIST_W - 48 - (current ? 70 : 0) - valueW;
             Ui::text(LIST_X + 22, y + 7, fitText(panelLabel(row), 16, maxW).c_str(), 16,
                      sel ? p.textOnAccent : p.text);
+            if (!value.empty())
+                Ui::textRight(LIST_X + LIST_W - 22, y + 8, value.c_str(), 15,
+                              sel ? p.textOnAccent : p.textDim);
             if (current)
                 Ui::textRight(LIST_X + LIST_W - 22, y + 9, tr("\xe2\x9c\x93 Current"), 13,
                               sel ? p.textOnAccent : p.ok);

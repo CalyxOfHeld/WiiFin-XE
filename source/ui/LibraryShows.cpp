@@ -27,9 +27,18 @@ static int seasonGridX0(int n)
 /* the List + Posters view: the list narrower, the poster on its right */
 static const int SEASON_LW = 384;
 
-/* the series' page: its poster where A plays it from the start */
+/* the series' page: its poster where A plays it (where it was left, or
+ * from the start); the choices under it */
 static const float SP_X = 40, SP_Y = 62, SP_W = 170, SP_H = 255;
 static const float PAGE_H = 420;   /* the overview over the seasons: one page down */
+static const float SP_LINE_Y = SP_Y + SP_H + 10, SP_LINE_H = 22;
+/* the choice under (x, y): 0 where it was left, 1 from the start, -1 none */
+static int seriesChoiceAt(float x, float y, int lines)
+{
+    if (x < SP_X - 20 || x >= SP_X + SP_W + 20 || y < SP_LINE_Y - 4) return -1;
+    const int i = (int)((y - (SP_LINE_Y - 4)) / SP_LINE_H);
+    return i < lines ? i : -1;
+}
 
 /* the first episode of its first season (not the specials), played; the
  * season's others after it */
@@ -60,8 +69,49 @@ bool LibraryView::startSeriesFromStart()
     return true;
 }
 
+/* the series' episode where it was left (part watched: from its position),
+ * or the one after it */
+bool LibraryView::startSeriesNext()
+{
+    if (!seriesHasNext) return false;
+    const std::string id = seriesNext.id;
+    bool ok = false;
+    std::string err;
+    freeDetail();
+    runWithLoading([&]() {
+        ok = client.getItemDetail(serverUrl, auth, id, detail);
+        if (!ok) err = client.lastError();
+    });
+    if (!ok) { errMsg = err; state = State::Error; return false; }
+    const long long at = seriesNextResume ? detail.playbackPositionTicks : 0LL;
+    SYS_Report("[Series] %s: %s at %llds\n", seriesNextResume ? "resume" : "next",
+               seriesNext.name.c_str(), at / 10000000LL);
+    detailItemId    = id;
+    detailIsEpisode = true;
+    selectDefaultTracks(detail.defaultAudioIndex, detail.defaultSubIndex);
+    preparePlay(at);
+    return true;
+}
+
+/* where the series was left: asked of the server (on the loading thread's
+ * side when called from runWithLoading) */
+void LibraryView::refreshSeriesNext()
+{
+    seriesNext = JellyfinEpisode();
+    seriesNextResume = false;
+    seriesHasNext = client.getSeriesResume(serverUrl, auth, currentSeriesId, seriesNext, seriesNextResume);
+    seriesNextFor = currentSeriesId;
+    seriesNextStale = false;
+    seriesPlaySel = 0;
+    if (seriesHasNext)
+        SYS_Report("[Series] left at S%d E%d (%s)\n", seriesNext.seasonNumber, seriesNext.indexNumber,
+                   seriesNextResume ? "part watched" : "next");
+}
+
 bool LibraryView::updateSeasons(ir_t& ir, bool aPressed) {
     if (seasonAsk) { updateSeasonAsk(ir); return false; }
+    /* back from playing, or a season marked: where it was left again */
+    if (seriesNextStale) runWithLoading([&]() { refreshSeriesNext(); });
     int n = (int)seasons.size();
     if (Input::isBackPressed()) {
         freeSeasonPosters();
@@ -76,7 +126,16 @@ bool LibraryView::updateSeasons(ir_t& ir, bool aPressed) {
         if (Input::isDownPressed() || (aPressed && ir.valid && ir.y > PAGE_H - 40)) { seriesTop = false; irMode = false; return false; }
         if (Input::is2Pressed() && n > 0) return startShuffle("");
         if (Input::is1Pressed()) toggleFavorite(currentSeriesId, seriesFavorite);
-        if (aPressed && (!ir.valid || onPoster) && n > 0) return startSeriesFromStart();
+        /* where it was left, or from the start: Left/Right, or the pointer */
+        const int choice = seriesHasNext && ir.valid ? seriesChoiceAt(ir.x, ir.y, 2) : -1;
+        if (seriesHasNext) {
+            if (Input::isLeftPressed())  seriesPlaySel = 0;
+            if (Input::isRightPressed()) seriesPlaySel = 1;
+            if (onPoster) seriesPlaySel = 0;
+            if (choice >= 0) seriesPlaySel = choice;
+        }
+        if (aPressed && (!ir.valid || onPoster || choice >= 0) && n > 0)
+            return seriesHasNext && seriesPlaySel == 0 ? startSeriesNext() : startSeriesFromStart();
         return false;
     }
     /* back up to the overview: Up from the first row, or A on the header */
@@ -148,6 +207,30 @@ bool LibraryView::updateSeasons(ir_t& ir, bool aPressed) {
 bool LibraryView::updateEpisodes(ir_t& ir, bool aPressed) {
     if (seasonAsk) { updateSeasonAsk(ir); return false; }
     if (epPanel || epTyping) return updateEpisodePanel(ir);
+    /* back from playing: the episode left part watched again, and the
+     * list's watched marks and progress as the server has them now */
+    if (seriesNextStale || episodesStale) {
+        const bool eps = episodesStale;
+        std::vector<JellyfinEpisode> fresh;
+        bool ok = false;
+        runWithLoading([&]() {
+            if (seriesNextStale) refreshSeriesNext();
+            if (eps) ok = client.getEpisodes(serverUrl, auth, currentSeriesId, currentSeasonId, fresh);
+        });
+        episodesStale = false;
+        if (ok) {
+            for (auto& e : episodes)
+                for (const auto& f : fresh)
+                    if (f.id == e.id) {
+                        e.played = f.played;
+                        e.playbackPositionTicks = f.playbackPositionTicks;
+                        e.lastPlayed = f.lastPlayed;
+                        break;
+                    }
+            buildEpisodeView();   /* sorted on watched or last played: in place */
+            clampEpisodeScroll();
+        }
+    }
     const int n = (int)episodeView.size();
     if (Input::isBackPressed()) {
         if (!episodeQuery.empty()) { episodeQuery.clear(); buildEpisodeView(); return false; }
@@ -478,6 +561,7 @@ void LibraryView::markSeasonWatched(const std::string& seasonId, const std::stri
             for (size_t i = 0; i < ids.size(); ++i)
                 if (marked[i] && e.id == ids[i]) { e.played = true; e.playbackPositionTicks = 0; break; }
     browse.invalidate();    /* continue watching, next up */
+    seriesNextStale = true;
     if (here) buildEpisodeView();
     char msg[96];
     if (count == (int)ids.size())
@@ -502,9 +586,32 @@ void LibraryView::drawSeriesOverview(ir_t& ir)
         Ui::circle(cx, cy, 30, Ui::alpha(0x000000FF, 0.55f));
         Ui::triangle(cx - 9, cy - 14, cx - 9, cy + 14, cx + 15, cy, 0xFFFFFFFF);
     }
+    /* under it: where it was left (when it was), then from the start */
+    std::string left;
+    if (seriesHasNext) {
+        char buf[96];
+        const int secs = (int)(seriesNext.playbackPositionTicks / 10000000LL);
+        const int h = secs / 3600, m = (secs % 3600) / 60, s = secs % 60;
+        char at[24];
+        if (h > 0) snprintf(at, sizeof at, "%d:%02d:%02d", h, m, s);
+        else       snprintf(at, sizeof at, "%d:%02d", m, s);
+        if (seriesNextResume)
+            /* TRANSLATORS: under a series' poster: the episode part watched, and where it stopped */
+            snprintf(buf, sizeof buf, tr("Resume S%d E%d at %s"), seriesNext.seasonNumber, seriesNext.indexNumber, at);
+        else
+            /* TRANSLATORS: under a series' poster: the episode after the one watched last */
+            snprintf(buf, sizeof buf, tr("Next: S%d E%d"), seriesNext.seasonNumber, seriesNext.indexNumber);
+        left = buf;
+    }
     /* TRANSLATORS: under the series' poster: A on it plays the first episode */
-    Ui::textCentered(SP_X + SP_W / 2, SP_Y + SP_H + 10, tr("Play from the start"), 14,
-                     seriesTop ? p.accentDark : p.textDim);
+    const char* lines[2] = { left.c_str(), tr("Play from the start") };
+    const int first = seriesHasNext ? 0 : 1;
+    for (int i = first; i < 2; i++) {
+        const bool sel = seriesTop && (!seriesHasNext || seriesPlaySel == i);
+        Ui::textCentered(SP_X + SP_W / 2, SP_LINE_Y + (i - first) * SP_LINE_H,
+                         fitText(font, lines[i], 14, (int)SP_W + 40).c_str(), 14,
+                         sel ? p.accentDark : p.textDim);
+    }
     /* its facts */
     const float X = SP_X + SP_W + 26, W = 600 - X;
     float y = SP_Y - 2;
@@ -582,9 +689,11 @@ void LibraryView::renderSeasons(ir_t& ir) {
     }
     if (sliding) Ui::clipReset();
     if (seriesTop) {
-        const Ui::Hint l[] = { { "A", N_("Play") }, { "2", N_("Shuffle") }, { "B", N_("Back") } };
+        const Ui::Hint l[] = { { "A", N_("Play") }, { "LR", N_("Select") }, { "2", N_("Shuffle") }, { "B", N_("Back") } };
+        const Ui::Hint l1[] = { l[0], l[2], l[3] };
         const Ui::Hint r[] = { { "UD", N_("Seasons") }, { "1", seriesFavorite ? N_("Unfavorite") : N_("Favorite") } };
-        Ui::footer(l, 3, r, 2);
+        if (seriesHasNext) Ui::footer(l, 4, r, 2);
+        else               Ui::footer(l1, 3, r, 2);
         return;
     }
     const bool real = seasonSel < (int)seasons.size() && seasons[seasonSel].id != SPECIALS_ROW;
@@ -686,12 +795,24 @@ void LibraryView::renderEpisodes(ir_t& ir) {
             snprintf(extra, sizeof(extra), tr("%d min"), (int)((ep.runTimeTicks + 300000000LL) / 600000000LL));
         const int ew = extra[0] ? Ui::textWidth(extra, 14) + 14 : 0;
         const bool seen = ep.played;
-        const int  avail = LIST_X + LIST_W - 16 - tx - (seen ? 34 : 0) - ew;
+        /* the series' episode played last, not finished (one only: not
+         * every one started while looking for where it was left) */
+        const bool part = !seen && ep.playbackPositionTicks > 0 && seriesNextResume &&
+                          seriesNextFor == currentSeriesId && ep.id == seriesNext.id;
+        const int  mark  = seen || part ? 34 : 0;
+        const int  avail = LIST_X + LIST_W - 16 - tx - mark - ew;
         const u32  col = seen ? Ui::mix(p.textDim, p.accentDark, f) : Ui::mix(p.text, p.accentDark, f);
         titleText(0, tx, ry + 11, avail, filterDejaVu(ep.name, 200), 18, col, sel);
-        if (extra[0]) Ui::textRight(LIST_X + LIST_W - 16 - (seen ? 34 : 0), ry + 13, extra, 14, p.textDim);
+        if (extra[0]) Ui::textRight(LIST_X + LIST_W - 16 - mark, ry + 13, extra, 14, p.textDim);
         if (seen)   /* watched: a check on the right */
             Ui::textRight(LIST_X + LIST_W - 16, ry + 11, "\xe2\x9c\x93", 18, p.ok);
+        if (part) {   /* part watched: how far, a bar on the right */
+            float k = ep.runTimeTicks > 0 ? (float)ep.playbackPositionTicks / (float)ep.runTimeTicks : 0.5f;
+            if (k > 1.0f) k = 1.0f;
+            const float bw = 26.0f, bx = LIST_X + LIST_W - 16 - bw, by = ry + 18;
+            Ui::roundRect(bx, by, bw, 6, 3, Ui::alpha(p.textDim, 0.45f));
+            Ui::roundRect(bx, by, bw * k < 6.0f ? 6.0f : bw * k, 6, 3, p.accent);
+        }
     }
     if (n == 0 && !episodeQuery.empty())
         Ui::textCentered(320, LIST_Y + 40, tr("No episode matches"), 16, p.textDim);

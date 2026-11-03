@@ -137,6 +137,19 @@ void setSolidColors(bool on) { s_solid = on; ++s_palGen; }
 static bool s_clock12 = false;
 void setClock12h(bool on) { s_clock12 = on; }
 bool clock12h()           { return s_clock12; }
+
+std::string dateText(const std::string& iso)
+{
+    int y = 0, m = 0, d = 0;
+    if (sscanf(iso.c_str(), "%d-%d-%d", &y, &m, &d) != 3 || y < 1900 || m < 1 || m > 12 || d < 1) return "";
+    /* TRANSLATORS: months, abbreviated (when a title was added, an episode aired) */
+    static const char* const MONTHS[12] = { N_("Jan"), N_("Feb"), N_("Mar"), N_("Apr"), N_("May"), N_("Jun"),
+                                            N_("Jul"), N_("Aug"), N_("Sep"), N_("Oct"), N_("Nov"), N_("Dec") };
+    char date[32];
+    if (s_clock12) snprintf(date, sizeof(date), "%s %d, %d", tr(MONTHS[m - 1]), d, y);
+    else           snprintf(date, sizeof(date), "%d %s %d", d, tr(MONTHS[m - 1]), y);
+    return date;
+}
 static bool s_dimRows = true;
 void setDimRows(bool on) { s_dimRows = on; }
 bool dimRows()           { return s_dimRows; }
@@ -443,6 +456,10 @@ void icon(Icon i, float cx, float cy, u32 c, u32 fill)
     case Icon::Folder:         /* a folder: its tab, its body */
         roundRect(cx - 7, cy - 6, 6, 3, 1, c);
         roundBorder(cx - 7, cy - 4, 14, 10, 1.5f, 2.0f, c);
+        break;
+    case Icon::Refresh:        /* a ring, an arrowhead on its top right */
+        roundBorder(cx - 6, cy - 6, 12, 12, 6, 2.0f, c);
+        triangle(cx + 1, cy - 9, cx + 7, cy - 6, cx + 1, cy - 2, c);
         break;
     }
 }

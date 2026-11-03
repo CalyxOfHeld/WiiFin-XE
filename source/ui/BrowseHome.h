@@ -37,6 +37,7 @@ public:
     /* Fetch the rows (blocking network; run it inside a loading screen). */
     void build(const std::vector<JellyfinLibrary>& libs);
     bool built() const { return isBuilt; }
+    unsigned long long builtAt() const { return builtMs; }   /* ms, of gettime() */
     bool empty() const { return rows.empty(); }
     /* Forget the rows so the next visit rebuilds them (e.g. after playback). */
     void invalidate();
@@ -52,7 +53,8 @@ public:
      * more of it, in the library view (Posters: a grid; List; List +
      * Posters); 1 changes the view, B back to the rows.  A row of parts
      * lists them all on the left: Left to that list, A shows the part
-     * picked (Action::Expand again: here, that part).  Blocking network:
+     * picked (Action::Expand again: here, that part, or the next page of
+     * titles when the selection nears the end).  Blocking network:
      * the loader stopped, inside a loading screen. */
     void expand();
     bool isExpanded() const { return expanded; }
@@ -119,7 +121,11 @@ private:
     int         expLines() const;  /* lines on the page */
     void        expWindow(int& first, int& last) const;   /* tiles worth loading */
     void        expFollow();
-    void        fetchExpanded();
+    /* its first page, or (more) the next one after those shown; a refresh
+     * fetches as many as were shown */
+    void        fetchExpanded(bool more = false);
+    int         expTotal    = 0;       /* the server's count of them all */
+    bool        expMoreWant = false;   /* the end near: expand() fetches more */
     void        collapse();
     Action      updateExpanded(const ir_t& ir, bool& irMode);
     void        renderExpanded(const ir_t& ir);
@@ -133,6 +139,7 @@ private:
     std::string         userName;
     std::vector<Row>    rows;
     bool                isBuilt  = false;
+    unsigned long long  builtMs  = 0;
     int                 rowSel   = 0;
     float               rowAnim  = 0.0f;
     int                 headerFocus = -1;   /* -1 rows, 0 search, 1 browse, 2 profile */

@@ -212,6 +212,7 @@ void BrowseHome::build(const std::vector<JellyfinLibrary>& libs)
     headerFocus = -1;
     if (expanded) fetchExpanded();   /* fresh too: resume points, favourites */
     isBuilt = true;
+    builtMs = ticks_to_millisecs(gettime());
 }
 
 /* Row from a query; empty rows are dropped. */
@@ -1192,6 +1193,7 @@ void BrowseHome::expand()
 {
     /* open already: the part picked in the list on the left, or another order */
     if (expanded) {
+        if (expMoreWant) { expMoreWant = false; fetchExpanded(true); return; }
         const bool part  = sideSel >= 0 && sideSel < (int)expSecs.size() && sideSel != expSec;
         const bool order = expSortWant != expSort;
         if (!part && !order) return;
@@ -1204,6 +1206,7 @@ void BrowseHome::expand()
         expSort = expSortWant;
         exp.items.clear(); exp.tex.clear(); exp.st.clear();
         exp.sel    = 0;
+        expTotal   = 0;
         fetchExpanded();
         return;
     }
@@ -1255,31 +1258,72 @@ void BrowseHome::expand()
         exp.st.assign(1, TILE_NONE);
     }
     expanded = true;
+    expTotal = 0;
+    expMoreWant = false;
     fetchExpanded();
 }
 
-/* the row's query for more of it (Limit=EXPAND_ITEMS), the selection kept */
-void BrowseHome::fetchExpanded()
+/* name=value in a query: replaced, or added */
+static void setParam(std::string& q, const char* name, int value)
+{
+    char kv[40];
+    snprintf(kv, sizeof(kv), "%s=%d", name, value);
+    const std::string key = std::string(name) + "=";
+    size_t p = q.find("?" + key);
+    if (p == std::string::npos) p = q.find("&" + key);
+    if (p != std::string::npos) {
+        size_t e = q.find('&', p + 1);
+        q.replace(p + 1, e == std::string::npos ? std::string::npos : e - p - 1, kv);
+    } else {
+        q += (q.find('?') == std::string::npos ? "?" : "&");
+        q += kv;
+    }
+}
+
+/* the row's query for more of it, EXPAND_ITEMS at a time (StartIndex):
+ * the first page, or the next after those shown (more), the selection kept.
+ * Only a query the server counts (TotalRecordCount) goes past one page. */
+void BrowseHome::fetchExpanded(bool more)
 {
     std::string keep = exp.sel >= 0 && exp.sel < (int)exp.items.size() ? exp.items[exp.sel].id : "";
-    freeTextures(exp);
     /* another order than the row's own: asked of the library itself */
     std::string q = expSort >= 0 && expSort != exp.sort && expSec >= 0 && expSec < (int)expSecs.size()
                     ? sortedQuery(expSecs[expSec], expSort) : exp.query;
-    char lim[24];
-    snprintf(lim, sizeof(lim), "Limit=%d", EXPAND_ITEMS);
-    size_t p = q.find("Limit=");
-    if (p != std::string::npos) {
-        size_t e = q.find('&', p);
-        q.replace(p, e == std::string::npos ? std::string::npos : e - p, lim);
-    } else {
-        q += (q.find('?') == std::string::npos ? "?" : "&");
-        q += lim;
+    setParam(q, "Limit", EXPAND_ITEMS);
+    if (more) {
+        const int start = (int)exp.items.size();
+        setParam(q, "StartIndex", start);
+        std::vector<JellyfinItem> got;
+        int total = 0;
+        if (!client.getItemsByQuery(serverUrl, auth, q, got, &total) || got.empty()) {
+            expTotal = start;                 /* no more: not asked again */
+            return;
+        }
+        if ((int)got.size() > EXPAND_ITEMS) got.resize(EXPAND_ITEMS);
+        expTotal = total;
+        exp.items.insert(exp.items.end(), got.begin(), got.end());
+        exp.tex.resize(exp.items.size(), nullptr);
+        exp.st.resize(exp.items.size(), TILE_NONE);
+        SYS_Report("[Home] expanded row: %d of %d\n", (int)exp.items.size(), expTotal);
+        return;
     }
-    std::vector<JellyfinItem> got;
-    client.getItemsByQuery(serverUrl, auth, q, got);
-    if ((int)got.size() > EXPAND_ITEMS) got.resize(EXPAND_ITEMS);
-    exp.items = std::move(got);
+    /* afresh: as many pages as were shown (a refresh keeps the place) */
+    const int want = (int)exp.items.size() > EXPAND_ITEMS ? (int)exp.items.size() : EXPAND_ITEMS;
+    freeTextures(exp);
+    std::vector<JellyfinItem> all;
+    int total = 0;
+    for (int start = 0; start < want; start += EXPAND_ITEMS) {
+        std::vector<JellyfinItem> got;
+        setParam(q, "StartIndex", start);
+        if (!client.getItemsByQuery(serverUrl, auth, q, got, &total)) break;
+        if ((int)got.size() > EXPAND_ITEMS) got.resize(EXPAND_ITEMS);
+        const bool full = (int)got.size() == EXPAND_ITEMS;
+        all.insert(all.end(), got.begin(), got.end());
+        if (!full) break;
+    }
+    /* no TotalRecordCount (Latest, Next Up: their own short lists): no more */
+    expTotal = total;
+    exp.items = std::move(all);
     exp.tex.assign(exp.items.size(), nullptr);
     exp.st.assign(exp.items.size(), TILE_NONE);
     exp.sel = 0;
@@ -1289,20 +1333,14 @@ void BrowseHome::fetchExpanded()
     expFollow();
 }
 
-/* "Added 3 Oct 2026" (Oct 3, 2026 on the 12-hour clock) from Jellyfin's
- * "2026-10-03T..."; "" when there is no date */
+/* "Added 3 Oct 2026"; "" when there is no date */
 static std::string addedOn(const std::string& iso)
 {
-    int y = 0, m = 0, d = 0;
-    if (sscanf(iso.c_str(), "%d-%d-%d", &y, &m, &d) != 3 || y < 1900 || m < 1 || m > 12 || d < 1) return "";
-    /* TRANSLATORS: months, abbreviated (when a title was added) */
-    static const char* const MONTHS[12] = { N_("Jan"), N_("Feb"), N_("Mar"), N_("Apr"), N_("May"), N_("Jun"),
-                                            N_("Jul"), N_("Aug"), N_("Sep"), N_("Oct"), N_("Nov"), N_("Dec") };
-    char date[32], out[64];
-    if (Ui::clock12h()) snprintf(date, sizeof(date), "%s %d, %d", tr(MONTHS[m - 1]), d, y);
-    else                snprintf(date, sizeof(date), "%d %s %d", d, tr(MONTHS[m - 1]), y);
+    const std::string date = Ui::dateText(iso);
+    if (date.empty()) return "";
+    char out[64];
     /* TRANSLATORS: under a New Addition's running time and year */
-    snprintf(out, sizeof(out), tr("Added %s"), date);
+    snprintf(out, sizeof(out), tr("Added %s"), date.c_str());
     return out;
 }
 
@@ -1439,6 +1477,8 @@ BrowseHome::Action BrowseHome::updateExpanded(const ir_t& ir, bool& irMode)
     if (sel < 0) sel = 0;
     if (sel > n - 1) sel = n - 1;
     if (sel != exp.sel) { exp.sel = sel; expFollow(); }
+    /* the last page reached and the server has more: the next ones */
+    if (n < expTotal && exp.sel >= n - page) { expMoreWant = true; return Action::Expand; }
 
     if (a && (!irMode || hover >= 0)) return Action::Open;
     return Action::None;

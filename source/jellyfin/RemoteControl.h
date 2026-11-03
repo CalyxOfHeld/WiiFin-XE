@@ -61,4 +61,8 @@ namespace Remote {
 
     /* every frame: messages to the screen, commands dropped in the menus */
     void pump();
+
+    /* the server's library changed (a scan added, changed or removed
+     * items) since the last call: the home's rows are out of date */
+    bool takeLibraryChanged();
 }

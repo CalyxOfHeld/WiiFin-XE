@@ -11,15 +11,35 @@
 
 using namespace LibDraw;
 
+/* The search keyboard from the home: what was typed and left with B is
+ * still there; after a search, a new one */
+void LibraryView::openSearch() {
+    if (!searchKept) searchQuery.clear();
+    searchKept = false;
+    searchResults.clear();
+    searchSel = 0; searchTop = 0;
+    searchKb.reset();
+    searchReturnState = State::LibsReady;
+    state = State::SearchInput;
+    irMode = false;
+}
+
 bool LibraryView::updateSearchInput(ir_t& ir) {
+    /* B leaves, the query kept for next time (- / X / Delete erase) */
+    if (Input::isBackPressed()) {
+        searchKept = true;
+        state = searchReturnState;
+        return false;
+    }
     searchKb.setOrigin((640 - searchKb.width()) * 0.5f, 132);
     searchKb.setEnterLabel(N_("Search"));
     searchKb.setTextField(62, 70, 516, 38);
     switch (searchKb.update(ir, searchQuery, 64)) {
     case Keyboard::Result::Enter:            // Search key or [+]
-        if (!searchQuery.empty()) state = State::SearchLoad;
+        if (!searchQuery.empty()) { searchKept = false; state = State::SearchLoad; }
         break;
-    case Keyboard::Result::Cancel:           // B with an empty query
+    case Keyboard::Result::Cancel:
+        searchKept = true;
         state = searchReturnState;
         break;
     default: break;
@@ -279,7 +299,7 @@ void LibraryView::renderSearchInput(ir_t& ir) {
 
     const Ui::Hint l[] = { { "A", N_("Type") }, { "kbdel", N_("Delete") }, { "kbspace", N_("Space") } };
     const Ui::Hint r[] = { { "kbsym", N_("Symbols") }, { "+!", N_("Search") }, { "B", N_("Back") } };
-    Ui::footer(l, 3, r, searchQuery.empty() ? 3 : 2);
+    Ui::footer(l, 3, r, 3);
 }
 
 // ---------------------------------------------------------------

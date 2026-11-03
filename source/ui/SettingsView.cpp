@@ -24,7 +24,7 @@ enum Row { R_SSL, R_MUSIC, R_SOUNDS, R_QUALITY, R_DIRECT, R_SMOOTH, R_THEME, R_H
            R_LIGHT, R_AREA, R_BACKGROUNDS, R_CLOCK, R_LANGUAGE, R_EXIT, R_START, R_DIM, R_HEADER, R_SIGNIN, R_STARTUP, R_LIBS, R_CUSTOMIZE,
            R_SAVER, R_SPEAKER, R_SAVER_LOGO, R_POWER_BTN, R_RESET_BTN,
            R_SAVER_SPEED, R_SAVER_EFFECT, R_KB_SIZE,
-           R_SUBTITLES, R_SUB_LANG,
+           R_SUBTITLES, R_SUB_LANG, R_SUB_SIZE,
            R_PAD_SCRUB, R_PAD_VOLUME, R_EPISODE_BTNS, R_ASK_STOP, R_ASK_NEXT,
            R_SKIP_BTN, R_SKIP_AFTER, R_SKIP_PLUGIN };
 
@@ -82,7 +82,7 @@ static std::vector<RowGroup> sectionGroups(int s, bool profile)
                  { G_SCREEN, { R_AREA, R_KB_SIZE } } };
     case S_PLAYBACK:
         return { { G_VIDEO,      { R_QUALITY, R_DIRECT, R_SMOOTH } },
-                 { G_SUBTITLES,  { R_SUBTITLES, R_SUB_LANG } },
+                 { G_SUBTITLES,  { R_SUBTITLES, R_SUB_LANG, R_SUB_SIZE } },
                  { G_SKIP,       PlayerView::skipButton ? std::vector<int>{ R_SKIP_BTN, R_SKIP_AFTER, R_SKIP_PLUGIN }
                                                         : std::vector<int>{ R_SKIP_BTN, R_SKIP_PLUGIN } },
                  { G_CONTROLLER, { R_PAD_SCRUB, R_PAD_VOLUME, R_EPISODE_BTNS, R_ASK_STOP, R_ASK_NEXT } },
@@ -270,6 +270,11 @@ SettingsView::RowInfo SettingsView::describe(int id)
             idx == 0 ? OFF : p.accent);
         break;
     }
+    case R_SUB_SIZE:
+        set(N_("Subtitle Size"),
+            N_("How big subtitles are; 2 in the player's Options changes it too"),
+            PlayerView::subSizeName(PlayerView::subSize), PlayerView::subSize == 1 ? OFF : p.accent);
+        break;
     case R_PAD_SCRUB: {
         static const char* const scrubNames[] = { N_("C-Stick"), N_("Main Stick"), N_("D-Pad"), N_("OFF") };
         static const char* const scrubDescs[] = {
@@ -509,10 +514,15 @@ SettingsView::RowInfo SettingsView::describe(int id)
         break;
     }
     case R_START:
-        set(N_("Start Screen"),
-            g_app_startBrowse ? N_("The rows home opens on browse: your libraries")
-                              : N_("The rows home opens on home: Continue Watching"),
-            g_app_startBrowse ? N_("Browse") : N_("Home"), g_app_startBrowse ? OFF : p.accent);
+        if (g_app_startLastShow)
+            set(N_("Start Screen"),
+                N_("Opens on the show you watched last, at its next episode; home when none in 14 days"),
+                N_("Last Show"), p.accent);
+        else
+            set(N_("Start Screen"),
+                g_app_startBrowse ? N_("The rows home opens on browse: your libraries")
+                                  : N_("The rows home opens on home: Continue Watching"),
+                g_app_startBrowse ? N_("Browse") : N_("Home"), g_app_startBrowse ? OFF : p.accent);
         break;
     case R_DIM:
         set(N_("Other Rows"),
@@ -619,7 +629,11 @@ void SettingsView::activate(int index) {
             if (!profile) break;
             signInWant = (signInWant + 1) % 3;
             break;
-        case R_START: g_app_startBrowse = !g_app_startBrowse; break;
+        case R_START:   /* Home, Browse, Last Show */
+            if (g_app_startLastShow)    { g_app_startLastShow = false; g_app_startBrowse = false; }
+            else if (g_app_startBrowse) g_app_startLastShow = true;
+            else                        g_app_startBrowse = true;
+            break;
         case R_DIM:   Ui::setDimRows(!Ui::dimRows()); break;
         case R_HEADER: Ui::setClassicHeader(!Ui::classicHeader()); break;
         case R_LIBS: if (profile) wantsLibraries = true; break;
@@ -634,6 +648,9 @@ void SettingsView::activate(int index) {
             break;
         case R_SUB_LANG:
             Subtitles::nextPreferredLanguage();
+            break;
+        case R_SUB_SIZE:
+            PlayerView::subSize = (PlayerView::subSize + 1) % PlayerView::SUB_SIZES;
             break;
         case R_PAD_SCRUB:
             Input::setPadScrub((Input::PadScrub)(((int)Input::padScrub() + 1) % 4));

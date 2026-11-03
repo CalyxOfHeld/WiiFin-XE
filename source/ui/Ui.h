@@ -98,6 +98,9 @@ bool solidColors();
 /* The bar's clock: 12-hour (1:31 PM, date month/day) or 24-hour */
 void setClock12h(bool on);
 bool clock12h();
+/* "3 Oct 2026" (Oct 3, 2026 on the 12-hour clock) from Jellyfin's
+ * "2026-10-03T..."; "" when there is no date */
+std::string dateText(const std::string& iso);
 /* The rows home: the rows under the focused one shaded (fewer things to
  * look at at once), or all of them shown plainly */
 void setDimRows(bool on);
@@ -154,7 +157,7 @@ void quad(float x, float y, float w, float h, u32 tl, u32 tr, u32 br, u32 bl);
 void triangle(float x0, float y0, float x1, float y1, float x2, float y2, u32 color);
 /* Small line icons (about 14 px, 2 px strokes) centred on cx, cy: the
  * header's buttons and the menus */
-enum class Icon { Search, Home, Browse, Menu, Play, Back, Profile, Settings, Folder };
+enum class Icon { Search, Home, Browse, Menu, Play, Back, Profile, Settings, Folder, Refresh };
 /* fill: the inside of an outlined icon (house, tiles) tinted, 0 none */
 void icon(Icon i, float cx, float cy, u32 color, u32 fill = 0);
 
