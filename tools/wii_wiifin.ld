@@ -68,9 +68,10 @@ SECTIONS {
 
         .rodata : {
                 KEEP( *(.rodata.__sys_versioninfo) )
-                /* not Brotli's dictionary (125 KB) nor FreeType's glyph names
-                 * (56 KB): with the blobs below */
-                EXCLUDE_FILE(*libbrotlicommon.a:* *libfreetype.a:psnames.o) *(.rodata .rodata.* .gnu.linkonce.r.*)
+                /* not Brotli's dictionary (125 KB), FreeType's glyph names
+                 * (56 KB) nor MPlayer's cosine tables (262 KB): with the
+                 * blobs below */
+                EXCLUDE_FILE(*libbrotlicommon.a:* *libfreetype.a:psnames.o *libmplayer.a:cos_tables.o) *(.rodata .rodata.* .gnu.linkonce.r.*)
                 *(.rodata1)
                 *(.fixup)
                 *(.got1)
@@ -191,6 +192,9 @@ SECTIONS {
                 /* FreeType's glyph names (constant): the CI's test build,
                  * with its scripted presses, had reached the stub zone */
                 *libfreetype.a:psnames.o(.rodata .rodata.*)
+                /* MPlayer's cosine tables (constant): the release build
+                 * (CI's compiler) had reached the stub zone */
+                *libmplayer.a:cos_tables.o(.rodata .rodata.*)
                 *stub_zone.o(.stub_zone)
                 . = ALIGN(32);   /* DOL loaders round section sizes up to 32 bytes */
         } :text2 = 0
