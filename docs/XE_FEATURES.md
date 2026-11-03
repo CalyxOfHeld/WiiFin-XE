@@ -6,6 +6,7 @@ WiiFin-XE is a modified version of [WiiFin](https://github.com/fabienmillet/WiiF
 - [Settings](#settings)
 - [Themes](#themes)
 - [Profiles](#profiles)
+- [Player](#player)
 - [Controllers and input](#controllers-and-input)
 - [On-screen keyboard](#on-screen-keyboard)
 - [Screen area](#screen-area)
@@ -29,7 +30,7 @@ The rows home has two pages:
 
 **New Additions and Top Rated** show every library at once.
 
-**Expand (button 2)** opens the row you're on as a page of up to 100 titles in the library layout.
+**Expand (button 2)** opens the row you're on as a full page in the library layout. Long rows load 100 more titles when you reach the last page.
 - On that page, 1 changes the layout, −/+ turn pages, A opens a title and B goes back.
 - Rows with parts (New Additions, Top Rated and each library on Browse) list them on the left: **All** first, then each library or genre.
 - On those rows, 2 also changes the order: Date Added (newest or oldest), Release Date, Title A-Z, Rating.
@@ -41,7 +42,9 @@ The rows home has two pages:
 
 **Other Rows** (Settings > View): **Shaded** fades the rows under the one you're on. **Shown** draws every row plainly.
 
-**Start Screen** sets which page the rows home opens on. It's in a profile's Sign-In settings, and under View in WiiFin's main menu settings.
+**The rows stay fresh:** coming back to the home after a library scan, or after 10 minutes, rebuilds the rows. **Refresh** in the profile menu does it at once.
+
+**Start Screen** sets which page the rows home opens on: Home, Browse, or **Last Show**, the episode list of the show you watched last (in the past two weeks) with the next episode picked. It's in a profile's Sign-In settings, and under View in WiiFin's main menu settings.
 
 ## Settings
 
@@ -87,6 +90,17 @@ Theme files are short text files in `sd:/apps/WiiFin/themes/`, easy to share and
 
 The **profile menu** has an icon on each entry. It also has **Local Media (WiiMC)** and **WiiFin Main Menu**.
 
+## Player
+
+- **Player Options:** button 2 goes through Subtitles, Audio, then Options. Left/Right change a row.
+  - **Sleep Timer:** Off, 30, 60 or 90 minutes, or the end of this video. A message shows a minute before it stops.
+  - **Subtitle Size:** Small, Medium, Large or Extra Large. Also in Settings > Playback.
+  - **Subtitle Sync:** moves the subtitles up to 15 seconds earlier or later, for this video.
+  - **Audio Sync:** moves the sound up to 1 second earlier or later. It's kept for next time.
+  - Size and sync don't change picture subtitles, which the server draws into the video.
+- **Skip Intro / Skip Credits** sits in the bottom-right corner. **B** hides it until the next one.
+- When the server marks more than one part of a video as credits, WiiFin uses the last one.
+
 ## Controllers and input
 
 - **Every controller at once:** all four Wii Remotes (with their Nunchuks and Classic Controllers), wireless Wii U Pro Controllers (Bluetooth), Nintendo Switch Pro Controllers (USB), Microsoft Xbox One controllers (USB), Sony PlayStation controllers (DualShock 4 and DualShock 3 over USB), and all four GameCube ports. DualSense, Xbox 360 and generic USB gamepads should also work. The on-screen hints follow the controller you pressed last.
@@ -101,7 +115,7 @@ The **profile menu** has an icon on each entry. It also has **Local Media (WiiMC
 - **Configurable Playback Controls:** in `Settings > Playback > Controller`, configure whether the GameCube / Gamepad right stick (C-Stick) or D-Pad handles scrubbing versus volume:
   - **Scrub Control:** C-Stick (default) or D-Pad. Left/right nudges playback by ±10 seconds; holding seeks continuously.
   - **Volume Control:** D-Pad (default) or C-Stick. Up/down adjusts volume in 5% increments.
-- **In-Player Overlay Navigation:** on GameCube, Classic, PlayStation, Xbox, Generic Gamepad, Switch Pro, and Wii U Pro Controllers, when the player controls are visible, the D-Pad or Left Stick navigates the on-screen buttons (|◀◀, −10s, Play/Pause, +10s, ▶▶|, Zoom, and Skip Intro when available). The focused button pulses with an animated selection glow, and pressing **A** (or ✕) executes the action. When a skip button appears (Skip Intro, Next Episode), it automatically takes the controller's focus so pressing **A** activates it. When controls are hidden, D-Pad Left/Right provides immediate ±10 second seeking (holding scrubs continuously). Pressing **B** (or ○) dismisses the overlay back to clean video playback.
+- **In-Player Overlay Navigation:** on GameCube, Classic, PlayStation, Xbox, Generic Gamepad, Switch Pro, and Wii U Pro Controllers, when the player controls are visible, the D-Pad or Left Stick navigates the on-screen buttons (|◀◀, −10s, Play/Pause, +10s, ▶▶|, Zoom, and Skip Intro when available). The focused button pulses with an animated selection glow, and pressing **A** (or ✕) executes the action. When a skip button appears (Skip Intro, Next Episode), it automatically takes the controller's focus so pressing **A** activates it. When controls are hidden, D-Pad Left/Right provides immediate ±10 second seeking (holding scrubs continuously). With the controls showing, **B** (or ○) stops the video, asking first when Ask Before Stopping is on; with them hidden, it brings them up.
 - **Seek bar navigation:** with the transport controls displayed, pressing Up moves onto the seek bar. Left and Right move 30 seconds at a time; holding down accelerates (60 seconds, then 3 minutes per step). Pressing **A** seeks immediately, or it seeks automatically 2 seconds after the last press. Pressing **B** cancels and returns the marker to where playback was. The stream restarts only once, not on every press. While controls are visible, D-pad Up and Down move between any skip prompt, the seek bar, and the transport buttons (Up/Down returns to controlling volume when controls are hidden).
 - **Playback Controller Settings:**
   - **Episode Buttons** (Settings > Playback > Controller): on by default. When turned off, + and − no longer change the episode, and |◀◀ / ▶▶| only skip between chapters.
@@ -174,12 +188,15 @@ The DVD, VHS and CD logos are WiiFin's own drawings in that style, not the trade
 
 ## Series and seasons
 
+- **A series' page** offers "Resume S2 E3 at 12:34" (the episode you left partway) or "Next: S2 E4", and "Play from the start".
+- **An episode's page** shows the show's name and episode number, the air date, and a **Rating** row: Left/Right for Liked, Disliked or not rated.
 - **+ on a season** (or Mark Season Watched) marks the episodes not watched yet. It asks first, and episodes already watched keep their dates.
 - **In the episode list:**
   - Left/Right or −/+ move a page.
   - 1 marks an episode watched or not.
   - 2 opens Options: Sort by (Episode, Title A-Z, Last Watched, Watched Status, Rating, Length), Order, Search (by name or episode number), Mark Season Watched, Shuffle Season, Skip Intro (this show).
   - B clears a search first, then goes back.
+  - The episode you're partway through has a progress bar. Watched marks and progress update as soon as you back out of a video.
 
 ## The Wii itself
 

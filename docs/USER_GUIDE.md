@@ -14,7 +14,7 @@ Everything WiiFin-XE does, its controls, its settings and how to give it your ow
 
 Download the files from the latest WiiFin-XE release.
 
-- **Homebrew Channel**: unzip `WiiFin-apps.zip` (or `WiiFin-hbc.zip`) at the root of the SD card (it holds `apps/WiiFin/`, fonts included) and start WiiFin from the Homebrew Channel
+- **Homebrew Channel**: unzip `WiiFin-hbc.zip` at the root of the SD card (it holds `apps/WiiFin/`, fonts included) and start WiiFin from the Homebrew Channel
 - **Wii Menu channel**: install `WiiFin.wad` with a WAD manager (Wii and vWii); for Chinese or Korean, also copy `apps/WiiFin/fonts/` from the zip to the SD card
 - **Dolphin**: open `WiiFin.dol` (`dolphin-emu -e WiiFin.dol`)
 
@@ -36,11 +36,14 @@ WiiFin-XE uses the same folder as WiiFin and replaces it. It keeps its settings,
 - Film, series and music libraries as posters or lists (with the cover of the selected title), their **tabs** in every view (−/+, or the pointer on one); **A-Z** jumps with left / right
 - A title too long for its place **scrolls** when it is selected
 - **Sort & filter** a film or series library, or a music library's albums (button 2): by name, year, rating or date added, ascending or descending; one genre; all, not watched, watched or favourites
-- **Search** (button 1 on the home screen)
+- **Search** (button 1 on the home screen); B keeps what you typed for next time
 - **Detail page**: synopsis (all of it with − when the page cuts it short), rating, genres, cast, audio and subtitle tracks (those the server picks for you to start with: your subtitle mode and languages, the file's default and forced tracks), several **versions** of a film, **favourites** (button 1, also on a series), **watched / not watched** (+, also on a row of the episode list)
 - **Special features**: trailers, featurettes, behind the scenes... of a film (button 2 on its page) or a series (after its seasons)
 - **Scenes**: the chapters of a film or an episode (the Scenes row of its page), with Jellyfin's picture of each: play from one
 - **Series**: seasons (as posters, or a list with the season's cover) and episodes, **shuffle** (button 2), next / previous episode across seasons
+- **Resume a series** from its page: "Resume S2 E3 at 12:34" or "Next: S2 E4", and "Play from the start"
+- **Episode list**: the episode you're partway through has a progress bar; watched marks and progress update as soon as you back out of a video
+- **An episode's page**: the show's name and episode number, the air date, and a Rating row (Left / Right: Liked, Disliked or not rated)
 - **Playlists of videos**: played one after the other from the one picked, or shuffled (button 2)
 - **Photos**: a photo library's pictures on the whole screen, left / right through the folder, a **slideshow** with A
 - **Japanese, Chinese and Korean** titles and subtitles: Japanese built in, Chinese and Korean with the font of `apps/WiiFin/fonts/` (in the Homebrew Channel package)
@@ -49,10 +52,11 @@ WiiFin-XE uses the same folder as WiiFin and replaces it. It keeps its settings,
 
 - Played by the integrated MPlayer CE engine: **direct play** of what the Wii decodes in real time (SD DivX/Xvid, MPEG-1/2, H.264 up to 480p, VP8; AVI, MKV, MP4, MPEG-TS/PS; seeks in the file itself), server-side transcoding for the rest, and back to transcoding when a file does not play smoothly (see [DIRECT_PLAY.md](../DIRECT_PLAY.md))
 - **Player**: seek bar with the server's trickplay thumbnails (Jellyfin 10.9+), left / right held to seek on, |◀ ▶| from chapter to chapter, volume, audio and subtitle tracks (text subtitles drawn by WiiFin, so the video can still play as it is), zoom (fit / fill)
-- **Overlay Navigation**: on GameCube, Classic, and USB Controllers, D-Pad or Left Stick navigates the on-screen controls (|◀◀, −10s, Play/Pause, +10s, ▶▶|, Zoom, and Skip Intro when available) with an animated pulsing focus ring, and **A** triggers the selected action. D-Pad Up moves onto the seek bar to jump through the stream. Press **B** to hide the overlay.
+- **Overlay Navigation**: on GameCube, Classic, and USB Controllers, D-Pad or Left Stick navigates the on-screen controls (|◀◀, −10s, Play/Pause, +10s, ▶▶|, Zoom, and Skip Intro when available) with an animated pulsing focus ring, and **A** triggers the selected action. D-Pad Up moves onto the seek bar to jump through the stream. With the controls showing, **B** stops the video; with Ask Before Stopping on (the default) it first asks "Stop watching?" (A stops, B keeps watching). On the seek bar with a move not made yet, B puts the marker back. With the controls hidden, B brings them up.
 - **Live Volume HUD**: real-time floating volume card (0–100% and mute cross) and transport bar volume badge during adjustments.
 - **Subtitles**: OFF by default, with automatic preferred language matching against media tracks.
-- **Skip intro / recap / credits** buttons from the server's media segments (Jellyfin 10.10+ with a plugin such as Intro Skipper), and **Next episode** during the credits; skip buttons automatically take controller focus so pressing **A** triggers them immediately
+- **Player Options** (button 2 goes through Subtitles, Audio, then Options): **Sleep Timer** (30, 60 or 90 minutes, or the end of this video; a message a minute before), **Subtitle Size**, **Subtitle Sync** and **Audio Sync**
+- **Skip intro / recap / credits** buttons (bottom right; B hides one) from the server's media segments (Jellyfin 10.10+ with a plugin such as Intro Skipper), and **Next episode** during the credits; skip buttons automatically take controller focus so pressing **A** triggers them immediately
 - **Next / previous episode**: an episode you started asks Continue or From Start; with Ask Before Next Episode on, it asks before changing episode at all
 - **Resume** where you left off; progress, pauses and the play method (direct or transcoded) reported to the server, each console a device of its own
 - A slow connection lowers the quality by itself; a picture that gets stuck is retried another way, with a message that says what happens
@@ -101,7 +105,7 @@ The pointer is optional: every screen works completely with the D-pad and analog
 - **Wii Remote & Nunchuk:** use the IR pointer or D-pad; the Nunchuk's stick acts as the D-pad, C is − and Z is +.
 - **Wii U Pro Controller:** syncs wirelessly over Bluetooth. Supports dual analog sticks, rumble, and uses Classic Controller button hints. (The controller is wireless only due to hardware limitations; its USB port is strictly for charging and carries no data).
 - **GameCube Controllers:** dual-analog sticks are fully utilized. By default, C-Stick scrubs playback (left/right ±10 s, held seeks continuously) and D-Pad controls volume (up/down). Roles can be customized in `Settings > Playback > Controller`.
-- **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons (|◀◀, −10s, Play/Pause, +10s, ▶▶|, Zoom, and Skip Intro / Next Episode) with a pulsing ring, and **A** executes the button. Pressing Up moves onto the seek bar. When a skip button appears (Skip Intro, Next Episode), it automatically takes focus so pressing **A** activates it. When controls are hidden, Left / Right instantly skips backward / forward 10 seconds (holding performs continuous scrub). Press **B** to hide the overlay.
+- **In-Player Overlay Navigation:** when transport controls are visible, the D-Pad or stick highlights buttons (|◀◀, −10s, Play/Pause, +10s, ▶▶|, Zoom, and Skip Intro / Next Episode) with a pulsing ring, and **A** executes the button. Pressing Up moves onto the seek bar. When a skip button appears (Skip Intro, Next Episode), it automatically takes focus so pressing **A** activates it. When controls are hidden, Left / Right instantly skips backward / forward 10 seconds (holding performs continuous scrub). With the controls showing, **B** stops the video; with Ask Before Stopping on (the default) it first asks "Stop watching?" (A stops, B keeps watching). On the seek bar with a move not made yet, B puts the marker back. With the controls hidden, B brings them up.
 - **Seek bar:** when controls are visible, pressing Up moves selection to the seek bar. Left/Right move 30 seconds at a time; holding down accelerates (60 seconds, then 3 minutes per step). Pressing **A** seeks immediately (or wait 2 seconds after the last press); pressing **B** returns the marker to where playback was without seeking. The stream restarts only once. While controls are visible, Up/Down navigate between skip buttons, seek bar, and transport buttons.
 - **HOME menu:** with a profile open, **Profile Menu** closes what's on screen (a video stops and keeps its place; music keeps playing) and opens the profile menu: Back to Jellyfin, Switch Profile, Settings... **WiiFin Main Menu** asks first, then closes the profile and goes back to the start, where profiles are picked. Below them: Homebrew Channel (or Wii Menu, as Exit To says) and Restart WiiFin.
 - **Rows home header:** L goes to Search, R goes to Menu. In the header, L / R and Left / Right cycle through the header buttons.
@@ -151,7 +155,7 @@ From a profile's menu, View holds that profile's own look. From WiiFin's main me
 | Home and Libraries | Home Screen * | Rows or a grid |
 | | Library View * | Posters, a list, or a list with the cover |
 | | Display Libraries * | The libraries shown on your home |
-| | Start Screen | The page the rows home opens on: Browse or Home (in a profile's settings, it's under Sign-In) |
+| | Start Screen | The page the rows home opens on: Home, Browse, or Last Show (the episode list of the show you watched last, with the next episode picked) (in a profile's settings, it's under Sign-In) |
 | | Other Rows | Shaded under the row you're on, or all shown plainly |
 | | Header Buttons | Icons (Search, Home, Browse, Menu) or Classic |
 | Screen and Keyboard | Screen Area | Shrink the interface when the TV crops its edges; save one per TV |
@@ -176,6 +180,7 @@ From a profile's menu, View holds that profile's own look. From WiiFin's main me
 | | Intro Skipper Plugin | A says how to set the plugin up on your server |
 | | (per series) | 2 in a series' episode list: **Skip Intro (this show)** overrides these two for that series (My Setting, Off, Always, After 1 to 10) |
 | Subtitles | Subtitles Default | Whether subtitles are Off (default) or On when playback begins |
+| | Subtitle Size | Small, Medium (default), Large or Extra Large; also in the player's Options |
 | | Preferred Subtitle Language | Preferred language to match against stream subtitle tracks (Any, English, French, Spanish, German, Italian, etc.) |
 | Speaker and Disc Light | Wii Remote Speaker | Off, Wii Remote only, or TV + Remote |
 | | Disc Slot Light | The light pulsing with the sound during playback, or off |
@@ -201,7 +206,7 @@ From a profile's menu, View holds that profile's own look. From WiiFin's main me
 |---|---|
 | Sign-In | At once, a four-digit passcode, or the password each time; it applies when you leave Settings |
 | Open at Start-Up | Skip the profile list and open this profile when WiiFin starts (hold B at start to pick another) |
-| Start Screen | The page the rows home opens on: Browse or Home |
+| Start Screen | The page the rows home opens on: Home, Browse, or Last Show |
 
 ## 🔊 Custom sounds
 

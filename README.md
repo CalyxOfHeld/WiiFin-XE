@@ -28,7 +28,7 @@ It's a modified version of <a href="https://github.com/fabienmillet/WiiFin">WiiF
 
 Download the files from the latest [WiiFin-XE release (v1.0.0-rc3-xe.2)](https://github.com/CalyxOfHeld/WiiFin-XE/releases/tag/v1.0.0-rc3-xe.2):
 
-- **Homebrew Channel:** unzip `WiiFin-apps.zip` (or `WiiFin-hbc.zip`) at the root of your SD card or USB drive (or transfer it over your network using ftpii). It extracts directly into `apps/WiiFin/` with `boot.dol`, `icon.png`, and `meta.xml`.
+- **Homebrew Channel:** unzip `WiiFin-hbc.zip` at the root of your SD card or USB drive (or transfer it over your network using ftpii). It extracts directly into `apps/WiiFin/` with `boot.dol`, `icon.png`, and `meta.xml`.
 - **Wii Menu channel:** install `WiiFin.wad` with a WAD manager (Wii and vWii). For Chinese or Korean, also copy `apps/WiiFin/fonts/` from the zip to the SD card.
 - **Dolphin:** open `WiiFin.dol` directly in the emulator.
 
@@ -39,6 +39,8 @@ Then sign in to your Jellyfin server with your username and password, or with Qu
 - **Films, series and music** from your Jellyfin server. Files the Wii can decode play as they are, and the server converts the rest.
 - A **rows home** in two pages, Home and Browse. Expand any row into a full page, and choose which libraries show.
 - A **player** with the server's thumbnails, scenes and chapters, skip intro and credits, next episode, audio and subtitle tracks, and resume.
+- **Player Options** (button 2 in the player): a Sleep Timer, Subtitle Size, and Subtitle and Audio Sync.
+- **Pick up where you left off:** a series' page offers Resume or the next episode, and WiiFin can open on the show you watched last.
 - **Full GameCube & Gamepad Navigation:** navigate the player overlay hands-free with the D-Pad or Stick; focused buttons pulse with visual feedback and trigger with `A`. Use the seek bar to jump through videos, and skip buttons (Intro / Next episode) take focus automatically.
 - **Configurable Playback Controls:** customize whether the C-Stick or D-Pad handles scrubbing versus volume adjustment under `Settings > Playback > Controller`. Options to disable episode buttons (+ / −) and ask before stopping on `B`.
 - **Live Volume HUD:** floating on-screen volume card and transport bar badge provide immediate visual confirmation of volume adjustments and mute status.
