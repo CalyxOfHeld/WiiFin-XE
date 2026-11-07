@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include "Lang.h"
 #include "SoundFX.h"
+#include "MusicSession.h"
 #include "../player/VideoSurface.h"
 #include "../player/vo_wiifin.h"
 #include "../player/WiiPlayer.h"
@@ -130,6 +131,10 @@ void App::loadSettings() {
             g_app_startBrowse = atoi(val) != 0;
         } else if (strcmp(key, "start_last_show") == 0) {
             g_app_startLastShow = atoi(val) != 0;
+        } else if (strcmp(key, "music_pulse") == 0) {
+            MusicSession::coverPulse = atoi(val) != 0;
+        } else if (strcmp(key, "music_visualizer") == 0) {
+            MusicSession::visualizer = atoi(val) != 0;
         } else if (strcmp(key, "language") == 0) {
             Lang::chooseKey(val);
         } else if (strcmp(key, "dim_rows") == 0) {
@@ -351,6 +356,8 @@ void App::saveSettings() {
     fprintf(f, "start_profile=%s\n",    sanitizeConfigValue(g_app_startProfile).c_str());
     fprintf(f, "start_browse=%d\n",     g_app_startBrowse ? 1 : 0);
     fprintf(f, "start_last_show=%d\n",  g_app_startLastShow ? 1 : 0);
+    fprintf(f, "music_pulse=%d\n",      MusicSession::coverPulse ? 1 : 0);
+    fprintf(f, "music_visualizer=%d\n", MusicSession::visualizer ? 1 : 0);
     {
         int l, t, r, b;
         Ui::safeArea(l, t, r, b);

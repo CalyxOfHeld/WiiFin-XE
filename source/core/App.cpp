@@ -55,6 +55,7 @@ volatile bool g_app_reset    = false;
 volatile bool g_restartApp = false;
 volatile bool g_app_toMenu = false;
 volatile bool g_app_toProfileMenu = false;
+volatile bool g_app_toNowPlaying = false;
 bool          g_app_profileOpen = false;
 bool g_app_shuttingDown = false;
 bool g_app_exitToLoader = true;
@@ -646,10 +647,18 @@ void App::loop() {
         /* the HOME menu offers its Profile Menu while it is open */
         struct ProfileOpen {
             ProfileOpen()  { g_app_profileOpen = true; }
-            ~ProfileOpen() { g_app_profileOpen = false; g_app_toProfileMenu = false; PlayerView::loadSeriesSkip(""); }
+            ~ProfileOpen() {
+                g_app_profileOpen = false; g_app_toProfileMenu = false; g_app_toNowPlaying = false;
+                PlayerView::loadSeriesSkip("");
+            }
         } profileOpen;
         PlayerView::loadSeriesSkip(p.skipSeries);   /* its series' own Skip Intro */
         /* the HOME menu's Profile Menu: the profile menu over the libraries */
+        /* Now Playing's Go to Album: the album's tracks over the libraries */
+        auto goToAlbum = [&]() {
+            std::string id, name, artist;
+            if (MusicSession::takeAlbum(id, name, artist)) lv.openAlbumFromPlayer(id, name, artist);
+        };
         auto toProfileMenu = [&]() {
             if (!g_app_toProfileMenu) return;
             g_app_toProfileMenu = false;
@@ -661,15 +670,35 @@ void App::loop() {
                 Input::update();
                 Input::readIR(ir);
                 if (g_app_powerOff || g_app_reset) { running = false; break; }
+                /* the HOME menu's Now Playing (here or over the settings):
+                 * the music's page, the libraries as they were under it */
+                if (g_app_toNowPlaying) {
+                    g_app_toNowPlaying = false;
+                    if (MusicSession::active()) { lv.exitTo = LibraryView::Exit::NowPlaying; break; }
+                }
                 if (Input::isHomePressed() && showHomeOverlay()) {
                     if (g_app_toProfileMenu) { toProfileMenu(); continue; }
+                    if (g_app_toNowPlaying) continue;
                     if (!g_app_toMenu) running = false;
+                    break;
+                }
+                /* the footer's music line, pointed at: its page */
+                if (ir.valid && Input::isAJustPressed() && MusicSession::active() &&
+                    Ui::nowPlayingAt(ir.x, ir.y)) {
+                    Input::consume();
+                    SoundFX::play(SoundFX::FX::Open);
+                    SYS_Report("[WiiFin] footer: Now Playing\n");
+                    lv.exitTo = LibraryView::Exit::NowPlaying;
                     break;
                 }
                 if (lv.update(ir)) break;
                 if (PlayerView::seriesSkipChanged) {   /* a series' Skip Intro: the profile's */
                     PlayerView::seriesSkipChanged = false;
                     p.skipSeries = PlayerView::seriesSkipString();
+                    saveSettings();
+                }
+                if (MusicSession::prefsChanged) {   /* Now Playing's options: the pulse, the visualizer */
+                    MusicSession::prefsChanged = false;
                     saveSettings();
                 }
                 if (PlayerView::prefsChanged) {   /* the player's Options: subtitle size, audio timing */
@@ -709,6 +738,7 @@ void App::loop() {
                 if (wantsExit && homeToMenu()) return;
                 if (wantsExit && !g_app_toProfileMenu) { running = false; return; }
                 lv.onPlaybackFinished("");
+                goToAlbum();
                 toProfileMenu();
             } else if (!lv.pendingPlayUrl.empty()) {
                 std::string lastItemId;
@@ -738,6 +768,7 @@ void App::loop() {
                 if (wantsExit && homeToMenu()) return;
                 if (wantsExit && !g_app_toProfileMenu) { running = false; return; }
                 lv.onPlaybackFinished("");
+                goToAlbum();
                 toProfileMenu();
             } else if (lv.exitTo == LibraryView::Exit::LocalMedia) {
                 lv.exitTo = LibraryView::Exit::Profiles;
@@ -975,6 +1006,7 @@ void App::loop() {
         /* back at WiiFin's menu: the HOME menu's WiiFin Menu is done */
         g_app_toMenu = false;
         g_app_toProfileMenu = false;
+        g_app_toNowPlaying = false;
         toMainMenu = false;   /* here already (runConnect may have set it) */
 
         // --- Input: D-pad navigation ---

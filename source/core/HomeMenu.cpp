@@ -2,6 +2,7 @@
 #include "AppInternal.h"
 #include "Input.h"
 #include "MusicBGM.h"
+#include "MusicSession.h"
 #include "SoundFX.h"
 #include "Text.h"
 #include "Utils.h"
@@ -26,12 +27,14 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
 {
     ir_t ir;
     ir.valid = false;
-    /* the buttons, top to bottom: the open profile's menu (no question
-     * asked; only with a profile open), WiiFin's main menu, leave (Wii Menu
-     * or Homebrew Channel, as Exit To says), restart */
-    enum { HM_PROFILE, HM_MENU, HM_LEAVE, HM_RESTART, HM_MAX };
+    /* the buttons, top to bottom: the music playing (its page, from any
+     * screen of the profile but that page), the open profile's menu (no
+     * question asked; only with a profile open), WiiFin's main menu, leave
+     * (Wii Menu or Homebrew Channel, as Exit To says), restart */
+    enum { HM_NOWPLAYING, HM_PROFILE, HM_MENU, HM_LEAVE, HM_RESTART, HM_MAX };
     int   btns[HM_MAX];
     int   nBtn = 0;
+    if (g_app_profileOpen && MusicSession::active() && !MusicSession::showing()) btns[nBtn++] = HM_NOWPLAYING;
     if (g_app_profileOpen) btns[nBtn++] = HM_PROFILE;
     btns[nBtn++] = HM_MENU;
     btns[nBtn++] = HM_LEAVE;
@@ -41,7 +44,7 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
     int   confirmFor = 0;   /* which button triggered the popup */
 
     /* Main button layout: a column in the middle */
-    const int BTN_W = 300, BTN_H = nBtn > 3 ? 56 : 62, BTN_GAP = nBtn > 3 ? 14 : 16;
+    const int BTN_W = 300, BTN_H = nBtn > 4 ? 52 : nBtn > 3 ? 56 : 62, BTN_GAP = nBtn > 4 ? 12 : nBtn > 3 ? 14 : 16;
     const int BTN_Y = 240 - (nBtn * BTN_H + (nBtn - 1) * BTN_GAP) / 2;
     float bcx    = 320.0f;
     float bcy[HM_MAX];
@@ -60,7 +63,7 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
 
     /* Animation state */
     float openAnim      = 0.0f;
-    float hoverSc[HM_MAX] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    float hoverSc[HM_MAX] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
     float popAnim       = 0.0f;
     int   popSel        = 1;             /* default: "No" */
     float popHoverSc[2] = { 1.0f, 1.0f };
@@ -118,10 +121,11 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
              * the d-pad selection is used when pointing away. */
             if (Input::isAJustPressed() && (!ir.valid || hover >= 0)) {
                 const int chosen = btns[(hover >= 0) ? hover : hmSel];
-                if (chosen == HM_PROFILE) {   /* nothing is lost: no question */
-                    SoundFX::play(SoundFX::FX::Back);
+                if (chosen == HM_NOWPLAYING || chosen == HM_PROFILE) {   /* nothing is lost: no question */
+                    SoundFX::play(chosen == HM_NOWPLAYING ? SoundFX::FX::Open : SoundFX::FX::Back);
                     if (musicEnabled) MusicBGM::resume();
-                    g_app_toProfileMenu = true;
+                    if (chosen == HM_NOWPLAYING) g_app_toNowPlaying = true;
+                    else                         g_app_toProfileMenu = true;
                     return true;
                 }
                 SoundFX::play(SoundFX::FX::Start); /* clicking main menu / leave / restart */
@@ -210,7 +214,7 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
         }
         Ui::popOffset();
 
-        /* Profile Menu / WiiFin Main Menu / Wii Menu (or Homebrew Channel, as
+        /* Now Playing / Profile Menu / WiiFin Main Menu / Wii Menu (or Homebrew Channel, as
          * Exit To says) / Restart WiiFin */
         const bool toLoader = appExitsToLoader();
         for (int i = 0; i < nBtn; i++) {
@@ -218,7 +222,8 @@ bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
             float dw = BTN_W * sc, dh = BTN_H * sc;
             bool  sel = (hmSel == i);
             Ui::button(bcx - dw * 0.5f, bcy[i] - dh * 0.5f, dw, dh,
-                       btns[i] == HM_PROFILE ? N_("Profile Menu")
+                       btns[i] == HM_NOWPLAYING ? N_("Now Playing")
+                       : btns[i] == HM_PROFILE ? N_("Profile Menu")
                        : btns[i] == HM_MENU    ? N_("WiiFin Main Menu")
                        : btns[i] == HM_RESTART ? N_("Restart WiiFin")
                        : toLoader      ? N_("Homebrew Channel") : N_("Wii Menu"),

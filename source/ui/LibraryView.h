@@ -58,6 +58,9 @@ public:
     /* the HOME menu's Profile Menu: the profile menu, once the screen under
      * it has loaded (a page coming back after a video) */
     void showProfileMenu() { wantProfileMenu = true; }
+    /* Now Playing's Go to Album: the album's tracks over the page the
+     * player was opened from, B back to that page */
+    void openAlbumFromPlayer(const std::string& id, const std::string& name, const std::string& artist);
 
     /* the profile's libraries left off the home (ids, comma-separated);
      * hiddenChanged: Display Libraries closed with others, for the profile */
@@ -359,6 +362,18 @@ private:
     static const int MUSIC_TRACKS_VISIBLE = 8;
     void loadMusicTracks();
     void clampMusicTrackScroll();
+    /* B on the track list (or its loading cancelled): the page it came from */
+    void leaveMusicTracks();
+    /* the page under an album opened by Go to Album (on: B goes back to it);
+     * an album's tracks before it: that album again */
+    struct {
+        bool        on = false;
+        int         state = 0;           /* State */
+        std::string id, name, artist;
+        bool        playlist = false, fromHome = false;
+        int         tab = 0, sel = 0, top = 0;
+    } playerAlbumBack;
+    int musicReturnSel = -1, musicReturnTop = 0;   /* loadMusicTracks: there, not the top */
 
     // Continue Watching / Next Up (activity page)
     std::vector<JellyfinItem> continueItems;

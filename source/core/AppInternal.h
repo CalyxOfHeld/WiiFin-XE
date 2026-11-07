@@ -54,8 +54,12 @@ extern volatile bool g_app_toMenu;
  * screens over its libraries close, its menu opens (g_app_toProfileMenu) */
 extern volatile bool g_app_toProfileMenu;
 extern bool          g_app_profileOpen;
+/* "Now Playing", offered while a profile is open and its music plays (but
+ * not over the Now Playing page): the screens over its libraries close, the
+ * page opens (g_app_toNowPlaying) */
+extern volatile bool g_app_toNowPlaying;
 /* the HOME menu closed a screen without leaving WiiFin */
-inline bool homeStaysInWiiFin() { return g_app_toMenu || g_app_toProfileMenu; }
+inline bool homeStaysInWiiFin() { return g_app_toMenu || g_app_toProfileMenu || g_app_toNowPlaying; }
 bool doShowHomeOverlay(GRRLIB_ttfFont* font, GRRLIB_texImg* btnTex,
                        GRRLIB_texImg* cursorPointerTex, bool musicEnabled);
 

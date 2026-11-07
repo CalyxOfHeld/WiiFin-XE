@@ -80,7 +80,13 @@ float rnd()
 
 enum class Req { None, Next, Prev, Jump, Ended, Leave };
 
-enum Ctl { C_FAV, C_SHUFFLE, C_PREV, C_PLAY, C_NEXT, C_REPEAT, C_QUEUE, C_COUNT };
+enum Ctl { C_FAV, C_SHUFFLE, C_PREV, C_PLAY, C_NEXT, C_REPEAT, C_QUEUE, C_MORE, C_COUNT };
+
+/* the options (More): Go to Album only when the track has one */
+enum Opt { O_ALBUM, O_FULL, O_PULSE, O_VIZ, O_COUNT };
+/* TRANSLATORS: the music player's options, under its More button */
+const char* const OPT_NAME[O_COUNT] = { N_("Go to Album"), N_("Full-Screen Cover"), N_("Cover Pulse"),
+                                        N_("Visualizer") };
 
 /* the visualizers, all drawn from the same bands; then the song's lyrics */
 enum Viz { V_BARS, V_RING, V_BUBBLES, V_WAVE, V_BLOCKS, V_LYRICS, V_COUNT };
@@ -115,6 +121,7 @@ struct Session {
     /* the cover's JPEG, made a texture by the main thread (it draws it) */
     std::string    pendingArt;
     bool           artReady = false;
+    std::string    artId;      /* the image the cover shows (the session thread's) */
     /* the session and its page */
     bool           over      = false;    /* the session thread is done */
     bool           stopNow   = false;    /* MusicSession::stop() asked */
@@ -159,6 +166,13 @@ struct Session {
     u64   peakAt[BARS] = {};
     float bassAvg = 0.0f, beat = 0.0f;
     bool  focusViz = false, hoverViz = false;
+    bool  hoverArt = false;            /* the pointer on the cover: A full screen */
+    bool  menu     = false;            /* the options, over the page */
+    float menuK    = 0.0f;
+    int   menuSel  = 0;
+    int   hoverOpt = -1;               /* the option pointed at (an index of opts()) */
+    bool  artFull  = false;            /* the cover, full screen */
+    float artFullK = 0.0f;
     float spin = 0.0f;                 /* seconds, for what moves on its own */
     Bubble bubbles[BUBBLES] = {};
     u64   titleSince = 0;
@@ -167,6 +181,10 @@ struct Session {
     u64   lastFrame  = 0;
 };
 Session* S = nullptr;
+
+/* Go to Album chosen: the album, for the library once the page closes */
+bool        s_goAlbum = false;
+std::string s_goAlbumId, s_goAlbumName, s_goAlbumArtist;
 
 /* S->lock for a scope: to change or draw the session (never over a request
  * to the server) */
@@ -464,6 +482,11 @@ void glyphQueue(float cx, float cy, u32 c)
     Ui::triangle(cx + 5, cy + 0.5f, cx + 5, cy + 8.5f, cx + 11, cy + 4.5f, c);
 }
 
+void glyphMore(float cx, float cy, u32 c)
+{
+    for (int i = -1; i <= 1; ++i) Ui::circle(cx + i * 7.0f, cy, 2.6f, c);
+}
+
 void glyphPrevNext(float cx, float cy, bool next, u32 c)
 {
     float s = next ? 1.0f : -1.0f;
@@ -490,8 +513,10 @@ const float VIZ_BASE = 262, VIZ_H = 104;
 const float VIZ_TOP = VIZ_BASE - VIZ_H - 10, VIZ_BOT = VIZ_BASE + 18;
 const float BAR_X = 48, BAR_W = 544, BAR_Y = 304;
 const float CTL_Y = 372;
-const float CTL_X[C_COUNT] = { 70, 184, 248, 320, 392, 456, 570 };   /* 18 px or more between two */
-const float CTL_R[C_COUNT] = { 20, 20, 24, 30, 24, 20, 20 };
+const float CTL_X[C_COUNT] = { 66, 184, 248, 320, 392, 456, 516, 574 };   /* 18 px or more between two */
+const float CTL_R[C_COUNT] = { 20, 20, 24, 30, 24, 20, 20, 20 };
+/* the options: a card standing over the More button */
+const float MENU_W = 256, MENU_ROW = 40, MENU_BOT = CTL_Y - 38;
 const float PANEL_W = 306, PANEL_Y = 18, PANEL_H = 420, ROW_H = 38, ROWS_Y = 86;
 /* the Up Next panel hugs the right edge of the screen, 4:3 or 16:9 */
 float panelX() { return Ui::screenRight() - PANEL_W - 16; }
@@ -727,7 +752,8 @@ void drawControl(int i, bool focused, bool playing)
     const Ui::Palette& p = Ui::pal();
     float cx = CTL_X[i], cy = CTL_Y, r = CTL_R[i];
     bool primary = i == C_PLAY;
-    bool on = (i == C_SHUFFLE && s.shuffle) || (i == C_REPEAT && s.repeat) || (i == C_QUEUE && s.panel);
+    bool on = (i == C_SHUFFLE && s.shuffle) || (i == C_REPEAT && s.repeat) || (i == C_QUEUE && s.panel) ||
+              (i == C_MORE && s.menu);
     if (focused) Ui::roundBorder(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, r + 4, 2.0f, p.focus);
     if (primary || focused) {
         Ui::circle(cx, cy, r, focused ? Ui::mix(p.accent, 0xFFFFFFFF, 0.15f) : p.accent);
@@ -744,6 +770,7 @@ void drawControl(int i, bool focused, bool playing)
     case C_NEXT:    glyphPrevNext(cx, cy, true, c); break;
     case C_REPEAT:  glyphRepeat(cx, cy, s.repeat == 2, c); break;
     case C_QUEUE:   glyphQueue(cx, cy, c); break;
+    case C_MORE:    glyphMore(cx, cy, c); break;
     }
     if (on && !focused) Ui::circle(cx, cy + r + 6, 2.2f, p.accent);
 }
@@ -832,6 +859,51 @@ void drawPanel()
     Ui::popOffset();
 }
 
+/* the options shown, top to bottom; their count */
+int opts(int* out)
+{
+    int n = 0;
+    if (!S->info.albumId.empty()) out[n++] = O_ALBUM;
+    out[n++] = O_FULL;
+    out[n++] = O_PULSE;
+    out[n++] = O_VIZ;
+    return n;
+}
+
+float menuX() { return CTL_X[C_MORE] + CTL_R[C_MORE] + 6 - MENU_W; }
+float menuTop(int n) { return MENU_BOT - n * MENU_ROW - 52; }
+float menuRowsY(int n) { return menuTop(n) + 44; }
+
+void drawMenu()
+{
+    Session& s = *S;
+    const Ui::Palette& p = Ui::pal();
+    int o[O_COUNT];
+    const int n = opts(o);
+    const float e = 1 - (1 - s.menuK) * (1 - s.menuK);
+    const float x = menuX(), top = menuTop(n), h = MENU_BOT - top;
+    Ui::pushOffset(0, (1 - e) * 16);
+    Ui::shadow(x, top + 4, MENU_W, h, 16, 12.0f, Ui::alpha(0x000000FF, 0.5f * e));
+    Ui::roundRect(x, top, MENU_W, h, 16, Ui::alpha(p.cardTop, e), Ui::alpha(p.cardBottom, e));
+    Ui::roundBorder(x, top, MENU_W, h, 16, 1.5f, Ui::alpha(p.cardBorder, 0.8f * e));
+    Ui::text(x + 18, top + 12, tr("Options"), 18, Ui::alpha(p.text, e));
+    for (int i = 0; i < n; ++i) {
+        const float y = menuRowsY(n) + i * MENU_ROW;
+        const bool sel = i == s.menuSel;
+        if (sel)
+            Ui::roundRect(x + 8, y, MENU_W - 16, MENU_ROW - 4, (MENU_ROW - 4) / 2,
+                          Ui::alpha(Ui::mix(p.accent, 0xFFFFFFFF, 0.2f), e), Ui::alpha(p.accentDark, e));
+        const u32 c = Ui::alpha(sel ? p.textOnAccent : p.text, e);
+        Ui::text(x + 24, y + 8, tr(OPT_NAME[o[i]]), 16, c);
+        if (o[i] == O_PULSE || o[i] == O_VIZ) {
+            const bool on = o[i] == O_PULSE ? MusicSession::coverPulse : MusicSession::visualizer;
+            Ui::textRight(x + MENU_W - 24, y + 9, on ? tr("On") : tr("Off"), 14,
+                          Ui::alpha(sel ? p.textOnAccent : (on ? p.accent : p.textDim), e));
+        }
+    }
+    Ui::popOffset();
+}
+
 /* The whole screen.  live: drawn by the background thread while a track
  * plays (pointer, hover); else a still frame between tracks. */
 void drawScreen(bool live, bool loading)
@@ -847,8 +919,11 @@ void drawScreen(bool live, bool loading)
     /* ---- normal layout (fades out when idle) ---- */
     if (idleE < 0.99f) {
         float a = 1 - idleE;
-        float pulse = 1 + fminf(s.beat, 0.3f) * 0.10f, sz = ART * pulse, off = (sz - ART) / 2;
+        float pulse = MusicSession::coverPulse ? 1 + fminf(s.beat, 0.3f) * 0.10f : 1.0f;
+        float sz = ART * pulse, off = (sz - ART) / 2;
         drawCover(ART_X - off, ART_Y - off, sz, a);
+        if (live && s.pointer && s.hoverArt && !s.panel && !s.menu && idleE < 0.5f)
+            Ui::roundBorder(ART_X - 6, ART_Y - 6, ART + 12, ART + 12, 20, 2.0f, p.focus);
 
         Ui::text(48, 22, tr("NOW PLAYING"), 13, Ui::alpha(p.textDim, a));
         if (s.order.size() > 1) {
@@ -865,11 +940,12 @@ void drawScreen(bool live, bool loading)
             Ui::text(COL_X, ART_Y + 60, LibDraw::fitText(Ui::font(), s.detail, 14, (int)COL_W).c_str(), 14,
                      Ui::alpha(p.textDim, a));
         if (s.favorite) glyphHeart(COL_X + COL_W - 8, ART_Y + 70, 0.75f, Ui::alpha(0xE8475EFF, a));
-        drawViz(COL_X, VIZ_BASE, COL_W, VIZ_H, a, true);
+        if (MusicSession::visualizer) drawViz(COL_X, VIZ_BASE, COL_W, VIZ_H, a, true);
 
         if (idleE < 0.5f) {
             /* the visualizer focused: A or Left/Right picks another; dots tell which */
-            bool vizF = live && !s.panel && (s.pointer ? s.hoverViz : s.focusViz);
+            bool vizF = live && !s.panel && !s.menu && MusicSession::visualizer &&
+                        (s.pointer ? s.hoverViz : s.focusViz);
             if (vizF) {
                 Ui::roundBorder(COL_X - 8, VIZ_TOP, COL_W + 16, VIZ_BOT - VIZ_TOP, 12, 2.0f, p.focus);
                 float dw = V_COUNT * 10 + 8, dx = COL_X + COL_W / 2 - dw / 2;
@@ -878,9 +954,10 @@ void drawScreen(bool live, bool loading)
                     Ui::circle(dx + 9 + i * 10, VIZ_BOT, i == s_viz ? 3.0f : 2.0f,
                                Ui::alpha(p.textOnAccent, i == s_viz ? 1.0f : 0.5f));
             }
-            drawSeekBar(pos, dur, live && !s.pointer && s.focusBar && !s.focusViz && !s.panel);
+            drawSeekBar(pos, dur, live && !s.pointer && s.focusBar && !s.focusViz && !s.panel && !s.menu);
             for (int i = 0; i < C_COUNT; ++i) {
-                bool f = live && !s.panel && (s.pointer ? s.hover == i : (!s.focusBar && s.focus == i));
+                bool f = live && !s.panel && (s.menu ? i == C_MORE
+                                                     : s.pointer ? s.hover == i : (!s.focusBar && s.focus == i));
                 drawControl(i, f, live ? playing : true);
             }
             if (loading)
@@ -888,7 +965,7 @@ void drawScreen(bool live, bool loading)
             /* what comes next */
             int nextPos = s.repeat == 2 ? s.pos : (s.pos + 1 < (int)s.order.size() ? s.pos + 1
                                                    : (s.repeat == 1 ? 0 : -1));
-            if (nextPos >= 0 && !s.panel) {
+            if (nextPos >= 0 && !s.panel && !s.menu) {
                 std::string t, ar;
                 splitName(s.tracks[s.order[nextPos]], "", t, ar);
                 char line[512];
@@ -902,6 +979,10 @@ void drawScreen(bool live, bool loading)
                 const Ui::Hint l[] = { { "A", N_("Play") }, { "2", N_("Shuffle") } };
                 const Ui::Hint r[] = { { "B", N_("Close") } };
                 Ui::footer(l, 2, r, 1);
+            } else if (s.menu) {
+                const Ui::Hint l[] = { { "A", N_("Select") }, { "-/+", N_("Track") } };
+                const Ui::Hint r[] = { { "B", N_("Close") } };
+                Ui::footer(l, 2, r, 1);
             } else {
                 const Ui::Hint l[] = { { "A", vizF ? N_("Visualizer") : N_("Select") }, { "-/+", N_("Track") } };
                 const Ui::Hint r[] = { { "1", N_("Up Next") }, { "B", N_("Back") } };
@@ -913,11 +994,13 @@ void drawScreen(bool live, bool loading)
     /* ---- idle layout: the cover alone, centred ---- */
     if (idleE > 0.01f) {
         float a = idleE;
-        float sz = 236 * (1 + fminf(s.beat, 0.3f) * 0.10f), cy = 172 - 40 + 30 * (1 - a);
-        if (s_viz == V_RING) drawRing(320, cy, 122, 36, a * 0.7f, false);   /* around the cover */
+        float sz = 236 * (MusicSession::coverPulse ? 1 + fminf(s.beat, 0.3f) * 0.10f : 1.0f);
+        float cy = 172 - 40 + 30 * (1 - a);
+        const int viz = MusicSession::visualizer ? s_viz : -1;   /* -1: none, the cover alone */
+        if (viz == V_RING) drawRing(320, cy, 122, 36, a * 0.7f, false);   /* around the cover */
         /* the bubbles rise behind the cover up to the top of the screen */
-        if (s_viz == V_BUBBLES) drawBubbles(Ui::screenLeft() + 20, 470, Ui::screenWidth() - 40, 450, a * 0.6f);
-        if (s_viz == V_LYRICS)   /* the lyrics in the cover's place: to sing along */
+        if (viz == V_BUBBLES) drawBubbles(Ui::screenLeft() + 20, 470, Ui::screenWidth() - 40, 450, a * 0.6f);
+        if (viz == V_LYRICS)   /* the lyrics in the cover's place: to sing along */
             drawLyrics(Ui::screenLeft() + 30, 290, Ui::screenWidth() - 60, 260, a, true);
         else
             drawCover(320 - sz / 2, cy - sz / 2, sz, a);
@@ -925,7 +1008,7 @@ void drawScreen(bool live, bool loading)
         if (!s.artist.empty())
             Ui::textCentered(320, 350, LibDraw::fitText(Ui::font(), s.artist, 17, 560).c_str(), 17,
                              Ui::alpha(p.accent, a));
-        if (s_viz != V_RING && s_viz != V_BUBBLES && s_viz != V_LYRICS)
+        if (viz >= 0 && viz != V_RING && viz != V_BUBBLES && viz != V_LYRICS)
             drawViz(Ui::screenLeft() + 20, 470, Ui::screenWidth() - 40, 60, a * 0.6f, false);
         float frac = dur > 0 ? pos / dur : 0;
         Ui::roundRect(220, 384, 200, 3, 1.5f, Ui::alpha(p.cardBorder, 0.5f * a));
@@ -933,6 +1016,15 @@ void drawScreen(bool live, bool loading)
     }
 
     if (s.panelK > 0.01f) drawPanel();
+    if (s.menuK > 0.01f) drawMenu();
+
+    /* the cover full screen: as tall as the screen, nothing else */
+    if (s.artFullK > 0.01f) {
+        const float e = s.artFullK * s.artFullK * (3 - 2 * s.artFullK), sz = 300 + 140 * e;
+        /* black over the whole page once it is in (16:9 too) */
+        Ui::roundRect(Ui::screenLeft() - 20, -20, Ui::screenWidth() + 40, 520, 0, Ui::alpha(0x000000FF, e));
+        drawCover(320 - sz / 2, 240 - sz / 2, sz, e);
+    }
 
     if (!s.toastMsg.empty() && nowMs() < s.toastUntil) {
         const char* msg = tr(s.toastMsg.c_str());
@@ -1003,6 +1095,41 @@ void activate(int c)
         s.panel = !s.panel;
         s.panelSel = s.pos + 1 < (int)s.order.size() ? s.pos + 1 : s.pos;
         s.panelTop = s.pos;
+        s.menu = false;
+        break;
+    case C_MORE:
+        s.menu = !s.menu;
+        s.menuSel = 0;
+        s.panel = false;
+        break;
+    }
+}
+
+void chooseOption(int o)
+{
+    Session& s = *S;
+    switch (o) {
+    case O_ALBUM:
+        if (s.info.albumId.empty()) break;
+        s_goAlbum       = true;
+        s_goAlbumId     = s.info.albumId;
+        s_goAlbumName   = !s.info.album.empty() ? s.info.album : s.cur.album;
+        s_goAlbumArtist = s.cur.artist;
+        s.menu = false;
+        s.leavePage = true;   /* as B: the music goes on */
+        break;
+    case O_FULL:
+        s.menu = false;
+        s.artFull = true;
+        break;
+    case O_PULSE:
+        MusicSession::coverPulse = !MusicSession::coverPulse;
+        MusicSession::prefsChanged = true;
+        break;
+    case O_VIZ:
+        MusicSession::visualizer = !MusicSession::visualizer;
+        MusicSession::prefsChanged = true;
+        if (!MusicSession::visualizer) s.focusViz = false;
         break;
     }
 }
@@ -1088,6 +1215,14 @@ void buttons(u32 down)
     if (down & WPAD_BUTTON_HOME) { s.homeWanted = true; s.lastInput = now; return; }
 
     if (!down) return;
+    if (s.artFull) {
+        /* - / + the track before or after; anything else, the page again */
+        if (down & WPAD_BUTTON_PLUS)  { requestTrack(Req::Next); return; }
+        if (down & WPAD_BUTTON_MINUS) { requestTrack(Req::Prev); return; }
+        s.artFull = false;
+        s.lastInput = now;
+        return;
+    }
     if (s.idleK > 0.3f) {
         /* the visualizer full screen stays: - / + the track before or
          * after, A pause or play; B, the D-pad or anything else (the
@@ -1099,6 +1234,25 @@ void buttons(u32 down)
         return;                          /* the first press wakes the screen */
     }
     s.lastInput = now;
+
+    if (s.menu) {
+        int o[O_COUNT];
+        const int n = opts(o);
+        if (s.menuSel >= n) s.menuSel = n - 1;
+        if (down & WPAD_BUTTON_B) { s.menu = false; return; }
+        if ((down & WPAD_BUTTON_UP) && s.menuSel > 0)       s.menuSel--;
+        if ((down & WPAD_BUTTON_DOWN) && s.menuSel < n - 1) s.menuSel++;
+        if (down & WPAD_BUTTON_A) {
+            if (s.pointer && s.hoverOpt < 0) {   /* a click beside the card */
+                s.menu = false;
+                return;
+            }
+            chooseOption(o[s.pointer ? s.hoverOpt : s.menuSel]);
+        }
+        if (down & WPAD_BUTTON_PLUS)  requestTrack(Req::Next);
+        if (down & WPAD_BUTTON_MINUS) requestTrack(Req::Prev);
+        return;
+    }
 
     if (s.panel) {
         int n = (int)s.order.size();
@@ -1127,7 +1281,7 @@ void buttons(u32 down)
         else if (s.focusBar) seekTo(position() + 10.0f * d);
         else                 s.focus = (s.focus + d + C_COUNT) % C_COUNT;
     }
-    if (down & WPAD_BUTTON_UP) { s.focusViz = s.focusBar; s.focusBar = true; }
+    if (down & WPAD_BUTTON_UP) { s.focusViz = s.focusBar && MusicSession::visualizer; s.focusBar = true; }
     if (down & WPAD_BUTTON_DOWN) {
         if (s.focusViz) s.focusViz = false;
         else            s.focusBar = false;
@@ -1136,6 +1290,7 @@ void buttons(u32 down)
         if (s.pointer) {
             if (s.hoverBar)       seekTo(s.hoverFrac * duration());
             else if (s.hover >= 0) activate(s.hover);
+            else if (s.hoverArt)  s.artFull = true;
             else if (s.hoverViz)  nextViz(1);
             else                  wii_player_pause_toggle();
         } else if (s.focusViz) {
@@ -1220,14 +1375,26 @@ void frame()
     } else {
         s.lastIrX = -1;
     }
-    bool idle = !s.panel && now - s.lastInput > IDLE_MS;
+    bool idle = !s.panel && !s.menu && !s.artFull && now - s.lastInput > IDLE_MS;
     s.idleK = Ui::approach(s.idleK, idle ? 1.0f : 0.0f, idle ? 0.02f : 0.18f);
     s.panelK = Ui::approach(s.panelK, s.panel ? 1.0f : 0.0f, 0.22f);
+    s.menuK = Ui::approach(s.menuK, s.menu ? 1.0f : 0.0f, 0.25f);
+    s.artFullK = Ui::approach(s.artFullK, s.artFull ? 1.0f : 0.0f, 0.15f);
 
-    s.hover = -1; s.hoverBar = false; s.hoverRow = -1; s.hoverViz = false;
+    s.hover = -1; s.hoverBar = false; s.hoverRow = -1; s.hoverViz = false; s.hoverArt = false; s.hoverOpt = -1;
     int arrow = 0;
-    if (ir.valid && s.idleK < 0.3f) {
-        if (s.panel) {
+    if (ir.valid && s.idleK < 0.3f && !s.artFull) {
+        if (s.menu) {
+            int o[O_COUNT];
+            const int n = opts(o);
+            if (ir.x >= menuX() && ir.x < menuX() + MENU_W && ir.y >= menuRowsY(n)) {
+                int r = (int)((ir.y - menuRowsY(n)) / MENU_ROW);
+                if (r < n) { s.hoverOpt = r; s.menuSel = r; }
+            }
+            /* the More button, pointed at, closes it too */
+            float dx = ir.x - CTL_X[C_MORE], dy = ir.y - CTL_Y, rr = CTL_R[C_MORE] + 4;
+            if (dx * dx + dy * dy <= rr * rr) s.hover = C_MORE;
+        } else if (s.panel) {
             for (int d = -1; d <= 1; d += 2) {
                 float dx = ir.x - (panelX() + PANEL_W / 2 + d * ARROW_DX), dy = ir.y - ARROW_Y;
                 if (dx * dx + dy * dy <= 20 * 20) arrow = d;
@@ -1252,7 +1419,9 @@ void frame()
                 s.hoverBar = true;
                 s.hoverFrac = fminf(fmaxf((ir.x - BAR_X) / BAR_W, 0.0f), 1.0f);
             }
-            s.hoverViz = ir.x >= COL_X - 8 && ir.x <= COL_X + COL_W + 8 && ir.y >= VIZ_TOP && ir.y <= VIZ_BOT;
+            s.hoverViz = MusicSession::visualizer &&
+                         ir.x >= COL_X - 8 && ir.x <= COL_X + COL_W + 8 && ir.y >= VIZ_TOP && ir.y <= VIZ_BOT;
+            s.hoverArt = ir.x >= ART_X && ir.x <= ART_X + ART && ir.y >= ART_Y && ir.y <= ART_Y + ART;
         }
     }
 
@@ -1296,8 +1465,8 @@ void loadTrack()
         s.artB = hsv(hue + 40, 0.70f, 0.32f);
         s.lyrics.clear();
         s.lyricsTimed = false;
-        s.pendingArt.clear();
-        s.artReady = true;   /* the last cover goes: the placeholder meanwhile */
+        /* the last cover stays until the next one is here (the same one:
+         * an album's next track, nothing to fetch) */
     }
     AudioTrackInfo info;
     std::vector<LyricLine> lyrics;
@@ -1305,7 +1474,8 @@ void loadTrack()
     const bool infoOk = s.client->getAudioTrackInfo(s.serverUrl, s.auth, id, info);
     if (infoOk && info.hasLyrics) s.client->getLyrics(s.serverUrl, s.auth, id, lyrics);
     const std::string img = info.hasImage ? id : (info.albumHasImage ? info.albumId : "");
-    if (!img.empty()) s.client->getItemImageBytes(s.serverUrl, s.auth, img, 320, 320, bytes);
+    const bool sameArt = !img.empty() && img == s.artId;
+    if (!img.empty() && !sameArt) s.client->getItemImageBytes(s.serverUrl, s.auth, img, 448, 448, bytes);
 
     Guard g;
     s.info = info;
@@ -1321,8 +1491,11 @@ void loadTrack()
         for (const LyricLine& l : s.lyrics) if (l.startTicks >= 0) s.lyricsTimed = true;
         SYS_Report("[Music] lyrics: %d line(s)%s\n", (int)s.lyrics.size(), s.lyricsTimed ? ", timed" : "");
     }
-    s.pendingArt = bytes;
-    s.artReady = true;
+    if (!sameArt) {   /* none: the placeholder */
+        s.pendingArt = bytes;
+        s.artReady = true;
+        s.artId = bytes.empty() ? "" : img;
+    }
     Ui::setNowPlaying(s.artist.empty() ? s.title : s.title + "  \xe2\x80\x94  " + s.artist);
 }
 
@@ -1457,6 +1630,7 @@ bool homeMenu()
     bool leave = doShowHomeOverlay(Ui::font(), nullptr, S->cursor, false);
     /* Profile Menu: the page closes as with B, the music goes on */
     const bool toProfileMenu = leave && g_app_toProfileMenu;
+    g_app_toNowPlaying = false;   /* not offered here: the page is up */
     if (toProfileMenu) leave = false;
     if (!leave && !wasPaused && g_mplayer_paused) wii_player_pause_toggle();
     Guard g;
@@ -1490,8 +1664,11 @@ bool showPage()
         s.leavePage = false;
         s.homeWanted = false;
         s.panel = false;
+        s.menu = false;
+        s.artFull = false;
         s.lastInput = nowMs();
     }
+    s_goAlbum = false;
     SYS_Report("[Music] Now Playing\n");
     bool exitWii = false;
     for (;;) {
@@ -1543,6 +1720,20 @@ bool showPage()
 namespace MusicSession {
 
 bool active() { return S && !S->over; }
+
+bool showing() { return S && S->pageOpen; }
+
+bool coverPulse = true;
+bool visualizer = true;
+volatile bool prefsChanged = false;
+
+bool takeAlbum(std::string& id, std::string& name, std::string& artist)
+{
+    if (!s_goAlbum) return false;
+    s_goAlbum = false;
+    id = s_goAlbumId; name = s_goAlbumName; artist = s_goAlbumArtist;
+    return true;
+}
 
 bool open()
 {

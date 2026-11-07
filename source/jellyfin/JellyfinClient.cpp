@@ -116,7 +116,9 @@ void JellyfinClient::bringUpNetwork() {
      * route is not in the table yet, although the network works. */
     s32 ret = -1;
     for (int attempt = 0; attempt < 4; ++attempt) {
+        if (s_aborted) return;
         char ip[16] = "", mask[16] = "";
+        SYS_Report("[Net] attempt %d: configuring interface...\n", attempt + 1);
         ret = if_config(ip, mask, nullptr, true, 20);
         SYS_Report("[Net] attempt %d: if_config=%d ip=%s\n", attempt + 1, (int)ret, ip);
         if (ret >= 0 && ip[0] && strcmp(ip, "0.0.0.0") != 0) {
@@ -126,7 +128,7 @@ void JellyfinClient::bringUpNetwork() {
             return;
         }
         net_deinit();                 /* start over from a clean state */
-        usleep(1000 * 1000);
+        for (int ms = 0; ms < 1000 && !s_aborted; ms += 50) usleep(50 * 1000);
     }
     char buf[96];
     if (ret >= 0) snprintf(buf, sizeof(buf), "%s", N_("No IP address from the router (DHCP)"));
@@ -1066,18 +1068,16 @@ void JellyfinClient::dropConnection() {
     closeConn();
 }
 
-/* The network lost (the Wi-Fi gone...): started again in the background.
- * It may take a long while (if_config's tries, the access point away): the
- * request fails at once meanwhile, the interface goes on (it froze 100 s on
- * a tester's Wii, its Wi-Fi gone); the next ones work once it is back */
+/* The network lost (the Wi-Fi gone...): restart it, blocking. */
 bool JellyfinClient::recoverNetwork() {
-    if (netBusy) return false;          /* already restarting */
+    if (netBusy) {
+        return initNetwork();
+    }
     takeNetworkResult();
     closeConn();
     networkReady = false;
     netRestart = true;
-    startNetwork();
-    return false;
+    return initNetwork();
 }
 
 int JellyfinClient::request(bool tls, const std::string& host, int port,
@@ -1098,12 +1098,18 @@ int JellyfinClient::request(bool tls, const std::string& host, int port,
                    path.substr(0, path.find('?')).c_str(), why.c_str());
         return -1;
     };
-    /* the network starting again (after a loss): not now */
-    if (netBusy) return fail(N_("Network lost: reconnecting..."));
+    /* the network starting again (after a loss): wait for it to finish */
+    if (netBusy) {
+        while (netBusy && !s_aborted) {
+            usleep(50 * 1000);
+        }
+        if (s_aborted) return fail(N_("Cancelled"));
+        takeNetworkResult();
+        if (!networkReady) return fail(N_("Network lost: reconnecting..."));
+    }
     if (!networkReady && takeNetworkResult() == false && netThread == 0 && netRestart == false) {
-        /* the last restart failed: another, in the background */
-        recoverNetwork();
-        return fail(N_("Network lost: reconnecting..."));
+        /* the last restart failed: another */
+        if (!recoverNetwork()) return fail(N_("Network lost: reconnecting..."));
     }
     if (tls && !tlsSharedInit(sslVerify, err)) return fail(err);
 

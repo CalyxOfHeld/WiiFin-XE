@@ -19,19 +19,11 @@ bool LibraryView::updateMusicTracks(ir_t& ir, bool aPressed) {
         ir.valid = false;
     } else if (musicAutoBack) {   /* back from it: the albums, as B */
         musicAutoBack = false;
-        if (tracksFromHome) { tracksFromHome = false; state = State::LibsReady; }
-        else if (musicTab == 1) state = State::MusicSuggestionsReady;
-        else state = posterMode ? State::PostersReady : State::ItemsReady;
+        leaveMusicTracks();
         return false;
     }
     if (Input::isBackPressed()) {
-        if (tracksFromHome) {
-            tracksFromHome = false;
-            state = State::LibsReady;
-        } else if (musicTab == 1)
-            state = State::MusicSuggestionsReady;
-        else
-            state = posterMode ? State::PostersReady : State::ItemsReady;
+        leaveMusicTracks();
         return false;
     }
     if (Input::isUpPressed())   {
@@ -84,6 +76,65 @@ bool LibraryView::updateMusicTracks(ir_t& ir, bool aPressed) {
         return true;
     }
     return false;
+}
+
+void LibraryView::leaveMusicTracks() {
+    if (playerAlbumBack.on) {   /* Go to Album: the page under it again */
+        playerAlbumBack.on = false;
+        state = (State)playerAlbumBack.state;
+        if (state == State::MusicTracksReady || state == State::MusicTracksLoad) {
+            musicAlbumId     = playerAlbumBack.id;
+            musicAlbumName   = playerAlbumBack.name;
+            musicAlbumArtist = playerAlbumBack.artist;
+            musicIsPlaylist  = playerAlbumBack.playlist;
+            tracksFromHome   = playerAlbumBack.fromHome;
+            musicTab         = playerAlbumBack.tab;
+            musicTracks.clear();
+            state = State::MusicTracksLoad;
+            /* where it was in the list (loadMusicTracks starts at the top) */
+            musicReturnSel = playerAlbumBack.sel;
+            musicReturnTop = playerAlbumBack.top;
+        }
+        return;
+    }
+    if (tracksFromHome) {
+        tracksFromHome = false;
+        state = State::LibsReady;
+    } else if (musicTab == 1)
+        state = State::MusicSuggestionsReady;
+    else
+        state = posterMode ? State::PostersReady : State::ItemsReady;
+}
+
+void LibraryView::openAlbumFromPlayer(const std::string& id, const std::string& name, const std::string& artist) {
+    if (id.empty()) return;
+    if ((state == State::MusicTracksReady || state == State::MusicTracksLoad) && musicAlbumId == id && !musicIsPlaylist) {
+        SYS_Report("[Music] Go to Album: here already\n");
+        return;
+    }
+    if (!playerAlbumBack.on) {   /* a second Go to Album: B still to the first page */
+        playerAlbumBack.on       = true;
+        playerAlbumBack.state    = (int)state;
+        playerAlbumBack.id       = musicAlbumId;
+        playerAlbumBack.name     = musicAlbumName;
+        playerAlbumBack.artist   = musicAlbumArtist;
+        playerAlbumBack.playlist = musicIsPlaylist;
+        playerAlbumBack.fromHome = tracksFromHome;
+        playerAlbumBack.tab      = musicTab;
+        playerAlbumBack.sel      = musicTrackSel;
+        playerAlbumBack.top      = musicTrackTop;
+    }
+    musicAlbumId     = id;
+    musicAlbumName   = name;
+    musicAlbumArtist = artist;
+    musicIsPlaylist  = false;
+    tracksFromHome   = false;
+    musicAutoBack    = false;
+    musicTracks.clear();
+    musicTrackSel = 0;
+    musicTrackTop = 0;
+    state = State::MusicTracksLoad;
+    SYS_Report("[Music] Go to Album: %s\n", name.c_str());
 }
 
 // Music track list

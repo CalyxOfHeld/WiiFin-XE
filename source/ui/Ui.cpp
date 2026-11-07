@@ -1065,6 +1065,15 @@ void setNowPlaying(const std::string& line)
     s_nowPlayingAt = w;
 }
 
+/* where the footer drew the music line last, for the pointer */
+static struct { float x, y, w, h; u64 at; } s_npPill;
+
+bool nowPlayingAt(float x, float y)
+{
+    if (ticks_to_millisecs(gettime()) - s_npPill.at > 100) return false;
+    return x >= s_npPill.x && x < s_npPill.x + s_npPill.w && y >= s_npPill.y && y < s_npPill.y + s_npPill.h;
+}
+
 /* a quaver: what plays, in the footers */
 static void noteGlyph(float x, float y, u32 c)
 {
@@ -1109,9 +1118,22 @@ void footer(const Hint* left, int nLeft, const Hint* right, int nRight, const ch
             snprintf(out, sizeof(out), "%s...", buf);
         }
         if (len > 0 && music) {
+            /* a button: pointed at, it lights; A opens Now Playing (App) */
             const float w = textWidth(out, 14) + 16;
-            noteGlyph(320 - w / 2, top + 8, p.accent);
-            text(320 - w / 2 + 16, top + 7, out, 14, p.accent);
+            s_npPill.x = 320 - w / 2 - 10; s_npPill.y = top + 3; s_npPill.w = w + 20; s_npPill.h = 24;
+            s_npPill.at = ticks_to_millisecs(gettime());
+            ir_t ir;
+            Input::readIR(ir);
+            const bool hover = ir.valid && nowPlayingAt(ir.x, ir.y);
+            if (hover) {
+                roundRect(s_npPill.x, s_npPill.y, s_npPill.w, s_npPill.h, 12, p.accent, p.accentDark);
+                noteGlyph(320 - w / 2, top + 8, p.textOnAccent);
+                text(320 - w / 2 + 16, top + 7, out, 14, p.textOnAccent);
+            } else {
+                roundRect(s_npPill.x, s_npPill.y, s_npPill.w, s_npPill.h, 12, alpha(p.accent, 0.16f));
+                noteGlyph(320 - w / 2, top + 8, p.accent);
+                text(320 - w / 2 + 16, top + 7, out, 14, p.accent);
+            }
         } else if (len > 0) {
             textCentered(320, top + 7, out, 14, p.text);
         }

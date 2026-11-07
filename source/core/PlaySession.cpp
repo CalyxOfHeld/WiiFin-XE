@@ -758,11 +758,35 @@ bool runPlaySession(JellyfinClient& client,
             long long fromTicks = (long long)(restartAt * 10000000.0);
             std::string newUrl, newSession;
             bool ok = false;
-            runWithPlayerUI(view, ir, N_("Loading..."), [&]() {
+            const char* busyText = (!client.isNetworkReady() || client.networkBusy())
+                ? N_("Reconnecting...") : N_("Loading...");
+            runWithPlayerUI(view, ir, busyText, [&]() {
+                /* If network dropped or is restarting, wait for it before making requests */
+                if (!client.isNetworkReady() || client.networkBusy()) {
+                    SYS_Report("[runPlay] network not ready (ready=%d busy=%d), waiting...\n",
+                               (int)client.isNetworkReady(), (int)client.networkBusy());
+                    view.setBusy(N_("Reconnecting..."));
+                    client.recoverNetwork();
+                }
                 client.deleteActiveEncoding(serverUrl, auth, playSessionId);
                 ok = client.getPlaybackUrl(serverUrl, auth, itemId, mediaSourceId,
                                            newAudio, newBurn, fromTicks,
                                            newUrl, newSession, how, allowDirect);
+                /* If getPlaybackUrl failed due to a network drop, try recovering once and retry */
+                if (!ok && (!client.isNetworkReady() || client.networkBusy() ||
+                            client.lastError().find("Network lost") != std::string::npos ||
+                            client.lastError().find("not reachable") != std::string::npos)) {
+                    SYS_Report("[runPlay] getPlaybackUrl failed (%s), attempting network recovery...\n",
+                               client.lastError().c_str());
+                    view.setBusy(N_("Reconnecting..."));
+                    if (client.recoverNetwork()) {
+                        SYS_Report("[runPlay] network recovered, retrying getPlaybackUrl...\n");
+                        client.deleteActiveEncoding(serverUrl, auth, playSessionId);
+                        ok = client.getPlaybackUrl(serverUrl, auth, itemId, mediaSourceId,
+                                                   newAudio, newBurn, fromTicks,
+                                                   newUrl, newSession, how, allowDirect);
+                    }
+                }
             });
             if (ok) {
                 url           = newUrl;

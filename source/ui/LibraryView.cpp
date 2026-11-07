@@ -1309,27 +1309,29 @@ void LibraryView::loadMusicTracks() {
         if (ok && musicAlbumArtist.empty() && !musicTracks.empty())
             musicAlbumArtist = musicTracks[0].artist;
     })) {
-        if (tracksFromHome) {
-            tracksFromHome = false;
-            state = State::LibsReady;
-        } else if (musicTab == 1) {
-            state = State::MusicSuggestionsReady;
-        } else {
-            state = posterMode ? State::PostersReady : State::ItemsReady;
-        }
+        musicReturnSel = -1;
+        leaveMusicTracks();
         return;
     }
-    if (!ok) { errMsg = err; state = State::Error; return; }
+    if (!ok) { errMsg = err; state = State::Error; playerAlbumBack.on = false; musicReturnSel = -1; return; }
     const int videos = (int)std::count_if(musicTracks.begin(), musicTracks.end(),
                                           [](const JellyfinAudioItem& a) { return a.video; });
     SYS_Report("[Music] %s: %d song(s), %d video(s)\n", musicIsPlaylist ? "playlist" : "album",
                (int)musicTracks.size() - videos, videos);
-    /* an album of one song: that song at once */
-    if (!musicIsPlaylist && musicTracks.size() == 1 && !musicTracks[0].video) {
+    /* an album of one song: that song at once (not one Go to Album opened:
+     * its song plays already) */
+    if (!musicIsPlaylist && musicTracks.size() == 1 && !musicTracks[0].video && !playerAlbumBack.on) {
         SYS_Report("[Music] one song: played at once\n");
         musicAutoPlay = true;
     }
-    musicTrackSel = 0; musicTrackTop = 0; state = State::MusicTracksReady;
+    musicTrackSel = 0; musicTrackTop = 0;
+    if (musicReturnSel >= 0) {   /* back from Go to Album: where it was */
+        musicTrackSel = musicReturnSel;
+        musicTrackTop = musicReturnTop;
+        musicReturnSel = -1;
+        clampMusicTrackScroll();
+    }
+    state = State::MusicTracksReady;
 }
 
 void LibraryView::clampMusicTrackScroll() {

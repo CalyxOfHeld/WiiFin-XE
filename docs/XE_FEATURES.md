@@ -7,6 +7,7 @@ WiiFin-XE is a modified version of [WiiFin](https://github.com/fabienmillet/WiiF
 - [Themes](#themes)
 - [Profiles](#profiles)
 - [Player](#player)
+- [Music](#music)
 - [Controllers and input](#controllers-and-input)
 - [On-screen keyboard](#on-screen-keyboard)
 - [Screen area](#screen-area)
@@ -100,6 +101,34 @@ The **profile menu** has an icon on each entry. It also has **Local Media (WiiMC
   - Size and sync don't change picture subtitles, which the server draws into the video.
 - **Skip Intro / Skip Credits** sits in the bottom-right corner. **B** hides it until the next one.
 - When the server marks more than one part of a video as credits, WiiFin uses the last one.
+
+## Music
+
+WiiFin-XE features a dedicated, dynamic music playback experience with real-time audio visualization, beat reactivity, and an ambient idle mode:
+
+- **Live Audio Spectrum & FFT Engine:** directly samples 1024 stereo PCM values from uncached hardware DMA audio buffers at the DSP level (~21 ms at 48 kHz). Applies a Hann window and in-place radix-2 FFT to split sound into logarithmic equalizer frequency bands with automatic gain tracking.
+- **Beat-Reactive Album Art Pulse:** tracks real-time bass frequencies (<150 Hz). When a kick drum or bass hit spikes above the running average, the album artwork smoothly pulses and scales up to the beat (103–108%), providing responsive visual feedback.
+- **Five Live Reactive Visualizers + Synced Lyrics:**
+  - **Bars:** classic spectrum equalizer bars with floating peak caps and subtle bottom reflections.
+  - **Ring:** radial spectrum rays expanding outward from a central circular disc pulsing with the beat.
+  - **Bubbles:** dynamic particles spawned in proportion to band amplitudes that float upward and drift across the screen.
+  - **Wave:** fluid oscillating sound wave ribbons with glowing cores and edges modulated by bass kicks.
+  - **Blocks:** retro LED segmented meter columns with peak indicators.
+  - **Lyrics:** synchronized karaoke-style lyrics (`.lrc` or embedded) with active line highlights.
+  - Switch visualizers anytime with **Left / Right** while the visualizer is focused, or click directly with the pointer.
+- **Ambient Idle / Screensaver Mode:**
+  - When playback is left untouched for 20 seconds, the on-screen transport buttons, seek bar, and header smoothly fade away.
+  - The album art smoothly transitions to the center of the TV and enlarges to take center stage with persistent beat pulsing.
+  - The **Ring** visualizer wraps cleanly around the enlarged album cover, and **Bubbles** float across the entire screen.
+  - Track title and artist display in clean, centered typography with an elegant minimalist progress bar.
+  - **Non-intrusive controls:** during idle mode, pressing **+** or **−** skips tracks and **A** pauses/resumes without dismissing the ambient visuals. Pressing any other button or moving the IR pointer instantly restores the full control UI.
+- **In-Player More Options:** a dedicated More menu (`...` button) in the transport bar:
+  - **Go to Album:** jump directly from the playing track to its album tracklist in your library. Pressing **B** in the album returns smoothly to where you were.
+  - **Full-Screen Cover:** display the high-resolution album artwork full screen. You can also click the cover directly with the pointer to toggle full-screen view.
+  - **Cover Pulse:** toggle the beat-reactive album art bounce on or off (saved in `wiifin.cfg`).
+  - **Visualizer:** toggle the visualizer display on or off.
+- **Persistent Background Playback:** pressing **B** leaves the Now Playing screen while music continues to play uninterrupted in the background. Browse your films, series, photo libraries, and settings while the footer displays the currently playing track. Re-open Now Playing anytime from the profile menu.
+- **Queue Management & Autoplay:** Up Next panel (button 1) lists the full play queue with scrolling and reordering. Supports shuffle (button 2), repeat (off, all, one), and Jellyfin's instant mix autoplay when the queue ends.
 
 ## Controllers and input
 

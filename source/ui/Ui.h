@@ -193,6 +193,9 @@ void showNotice(const std::string& header, const std::string& text, int ms);
 /* the music that goes on while browsing: the footers say what plays ("":
  * nothing); any thread */
 void setNowPlaying(const std::string& line);
+/* the footer's music line under (x, y) (drawn in the last 100 ms): a button
+ * to Now Playing */
+bool nowPlayingAt(float x, float y);
 void drawNotice();
 
 /* Bottom bar with the clock in the middle and button hints on the sides.

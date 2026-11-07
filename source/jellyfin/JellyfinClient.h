@@ -195,7 +195,7 @@ public:
     // Bring the network up in the background (call once at boot, and again
     // to retry after a failure).  networkBusy() is true while it runs.
     void startNetwork();
-    bool networkBusy() const { return netBusy; }
+    bool networkBusy() const { return netBusy || netRestart; }
     // Once networkBusy() is false: the outcome of the last attempt.
     bool takeNetworkResult();
     // IOS dropped the network (Wi-Fi lost): restart it, blocking.

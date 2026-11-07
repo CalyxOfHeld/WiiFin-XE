@@ -64,10 +64,13 @@ WiiFin-XE uses the same folder as WiiFin and replaces it. It keeps its settings,
 ### Music
 
 - Libraries in tabs as on Jellyfin: **Albums, Suggestions, Artists, Playlists, Songs** (a library of loose files opens on its songs)
-- A **Now Playing** screen with the cover, the sound live in five visualizers (bars, ring, bubbles, wave, blocks: up twice, then A), an Up Next queue, shuffle, repeat, favourites, and similar tracks once the queue runs out
+- A **Now Playing** screen with beat-reactive album artwork, real-time frequency visualizers, an Up Next queue, shuffle, repeat, favourites, and similar tracks once the queue runs out
+- **Beat-reactive cover pulse:** the album cover dynamically pulses and bounces with the bass (<150 Hz) on beat hits. Toggle it on or off in the More options menu or Settings
+- **Five live visualizers & lyrics:** Bars (with peak caps and reflection), Ring (radial spectrum), Bubbles (reactive particle effects), Wave (oscillating ribbons), Blocks (retro segmented meters), and synchronized lyrics (karaoke highlight). Switch between them by focusing the visualizer and pressing Left/Right or A
+- **Ambient idle screensaver mode:** after 20 seconds untouched, controls fade away and the album art smoothly enlarges to the center of the screen with continuous beat pulsing. The Ring visualizer wraps around the cover, and Bubbles float across the entire screen. Pressing **+** or **−** skips tracks and **A** pauses without closing the visualizer; pressing **B** or moving the pointer restores full controls
+- **More options menu:** the `...` button offers **Go to Album** (jumps directly to the album tracklist in the library; B returns to your previous spot), **Full-Screen Cover** (also toggled by clicking the cover with the pointer), **Cover Pulse**, and **Visualizer**
 - **Shuffle** (button 2): an album, a playlist, or songs drawn from the whole library
-- **Lyrics** (Jellyfin 10.9+: an `.lrc` beside the song, or embedded): the player's last visualizer, the line sung lit as it comes, on the whole screen once the controls fade away, to sing along
-- The music **goes on while browsing**: B while a song plays; the footers say what plays, and **Now Playing** in the profile menu opens the player again (a video stops the music)
+- The music **goes on while browsing**: press **B** while a song plays; the footers say what plays, and **Now Playing** in the profile menu opens the player again (a video stops the music)
 
 ### Remote control
 
@@ -190,6 +193,7 @@ From a profile's menu, View holds that profile's own look. From WiiFin's main me
 | Group | Setting | |
 |---|---|---|
 | Sound | Background Music / Interface Sounds | The menus' music and sounds |
+| | Cover Pulse / Live Visualizer | Beat pulse on album art and live frequency visualizers in the music player |
 | Screensaver | Screensaver | Off, or after 1 to 30 minutes untouched (or paused) |
 | | Screensaver Logo | WiiFin, DVD, VHS, CD, or your own pictures |
 | | Screensaver Speed | Slow, Normal or Fast |
